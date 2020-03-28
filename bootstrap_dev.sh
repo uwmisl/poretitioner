@@ -28,22 +28,22 @@ trap cleanup SIGINT SIGQUIT SIGABRT SIGABRT
 
 NORMAL=$(tput sgr0)
 
-function bold() {
+bold () {
     local BOLD=$(tput bold)
     echo -e "$BOLD$*$NORMAL"
 }
 
-function green() {
+green () {
     local GREEN=$(tput setaf 2; tput bold)
     echo -e "$GREEN$*$NORMAL"
 }
 
-function yellow() {
+yellow () {
     local YELLOW=$(tput setaf 3)
     echo -e "$YELLOW$*$NORMAL"
 }
 
-function red() {
+red () {
     local RED=$(tput setaf 1)
     echo -e "$RED$*$NORMAL"
 }
@@ -52,9 +52,20 @@ function red() {
 #                 Utilities                  #
 ##############################################
 
+
 # This script requires a 'PORETITIONER_DIR' environment variable, to be set to 
 # the directory where the poretitioner package resides (e.g. where you cloned https://github.com/uwmisl/poretitioner)
-if [[ ! -d "${PORETITIONER_DIR}" ]]
+
+# If PORETITIONER_DIR wasn't provided, assume this script's being run from
+# the poretitioner directory. 
+PORETITIONER_DIR=${PORETITIONER_DIR:-$(pwd)}
+
+pathToNixEnv () {
+    # Where the poretitioner env.nix resides. 
+    echo "${PORETITIONER_DIR}/nix/env.nix"
+}
+
+if [[ ! -f $(pathToNixEnv) ]]
 then
     yellow "This script requires a PORETITIONER_DIR environment variable, set to the poretitioner repo's path."
     yellow "e.g. PORETITIONER_DIR='$HOME/developer/misl/poretitioner'"
@@ -62,15 +73,20 @@ then
     exit 1
 fi
 
+pathToPreCommitNix () {
+    # Where the poretitioner pre-commit.nix resides. 
+    echo "${PORETITIONER_DIR}/nix/pkgs/pre-commit/pre-commit.nix"
+}
+
 get () {
     # Finds the *Nix-friendly HTTP GET function. Uses curl if the user has it (MacOS/Linux)
     # or wget if they don't (Linux)
     # Exits if the user has neither (unlikely).
-    if [ -x "$(command -v curl)" ] 
+    if [ -x "$(command -v curl)" ]
     then
       echo "curl"
       return
-    elif [ -x "$(command -v wget)" ] 
+    elif [ -x "$(command -v wget)" ]
     then 
         echo "wget"
         return
@@ -84,7 +100,7 @@ get () {
 ##############################################
 
 install_nix () {
-    if locate nix -n 1 &> /dev/null
+    if $(command nix &> /dev/null)
     then
         # Nix is already installed!
         bold "Nix is already installed. Skipping."
@@ -106,7 +122,7 @@ install_nix () {
 }
 
 install_nix_python () {
-    if nix-env -q | grep python3- &> /dev/null
+    if nix-env --query | grep python3- &> /dev/null
     then
         # Python 3 Nix is already installed!
         bold "Python is already installed through Nix. Skipping."
@@ -115,23 +131,22 @@ install_nix_python () {
 
     bold "\nInstalling Python (via Nix)..."
     # Installs Python 3.7
-    nix-env -f "<nixpkgs>" -i "python3-3.7.6"
+    nix-env --file "<nixpkgs>" --install "python3-3.7.6" --show-trace
 
     green "Python installed."
 }
 
 install_precommit () {
-    if nix-env -q | grep python3- &> /dev/null
+    if nix-env --query | grep pre-commit- &> /dev/null
     then
-        # Python 3 Nix is already installed!
+        # Precommit is already installed!
         bold "Precommit is already installed through Nix. Skipping."
         return 0
     fi
 
     bold "\nInstalling pre-commit..."
     # Installs the pre-commit package (for git hooks)
-    nix-env -f "<nixpkgs>" -i "python3.7-importlib-metadata-1.5.0"
-    nix-env -f "<nixpkgs>" -i "${PORETITIONER_DIR}/nix/pre-commit"
+    nix-env --install --file $(pathToPreCommitNix) --show-trace
 
     # Installs the pre-commit profile in user home directory. 
     pre-commit install
@@ -144,7 +159,7 @@ install_misl_env () {
 
     bold "\nInstalling MISL env..."
     # Installs poretitioner developer dependencies 
-    nix-env -i -f "${PORETITIONER_DIR}/nix/env.nix"
+    nix-env --install --file $(pathToNixEnv) --show-trace
 
     green "MISL env installed."
 }
@@ -159,6 +174,7 @@ main () {
     install_nix_python
     install_precommit
     install_misl_env
+    green "All done!"
 }
 
 main

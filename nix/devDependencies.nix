@@ -12,10 +12,12 @@
 #
 ###########################################################################################
 
+{ python }: 
+    #let precommit = nixpkgs.toPythonApplication (import ./pkgs/pre-commit/pre-commit.nix) {} ;
+    let precommit = (import ./pkgs/pre-commit/pre-commit.nix) { inherit python; };
+        test_pkgs = (import ./testingDependencies.nix) { inherit python; };
+        pythonPackages = python.pkgs;
 
-pythonPackages: 
-    let precommit = import ./pre-commit.nix;
-        test_pkgs = (import ./testingDependencies.nix) pythonPackages;
     in [
         #####################################
         #      Development Automation       #

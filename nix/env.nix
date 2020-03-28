@@ -15,12 +15,9 @@
 
 let
     pkgs = import <nixpkgs> {};
-    inherit (pkgs) buildEnv;
-    python37pkgs = pkgs.python37.pkgs;
+    python = pkgs.python37;
 
-    get_dev_pkgs = (import ./devDependencies.nix);
-    get_testing_pkgs = (import ./testingDependencies.nix);
-    dev_pkgs = get_dev_pkgs python37pkgs
-                 ++ [python37pkgs.virtualenv]; # VirtualEnv is needed for pre-commit hooks
+    dev_pkgs = (import ./devDependencies.nix) { inherit python; };
+    testing_pkgs = (import ./testingDependencies.nix) { inherit python; }; 
 in
-dev_pkgs
+dev_pkgs ++ testing_pkgs

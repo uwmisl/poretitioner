@@ -11,22 +11,22 @@
 #
 ###########################################################################################
 
-
-pythonPackages: [ 
-        # Numerical computation library
-        pythonPackages.numpy
-        # Data manipulation and analysis
-        pythonPackages.pandas
-        # Hierarchical Data Format utilities 
-        pythonPackages.h5py
-        # Parallel computing library
-        pythonPackages.dask
-        # Charts and plotting library
-        pythonPackages.matplotlib
-        # Data visualization 
-        pythonPackages.seaborn
-        # Interactive computing
-        pythonPackages.notebook
-        # For interactive builds
-        pythonPackages.jupyter
+{ python } : 
+with python.pkgs; [ 
+    # Numerical computation library
+    numpy
+    # Data manipulation and analysis
+    pandas
+    # Hierarchical Data Format utilities 
+    h5py
+    # Parallel computing library
+    dask
+    # Charts and plotting library
+    matplotlib
+    # Data visualization 
+    seaborn
+    # Interactive computing
+    notebook
+    # For interactive builds
+    jupyter
 ]

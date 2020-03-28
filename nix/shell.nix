@@ -15,18 +15,14 @@
 
 with import <nixpkgs> {};
 
-let get_run_pkgs = (import ./runDependencies.nix);
-    get_dev_pkgs = (import ./devDependencies.nix);
-    get_test_pkgs = (import ./testingDependencies.nix);
-    pythonEnv = python37.withPackages (python37Packages:
-        get_run_pkgs python37Packages
-     ++ get_dev_pkgs python37Packages
-     ++ get_test_pkgs python37Packages
-    ); 
-
+let python = pkgs.python37; 
+    run_pkgs = (import ./runDependencies.nix) { inherit python; };
+    dev_pkgs = (import ./devDependencies.nix) { inherit python; };
+    test_pkgs = (import ./testingDependencies.nix) { inherit python; };
 in mkShell {
-    buildInputs = [
-        pythonEnv
-    ];
-}
 
+    buildInputs = run_pkgs
+      ++ dev_pkgs
+      ++ test_pkgs
+    ;
+}

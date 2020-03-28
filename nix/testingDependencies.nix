@@ -11,12 +11,12 @@
 #
 ###########################################################################################
 
-
-pythonPackages: [
-        # Testing suite
-        pythonPackages.pytest
-        # Test runner 
-        pythonPackages.pytestrunner
-        # Test code coverage generator
-        pythonPackages.pytestcov
+{ python } : 
+    with python.pkgs; [
+    # Testing suite
+    pytest
+    # Test runner 
+    pytestrunner
+    # Test code coverage generator
+    pytestcov
 ]
