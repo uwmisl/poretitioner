@@ -13,15 +13,15 @@
 ###########################################################################################
 
 let nixpkgs = import <nixpkgs> {};
-    packages = nixpkgs.python37.pkgs;
+    python = nixpkgs.python37;
 
-    run_pkgs = (import ./nix/runDependencies.nix) packages;
-    dev_pkgs = (import ./nix/devDependencies.nix) packages;
-    test_pkgs = (import ./nix/testingDependencies.nix) packages;
+    run_pkgs = (import ./nix/runDependencies.nix) { inherit python; };
+    dev_pkgs = (import ./nix/devDependencies.nix) { inherit python; };
+    test_pkgs = (import ./nix/testingDependencies.nix) { inherit python; };
 
     # Reference https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/interpreters/python/mk-python-derivation.nix
     # Base python package definition, which we'll then 
-    poretitioner = packages.buildPythonApplication {
+    poretitioner = python.pkgs.buildPythonApplication {
         pname = "poretitioner";
         version = "0.0.1"; 
 
