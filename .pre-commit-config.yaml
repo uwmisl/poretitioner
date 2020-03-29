@@ -1,6 +1,6 @@
 repos:
     #####################################
-    #    Makes code clean and pretty    # 
+    #    Makes code clean and pretty    #
     #####################################
 -   repo: https://github.com/ambv/black
     rev: 18.9b0
@@ -11,17 +11,7 @@ repos:
         always_run: true
 
     #####################################
-    #       Sorts module imports        # 
-    #####################################
--   repo: git://github.com/doublify/pre-commit-isort
-    rev: v4.3.0
-    hooks:
-    -   id: isort
-        name: Sort imports
-        always_run: true
-
-    #####################################
-    #     Strips trailing whitespace    # 
+    #     Strips trailing whitespace    #
     #####################################
 -   repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v2.0.0
@@ -29,10 +19,9 @@ repos:
     -   id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
         always_run: true
-        stages: [commit]
 
     #####################################
-    #   Checks for code style issues    # 
+    #   Checks for code style issues    #
     #####################################
 -   repo: https://gitlab.com/pycqa/flake8
     rev: 3.7.3
@@ -45,7 +34,7 @@ repos:
         stages: [push]
 
     #####################################
-    #  Checks for documentation issues  # 
+    #  Checks for documentation issues  #
     #####################################
 -   repo: https://github.com/pycqa/pydocstyle
     rev: 5.0.2
@@ -56,7 +45,7 @@ repos:
         stages: [push]
 
     #####################################
-    #          Runs unit tests          # 
+    #          Runs unit tests          #
     #####################################
 -   repo: local
     hooks:
