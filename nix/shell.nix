@@ -1,4 +1,4 @@
-###########################################################################################
+# ##########################################################################################
 #                       
 # shell.nix 
 #                      
@@ -12,17 +12,11 @@
 #
 ###########################################################################################
 
+with import <nixpkgs> { };
 
-with import <nixpkgs> {};
-
-let python = pkgs.python37; 
-    run_pkgs = (import ./runDependencies.nix) { inherit python; };
-    dev_pkgs = (import ./devDependencies.nix) { inherit python; };
-    test_pkgs = (import ./testingDependencies.nix) { inherit python; };
-in mkShell {
-
-    buildInputs = run_pkgs
-      ++ dev_pkgs
-      ++ test_pkgs
-    ;
-}
+let
+  python = pkgs.python37;
+  run_pkgs = callPackage ./runDependencies.nix { inherit python; };
+  dev_pkgs = callPackage ./devDependencies.nix { inherit python; };
+  test_pkgs = callPackage ./testingDependencies.nix { inherit python; };
+in mkShell { buildInputs = run_pkgs ++ dev_pkgs ++ test_pkgs; }

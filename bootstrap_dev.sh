@@ -100,7 +100,7 @@ get () {
 ##############################################
 
 install_nix () {
-    if $(command nix &> /dev/null)
+    if [ -x "$(command -v nix)" ]
     then
         # Nix is already installed!
         bold "Nix is already installed. Skipping."
@@ -137,7 +137,7 @@ install_nix_python () {
 }
 
 install_precommit () {
-    if nix-env --query | grep pre-commit- &> /dev/null
+    if nix-env --query | grep pre-commit- &> /dev/null && [ -x "$(command -v pre-commit)"]
     then
         # Precommit is already installed!
         bold "Precommit is already installed through Nix. Skipping."

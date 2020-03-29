@@ -1,4 +1,4 @@
-###########################################################################################
+# ##########################################################################################
 #                       
 # runDependencies.nix 
 #                      
@@ -11,22 +11,22 @@
 #
 ###########################################################################################
 
-{ python } : 
-with python.pkgs; [ 
-    # Numerical computation library
-    numpy
-    # Data manipulation and analysis
-    pandas
-    # Hierarchical Data Format utilities 
-    h5py
-    # Parallel computing library
-    dask
-    # Charts and plotting library
-    matplotlib
-    # Data visualization 
-    seaborn
-    # Interactive computing
-    notebook
-    # For interactive builds
-    jupyter
+{ python }:
+with python.pkgs; [
+  # Numerical computation library
+  numpy
+  # Data manipulation and analysis
+  pandas
+  # Hierarchical Data Format utilities 
+  h5py
+  # Parallel computing library
+  dask
+  # Charts and plotting library
+  matplotlib
+  # Data visualization 
+  seaborn
+  # Interactive computing
+  notebook
+  # For interactive builds
+  jupyter
 ]

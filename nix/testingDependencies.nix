@@ -11,12 +11,12 @@
 #
 ###########################################################################################
 
-{ python } : 
-    with python.pkgs; [
-    # Testing suite
-    pytest
-    # Test runner 
-    pytestrunner
-    # Test code coverage generator
-    pytestcov
+{ python }:
+with python.pkgs; [
+  # Testing suite
+  pytest
+  # Test runner 
+  pytestrunner
+  # Test code coverage generator
+  pytestcov
 ]

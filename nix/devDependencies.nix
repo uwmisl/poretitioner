@@ -12,31 +12,29 @@
 #
 ###########################################################################################
 
-{ python }: 
-    let precommit = (import ./pkgs/pre-commit/pre-commit.nix) { inherit python; };
-        test_pkgs = (import ./testingDependencies.nix) { inherit python; };
-        pythonPackages = python.pkgs;
+{ python }:
+let
+  precommit = (import ./pkgs/pre-commit/pre-commit.nix) { inherit python; };
+  test_pkgs = (import ./testingDependencies.nix) { inherit python; };
+  pythonPackages = python.pkgs;
 
-    in [
-        #####################################
-        #      Development Automation       #
-        #####################################
-        # Git hooks
-        precommit  
+in [
+  #####################################
+  #      Development Automation       #
+  #####################################
+  # Git hooks
+  precommit
 
-        #####################################
-        #          Code Formatting          #
-        #####################################
+  #####################################
+  #          Code Formatting          #
+  #####################################
 
-        # Import sorter 
-        pythonPackages.isort
-        # Highly opinionated code-formatter
-        pythonPackages.black
-        # Style-guide enforcer 
-        pythonPackages.flake8
-        # Docstring static analyzer
-        pythonPackages.pydocstyle
-        # Static type analyzer
-        #pythonPackages.pytype
-    ] 
-    ++ test_pkgs
+  # Import sorter 
+  pythonPackages.isort
+  # Highly opinionated code-formatter
+  pythonPackages.black
+  # Style-guide enforcer 
+  pythonPackages.flake8
+  # Docstring static analyzer
+  pythonPackages.pydocstyle
+] ++ test_pkgs

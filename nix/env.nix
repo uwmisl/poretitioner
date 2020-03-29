@@ -1,4 +1,4 @@
-###########################################################################################
+# ##########################################################################################
 #                       
 # env.nix 
 #                      
@@ -12,12 +12,9 @@
 #
 ###########################################################################################
 
-
+with import <nixpkgs> { };
 let
-    pkgs = import <nixpkgs> {};
-    python = pkgs.python37;
-
-    dev_pkgs = (import ./devDependencies.nix) { inherit python; };
-    testing_pkgs = (import ./testingDependencies.nix) { inherit python; }; 
-in
-dev_pkgs ++ testing_pkgs
+  python = pkgs.python37;
+  dev_pkgs = callPackage ./devDependencies.nix { inherit python; };
+  testing_pkgs = callPackage ./testingDependencies.nix { inherit python; };
+in dev_pkgs ++ testing_pkgs
