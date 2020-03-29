@@ -1,10 +1,10 @@
 # ##########################################################################################
-#                       
-# runDependencies.nix 
-#                      
+#
+# runDependencies.nix
+#
 ###########################################################################################
 #
-# This expression hosts the project's runtime dependencies (basically, anything you 
+# This expression hosts the project's runtime dependencies (basically, anything you
 # need to explicitly import in python)
 #
 # It takes in a pythonPackage, which is intended to be provided by `python.withPackages`.
@@ -17,13 +17,13 @@ with python.pkgs; [
   numpy
   # Data manipulation and analysis
   pandas
-  # Hierarchical Data Format utilities 
+  # Hierarchical Data Format utilities
   h5py
   # Parallel computing library
   dask
   # Charts and plotting library
   matplotlib
-  # Data visualization 
+  # Data visualization
   seaborn
   # Interactive computing
   notebook

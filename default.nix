@@ -1,10 +1,10 @@
 # ##########################################################################################
-#                       
-# default.nix 
-#                      
+#
+# default.nix
+#
 ###########################################################################################
 #
-# This expression hosts dependencies that shouldn't be packaged for distribution, but 
+# This expression hosts dependencies that shouldn't be packaged for distribution, but
 # are still needed for developers. This includes testing frameworks, as well as tools like
 # linters, git hooks, and static analyzers.
 #
@@ -12,15 +12,16 @@
 #
 ###########################################################################################
 
+with import <nixpkgs> { };
+
 let
-  nixpkgs = import <nixpkgs> { };
-  python = nixpkgs.python37;
+  python = python37;
   run_pkgs = callPackage ./nix/runDependencies.nix { inherit python; };
   dev_pkgs = callPackage ./nix/devDependencies.nix { inherit python; };
   test_pkgs = callPackage ./nix/testingDependencies.nix { inherit python; };
 
   # Reference https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/interpreters/python/mk-python-derivation.nix
-  # Base python package definition, which we'll then 
+  # Base python package definition, which we'll then
 in python.pkgs.buildPythonApplication {
   pname = "poretitioner";
   version = "0.0.1";
@@ -30,7 +31,7 @@ in python.pkgs.buildPythonApplication {
   # Build-time exclusive dependencies
   nativeBuildInputs = dev_pkgs;
 
-  # Test Dependencies 
+  # Test Dependencies
   doCheck = true;
   checkInputs = test_pkgs;
   checkPhase = ''

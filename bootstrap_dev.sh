@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 ###############################################################################
-# This script installs Nix, a functional package manager, as well as other 
+# This script installs Nix, a functional package manager, as well as other
 # core dependencies used at MISL.
 ###############################################################################
 
 
 set -o errexit
-set -e 
+set -e
 
 ##############################################
 #   Script clean up and exception handling.  #
@@ -17,7 +17,7 @@ cleanup () {
     echo "Cleaning up before exit..."
 
     echo "Done"
-    exit 
+    exit
 }
 
 trap cleanup SIGINT SIGQUIT SIGABRT SIGABRT
@@ -53,15 +53,15 @@ red () {
 ##############################################
 
 
-# This script requires a 'PORETITIONER_DIR' environment variable, to be set to 
+# This script requires a 'PORETITIONER_DIR' environment variable, to be set to
 # the directory where the poretitioner package resides (e.g. where you cloned https://github.com/uwmisl/poretitioner)
 
 # If PORETITIONER_DIR wasn't provided, assume this script's being run from
-# the poretitioner directory. 
+# the poretitioner directory.
 PORETITIONER_DIR=${PORETITIONER_DIR:-$(pwd)}
 
 pathToNixEnv () {
-    # Where the poretitioner env.nix resides. 
+    # Where the poretitioner env.nix resides.
     echo "${PORETITIONER_DIR}/nix/env.nix"
 }
 
@@ -74,7 +74,7 @@ then
 fi
 
 pathToPreCommitNix () {
-    # Where the poretitioner pre-commit.nix resides. 
+    # Where the poretitioner pre-commit.nix resides.
     echo "${PORETITIONER_DIR}/nix/pkgs/pre-commit/pre-commit.nix"
 }
 
@@ -87,7 +87,7 @@ get () {
       echo "curl"
       return
     elif [ -x "$(command -v wget)" ]
-    then 
+    then
         echo "wget"
         return
     else
@@ -148,17 +148,17 @@ install_precommit () {
     # Installs the pre-commit package (for git hooks)
     nix-env --install --file $(pathToPreCommitNix) --show-trace
 
-    # Installs the pre-commit profile in user home directory. 
+    # Installs the pre-commit profile in user home directory.
     pre-commit install
 
     green "Precommit installed."
 }
 
 install_misl_env () {
-    # Installs 
+    # Installs
 
     bold "\nInstalling MISL env..."
-    # Installs poretitioner developer dependencies 
+    # Installs poretitioner developer dependencies
     nix-env --install --file $(pathToNixEnv) --show-trace
 
     green "MISL env installed."

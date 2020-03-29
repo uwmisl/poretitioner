@@ -1,10 +1,10 @@
 ###########################################################################################
-#                       
-# devDependencies.nix 
-#                      
+#
+# devDependencies.nix
+#
 ###########################################################################################
 #
-# This expression hosts dependencies that shouldn't be packaged for distribution, but 
+# This expression hosts dependencies that shouldn't be packaged for distribution, but
 # are still needed for developers. This includes testing frameworks, as well as tools like
 # linters, git hooks, and static analyzers.
 #
@@ -29,11 +29,11 @@ in [
   #          Code Formatting          #
   #####################################
 
-  # Import sorter 
+  # Import sorter
   pythonPackages.isort
   # Highly opinionated code-formatter
   pythonPackages.black
-  # Style-guide enforcer 
+  # Style-guide enforcer
   pythonPackages.flake8
   # Docstring static analyzer
   pythonPackages.pydocstyle
