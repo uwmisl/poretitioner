@@ -4,9 +4,10 @@
 #
 ###########################################################################################
 #
-# The `pre-commit` third-party package helps us automate several development processes [1].
+# The `pre-commit` third-party package allows for customizable git hooks,
+# which helps us automate several development processes (e.g. testing, linting, formatting) [1].
 #
-# Why are we building in manually instead of downloading it from the Nix store?
+# Why are we building it in manually instead of downloading it from the Nix store?
 # Sadly, >=v2.0 version of pre-commit isn't available in the Nix package repository yet,
 # (Nix-pkgs only has v1.2.1, which is coupled to Python 2), so we're building it ourselves
 # for now.

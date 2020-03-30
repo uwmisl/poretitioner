@@ -15,7 +15,8 @@ cleanup () {
     # Called when this script exits unexpectedly (without explicit failure)
     # Performs clean-up.
     echo "Cleaning up before exit..."
-
+    # As of this writing, there is no clean up to perform, but it's
+    # a best practice to be aware of potential failures.
     echo "Done"
     exit
 }
@@ -55,7 +56,6 @@ red () {
 
 # This script requires a 'PORETITIONER_DIR' environment variable, to be set to
 # the directory where the poretitioner package resides (e.g. where you cloned https://github.com/uwmisl/poretitioner)
-
 # If PORETITIONER_DIR wasn't provided, assume this script's being run from
 # the poretitioner directory.
 PORETITIONER_DIR=${PORETITIONER_DIR:-$(pwd)}
@@ -129,7 +129,7 @@ install_nix_python () {
         return 0
     fi
 
-    bold "\nInstalling Python (via Nix)..."
+    bold "Installing Python (via Nix)..."
     # Installs Python 3.7
     nix-env --file "<nixpkgs>" --install "python3-3.7.6" --show-trace
 
@@ -144,7 +144,7 @@ install_precommit () {
         return 0
     fi
 
-    bold "\nInstalling pre-commit..."
+    bold "Installing pre-commit..."
     # Installs the pre-commit package (for git hooks)
     nix-env --install --file $(pathToPreCommitNix) --show-trace
 
@@ -155,9 +155,8 @@ install_precommit () {
 }
 
 install_misl_env () {
-    # Installs
 
-    bold "\nInstalling MISL env..."
+    bold "Installing MISL env..."
     # Installs poretitioner developer dependencies
     nix-env --install --file $(pathToNixEnv) --show-trace
 

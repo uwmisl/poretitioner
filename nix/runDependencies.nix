@@ -5,9 +5,9 @@
 ###########################################################################################
 #
 # This expression hosts the project's runtime dependencies (basically, anything you
-# need to explicitly import in python)
+# need to explicitly import in Python)
 #
-# It takes in a pythonPackage, which is intended to be provided by `python.withPackages`.
+# It takes in the Python package corresponding to a Python version.
 #
 ###########################################################################################
 

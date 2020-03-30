@@ -8,7 +8,7 @@
 # are still needed for developers. This includes testing frameworks, as well as tools like
 # linters, git hooks, and static analyzers.
 #
-# It takes in `pythonPackages`, which is intended to be provided by `python.withPackages`.
+# It takes in `python`, which is which should be the python package with the desired version.
 #
 ###########################################################################################
 

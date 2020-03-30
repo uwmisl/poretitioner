@@ -1,14 +1,11 @@
-# ##########################################################################################
+###########################################################################################
 #
 # default.nix
 #
 ###########################################################################################
 #
-# This expression hosts dependencies that shouldn't be packaged for distribution, but
-# are still needed for developers. This includes testing frameworks, as well as tools like
-# linters, git hooks, and static analyzers.
-#
-# It takes in `pythonPackages`, which is intended to be provided by `python.withPackages`.
+# This expression builds the Poretitioner application.
+# It runs the test suite before building and will fail if any tests fail.
 #
 ###########################################################################################
 
@@ -20,8 +17,7 @@ let
   dev_pkgs = callPackage ./nix/devDependencies.nix { inherit python; };
   test_pkgs = callPackage ./nix/testingDependencies.nix { inherit python; };
 
-  # Reference https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/interpreters/python/mk-python-derivation.nix
-  # Base python package definition, which we'll then
+  # To understand how `buildPythonApplication` works, check out https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/interpreters/python/mk-python-derivation.nix
 in python.pkgs.buildPythonApplication {
   pname = "poretitioner";
   version = "0.0.1";

@@ -1,4 +1,4 @@
-# This module is a placeholder demonstrating how to write tests through pytest
+# This module is a placeholder demonstrating that our tests run.
 
 
 def test_truth_test():
