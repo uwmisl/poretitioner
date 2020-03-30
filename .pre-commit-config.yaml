@@ -11,6 +11,17 @@ repos:
         always_run: true
 
     #####################################
+    #       Sorts module imports        #
+    #####################################
+-   repo: https://github.com/timothycrosley/isort
+    rev: master
+    hooks:
+    -   id: isort
+        name: Sort imports
+        always_run: true
+        args: [-]
+
+    #####################################
     #     Strips trailing whitespace    #
     #####################################
 -   repo: https://github.com/pre-commit/pre-commit-hooks
