@@ -136,24 +136,6 @@ install_nix_python () {
     green "Python installed."
 }
 
-install_precommit () {
-    if nix-env --query | grep pre-commit- &> /dev/null && [ -x "$(command -v pre-commit)"]
-    then
-        # Precommit is already installed!
-        bold "Precommit is already installed through Nix. Skipping."
-        return 0
-    fi
-
-    bold "Installing pre-commit..."
-    # Installs the pre-commit package (for git hooks)
-    nix-env --install --file $(pathToPreCommitNix) --show-trace
-
-    # Installs the pre-commit profile in user home directory.
-    pre-commit install
-
-    green "Precommit installed."
-}
-
 install_misl_env () {
 
     bold "Installing MISL env..."
@@ -171,7 +153,6 @@ install_misl_env () {
 main () {
     install_nix
     install_nix_python
-    install_precommit
     install_misl_env
     green "All done!"
 }
