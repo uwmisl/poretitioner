@@ -119,7 +119,7 @@ create_root_nix_if_necessaary () {
 
             yellow "Nix volume created!"
         fi
-        # else: We're either on OS X Mojave (10.14) or below, so /nix/ will be created at
+        # else: We're on OS X Mojave (10.14) or below, so /nix/ will be created at
         # the system root (same behavior as Linux) in the install_linux step.
     fi
 }
