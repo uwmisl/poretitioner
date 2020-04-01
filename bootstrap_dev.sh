@@ -95,9 +95,60 @@ get () {
     fi
 }
 
+
 ##############################################
 #          Installation Methods              #
 ##############################################
+
+
+create_root_nix_if_necessaary () {
+    #
+    # As of MacOS X Catalina (10.15.x), the root directory is no longer writeable.
+    # However, Nix expects to be installed at this location. To get around this,
+    # we borrowed a script from the NixOS repository that creates a separate
+    # volume where Nix can be hosted at root (i.e. /nix/).
+    #
+    # Please see './nix/create-darwin-volume.sh' for more details.
+    #
+    if [[ ! -d "/nix" ]]; then
+        if [[ ! -w "/" && "$OSTYPE" == "darwin"* ]]; then
+            yellow "Detected operating system is MacOS X Catalina or higher ( >= 10.15), so we'll have to do a little extra disk set up."
+            yellow "Creating Nix volume..."
+
+            . ./nix/create-darwin-volume.sh
+
+            yellow "Nix volume created!"
+        fi
+        # else: We're either on OS X Mojave (10.14) or below, so /nix/ will be created at
+        # the system root (same behavior as Linux) in the install_linux step.
+    fi
+}
+
+configure_nix_env_if_necessary () {
+    set -x
+    # This exists to patch the fact that as of 31 March 2020, Nix installer doesn't modify
+    # the Zshell profile (it only checks bash and sh).
+    p=$HOME/.nix-profile/etc/profile.d/nix.sh
+    if [ -z "$NIX_INSTALLER_NO_MODIFY_PROFILE" ]; then
+        # Make the shell source nix.sh during login.
+        for i in .bash_profile .bash_login .profile .zshrc; do
+            fn="$HOME/$i"
+            if [ -w "$fn" ]; then
+                if ! grep -q "$p" "$fn"; then
+                    echo "modifying $fn..." >&2
+                    echo "if [ -e $p ]; then . $p; fi # added by Nix installer" >> "$fn"
+                    source $fn
+                fi
+                added=1
+                break
+            fi
+        done
+    fi
+
+    # Sets up some important Nix environment variables
+    . /Users/$USER/.nix-profile/etc/profile.d/nix.sh
+    set +x
+}
 
 install_nix () {
     if [ -x "$(command -v nix)" ]
@@ -113,8 +164,7 @@ install_nix () {
 
     bold "Configuring Nix environment..."
 
-    # Sets up some important Nix environment variables
-    . ${HOME}/.nix-profile/etc/profile.d/nix.sh
+    configure_nix_env_if_necessary
 
     bold "Nix environment configured."
 
@@ -151,10 +201,17 @@ install_misl_env () {
 
 # Bootstraps the developer environment.
 main () {
+    # Make sure to call `create_root_nix_if_necessaary` for Mac OS X users, as it solves a problem
+    # with Mac OS Catalina and above.
+    create_root_nix_if_necessaary
     install_nix
     install_nix_python
     install_misl_env
     green "All done!"
+
+    # Reload the shell to set environment variables like $NIX_PATH.
+    exec $SHELL
+
 }
 
 main
