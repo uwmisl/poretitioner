@@ -1,0 +1,28 @@
+diff --git a/pre_commit/languages/python.py b/pre_commit/languages/python.py
+index 5073a8b..1670fdd 100644
+--- a/pre_commit/languages/python.py
++++ b/pre_commit/languages/python.py
+@@ -202,7 +202,7 @@ def py_interface(
+
+ def make_venv(envdir: str, python: str) -> None:
+     env = dict(os.environ, VIRTUALENV_NO_DOWNLOAD='1')
+-    cmd = (sys.executable, '-mvirtualenv', envdir, '-p', python)
++    cmd = [sys.executable, '-mvenv', envdir]
+     cmd_output_b(*cmd, env=env, cwd='/')
+
+
+diff --git a/pre_commit/resources/hook-tmpl b/pre_commit/resources/hook-tmpl
+index 299144e..602da37 100755
+--- a/pre_commit/resources/hook-tmpl
++++ b/pre_commit/resources/hook-tmpl
+@@ -25,7 +25,9 @@ ARGS.append('--')
+ ARGS.extend(sys.argv[1:])
+
+ DNE = '`pre-commit` not found.  Did you forget to activate your virtualenv?'
+-if os.access(INSTALL_PYTHON, os.X_OK):
++if os.path.isfile('@pre-commit@/bin/pre-commit') and os.access('@pre-commit@/bin/pre-commit', os.X_OK):
++    CMD = ['@pre-commit@/bin/pre-commit']
++elif os.access(INSTALL_PYTHON, os.X_OK):
+     CMD = [INSTALL_PYTHON, '-mpre_commit']
+ elif which('pre-commit'):
+     CMD = ['pre-commit']
