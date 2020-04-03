@@ -5,9 +5,8 @@ import dask.bag as db
 import h5py
 import numpy as np
 import pandas as pd
+import raw_signal_utils
 from dask.diagnostics import ProgressBar
-
-from . import raw_signal_utils
 
 ProgressBar().register()
 
@@ -35,7 +34,7 @@ def find_peptides(signal, voltage, signal_threshold=0.7, voltage_threshold=-180)
     if voltage[-1] <= voltage_threshold and signal[-1] <= signal_threshold:
         diff_points = np.hstack([diff_points, [len(voltage)]])
 
-    return list(zip(diff_points[::2], diff_points[1::2]))
+    return zip(diff_points[::2], diff_points[1::2])
 
 
 def _find_peptides_helper(
@@ -105,7 +104,7 @@ def parallel_find_peptides(
     logger.setLevel(logging.INFO)
     logger.addHandler(logging.StreamHandler())
 
-    for run, f5_fname in f5_fnames.items():
+    for run, f5_fname in f5_fnames.iteritems():
         logger.info("Reading in signals for run: %s" % run)
         f5 = h5py.File(f5_fname)
         voltage = f5.get("/Device/MetaData").value["bias_voltage"] * 5.0
@@ -177,7 +176,7 @@ def extract_raw_data(
     logger.setLevel(logging.INFO)
     logger.addHandler(logging.StreamHandler())
 
-    for run, f5_fname in f5_fnames.items():
+    for run, f5_fname in f5_fnames.iteritems():
         logger.info("Saving data from %s" % run)
         df = np.load(os.path.join(df_location, df_prefix + "_%s.pkl" % run), allow_pickle=True)
         f5 = h5py.File(f5_fname, "r")

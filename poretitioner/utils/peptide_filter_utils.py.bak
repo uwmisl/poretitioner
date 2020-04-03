@@ -8,9 +8,9 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+from NTERs_trained_cnn_05152019 import *
 
 from . import peptide_quantifier_utils as pepquant
-from .NTERs_trained_cnn_05152019 import *
 
 warnings.filterwarnings("ignore")
 use_cuda = True

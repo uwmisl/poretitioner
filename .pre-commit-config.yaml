@@ -3,22 +3,22 @@ repos:
     #    Makes code clean and pretty    #
     #####################################
 -   repo: https://github.com/ambv/black
-    rev: 18.9b0
+    rev: 19.10b0
     hooks:
     -   id: black
-        args: [--verbose, --line-length=99]
+        args: [--safe, --verbose, --line-length=99]
         name: Prettify code
-        always_run: true
+        language_version: python3.7
 
     #####################################
     #       Sorts module imports        #
     #####################################
--   repo: https://github.com/timothycrosley/isort
-    rev: master
+-   repo: https://github.com/pre-commit/mirrors-isort
+    rev: v4.3.4
     hooks:
     -   id: isort
         name: Sort imports
-        args: [-]
+        args: []
 
     #####################################
     #     Strips trailing whitespace    #

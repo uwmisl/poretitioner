@@ -8,8 +8,7 @@ from shutil import copyfile
 import h5py
 import numpy as np
 from matplotlib import pyplot as plt
-
-from .yaml_assistant import *
+from yaml_assistant import *
 
 _raw_data_paths = {
     "read-based": {
@@ -57,7 +56,7 @@ def get_local_fractional_blockage(
     signal = get_scaled_raw_for_channel(f5, channel=channel, read=read)
     open_pore = find_open_pore_current(signal, open_pore_guess, bound=open_pore_bound)
     if open_pore is None:
-        print("open pore is None")
+        print "open pore is None"
 
         return None
 
@@ -94,12 +93,12 @@ def get_raw_signal(f5, channel=None):
         raw = f5.get(signal_path).value
         return raw
     else:
-        raw = list(f5.get("/Raw/Reads/").values())[0].get("Signal").value
+        raw = f5.get("/Raw/Reads/").values()[0].get("Signal").value
         return raw
 
 
 def determine_f5_format(f5):
-    raw_base_path = str(list(f5.get("/Raw").values())[0])
+    raw_base_path = str(f5.get("/Raw").values()[0])
     if "Reads" in raw_base_path:
         path_type = "read-based"
     elif "Channel" in raw_base_path:
@@ -229,7 +228,7 @@ def split_multi_fast5(yml_file, temp_f5_fname=None):
 
     new_names = {}
 
-    for i, (run, name) in enumerate(names.items()):
+    for i, (run, name) in enumerate(names.iteritems()):
         f5_fname = f5_dir + "/" + prefix + name
         f5 = h5py.File(f5_fname, "r")
         sample_freq = get_sampling_rate(f5)
@@ -342,7 +341,7 @@ def split_multi_fast5(yml_file, temp_f5_fname=None):
                 split_f5.flush()
 
         logger.info("Closing and compressing files.")
-        for run_split, split_f5 in open_split_f5.items():
+        for run_split, split_f5 in open_split_f5.iteritems():
             logger.debug(run_split)
             split_f5_temp_name = split_f5.filename
             split_f5.close()
@@ -369,7 +368,7 @@ def judge_channels(fast5_fname, plot_grid=False, cmap=None, expected_open_pore=2
     if cmap is None:
         cmap = make_cmap([(0.02, 0.02, 0.02), (0.7, 0.7, 0.7), (0.98, 0.98, 1)])
     f5 = h5py.File(name=fast5_fname)
-    channels = list(f5.get("Raw").keys())
+    channels = f5.get("Raw").keys()
     channels.sort(key=natkey)
     nrows, ncols = 16, 32  # = 512 channels
     channel_grid = np.zeros((nrows, ncols))
@@ -407,7 +406,7 @@ def judge_channels(fast5_fname, plot_grid=False, cmap=None, expected_open_pore=2
         off_regions = find_signal_off_regions(raw, current_range=100)
         off_points = []
         for start, end in off_regions:
-            off_points.extend(list(range(start, end)))
+            off_points.extend(range(start, end))
         if len(off_points) + 50000 > len(raw):
             if plot_grid:
                 ax.text(col_j, row_i, str(i), va="center", ha="center", color="white")

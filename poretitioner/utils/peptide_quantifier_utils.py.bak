@@ -19,7 +19,7 @@ def find_peptide_voltage_changes(voltage, voltage_threshold=-180):
     if voltage[-1] <= voltage_threshold:
         diff_points = np.hstack([diff_points, [len(voltage)]])
 
-    return list(zip(diff_points[::2], diff_points[1::2]))
+    return zip(diff_points[::2], diff_points[1::2])
 
 
 # # Retrieving Related Data Files from Filtered File or Capture File
@@ -245,8 +245,8 @@ def get_time_between_captures(
     # If no time interval given then just take average time between captures of
     # entire run
     if time_interval:
-        time_segments = list(
-            range(time_interval * 60 * 10000, len(voltage) + 1, time_interval * 60 * 10000)
+        time_segments = range(
+            time_interval * 60 * 10000, len(voltage) + 1, time_interval * 60 * 10000
         )
     else:
         time_segments = [len(voltage)]
@@ -413,8 +413,8 @@ def get_capture_freq(
     # If no time interval given then just take average time between captures of
     # entire run
     if time_interval:
-        time_segments = list(
-            range(time_interval * 60 * 10000, len(voltage) + 1, time_interval * 60 * 10000)
+        time_segments = range(
+            time_interval * 60 * 10000, len(voltage) + 1, time_interval * 60 * 10000
         )
     else:
         time_segments = [len(voltage)]
