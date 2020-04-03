@@ -1,18 +1,19 @@
-import numpy as np
-import pandas as pd
-import h5py
+import logging
 import os
 import re
-import logging
-from yaml_assistant import YAMLAssistant
 
+import h5py
+import numpy as np
+import pandas as pd
+
+from .yaml_assistant import YAMLAssistant
 
 # # Finding Regions with Normal Voltage
 # Returns tuple list of open voltage regions (between flips)
 
+
 def find_peptide_voltage_changes(voltage, voltage_threshold=-180):
-    diff_points = np.where(np.abs(np.diff(np.where(
-        voltage <= voltage_threshold, 1, 0))) == 1)[0]
+    diff_points = np.where(np.abs(np.diff(np.where(voltage <= voltage_threshold, 1, 0))) == 1)[0]
     if voltage[0] <= voltage_threshold:
         diff_points = np.hstack([[0], diff_points])
     if voltage[-1] <= voltage_threshold:
@@ -25,6 +26,7 @@ def find_peptide_voltage_changes(voltage, voltage_threshold=-180):
 # Returns list containing path names of `[raw_file, capture_file, config_file]`
 # corresponding to the passed in file name. Passed in file can be either filter
 # file or capture file (total captures).
+
 
 def get_related_files(input_file, raw_file_dir="", capture_file_dir=""):
     logger = logging.getLogger("get_related_files")
@@ -47,8 +49,9 @@ def get_related_files(input_file, raw_file_dir="", capture_file_dir=""):
     if input_file.endswith(".csv"):
         # Given file is the filtered file and we're looking for the capture file
         filtered_file = input_file
-        capture_file = [x for x in os.listdir(
-            capture_file_dir) if x.endswith(run_name + ".pkl")][0]
+        capture_file = [x for x in os.listdir(capture_file_dir) if x.endswith(run_name + ".pkl")][
+            0
+        ]
     elif input_file.endswith(".pkl"):
         # Given file is the capture file and filtered file is unspecified
         capture_file = input_file
@@ -70,8 +73,10 @@ def get_related_files(input_file, raw_file_dir="", capture_file_dir=""):
 # Returns list of all capture times from a single channel. Called by
 # `get_capture_time` and `get_capture_time_tseg`
 
-def calc_time_until_capture(voltage_changes, segment_starts, segment_ends,
-                            blockage_starts, blockage_ends):
+
+def calc_time_until_capture(
+    voltage_changes, segment_starts, segment_ends, blockage_starts, blockage_ends
+):
     logger = logging.getLogger("calc_time_until_capture")
     if logger.handlers:
         logger.handlers = []
@@ -88,8 +93,7 @@ def calc_time_until_capture(voltage_changes, segment_starts, segment_ends,
     voltage_ix = 0
     segment_ix = 0
     blockage_ix = 0
-    while voltage_ix < len(voltage_changes) and \
-            segment_ix < len(segment_starts):
+    while voltage_ix < len(voltage_changes) and segment_ix < len(segment_starts):
         voltage_start, voltage_end = voltage_changes[voltage_ix]
 
         # Check if voltage region contains captures
@@ -102,8 +106,7 @@ def calc_time_until_capture(voltage_changes, segment_starts, segment_ends,
             start_time = voltage_start
 
             # Loop through captures within the current voltage region
-            while segment_ix < len(segment_starts) and \
-                    segment_starts[segment_ix] < voltage_end:
+            while segment_ix < len(segment_starts) and segment_starts[segment_ix] < voltage_end:
                 segment_start = segment_starts[segment_ix]
                 segment_end = segment_ends[segment_ix]
 
@@ -113,13 +116,11 @@ def calc_time_until_capture(voltage_changes, segment_starts, segment_ends,
                     # Subtracts all blockages that have occurred since the last
                     # capture
                     while blockage_starts[blockage_ix] < segment_start:
-                        capture_time -= blockage_ends[blockage_ix] - \
-                            blockage_starts[blockage_ix]
+                        capture_time -= blockage_ends[blockage_ix] - blockage_starts[blockage_ix]
                         blockage_ix += 1
 
                     # Add capture time to list & reset stuff
-                    all_capture_times.append(
-                        segment_start - start_time + capture_time)
+                    all_capture_times.append(segment_start - start_time + capture_time)
                     start_time = segment_end
                     segment_ix += 1
                     capture_time = 0
@@ -147,8 +148,8 @@ def calc_time_until_capture(voltage_changes, segment_starts, segment_ends,
 
 # Find time between all blockages:
 
-def calc_time_until_capture_blockages(voltage_changes, blockage_starts,
-                                      blockage_ends):
+
+def calc_time_until_capture_blockages(voltage_changes, blockage_starts, blockage_ends):
     time_until_capture = []
 
     # If there are no captures for the entire channel
@@ -159,8 +160,7 @@ def calc_time_until_capture_blockages(voltage_changes, blockage_starts,
     voltage_ix = 0
     blockage_ix = 0
     first = True
-    while voltage_ix < len(voltage_changes) and \
-            blockage_ix < len(blockage_starts):
+    while voltage_ix < len(voltage_changes) and blockage_ix < len(blockage_starts):
         voltage_start, voltage_end = voltage_changes[voltage_ix]
         blockage_start = blockage_starts[blockage_ix]
 
@@ -170,14 +170,12 @@ def calc_time_until_capture_blockages(voltage_changes, blockage_starts,
             if blockage_start >= voltage_start:
                 # If this is the first blockage in this voltage region
                 if first:
-                    time_until_capture.append(
-                        blockage_start - voltage_start + blockage_extend)
+                    time_until_capture.append(blockage_start - voltage_start + blockage_extend)
                     blockage_extend = 0
                     blockage_ix += 1
                     first = False
                 else:
-                    time_until_capture.append(
-                        blockage_start - blockage_ends[blockage_ix - 1])
+                    time_until_capture.append(blockage_start - blockage_ends[blockage_ix - 1])
                     blockage_ix += 1
             # Blockage was captured before this voltage region, so move on to
             # next blockage
@@ -203,9 +201,10 @@ def calc_time_until_capture_blockages(voltage_changes, blockage_starts,
 # Returns list of average times until capture for given time intervals of a
 # single run
 
-def get_time_between_captures(filtered_file, time_interval=None,
-                              raw_file_dir="", capture_file_dir="",
-                              config_file=""):
+
+def get_time_between_captures(
+    filtered_file, time_interval=None, raw_file_dir="", capture_file_dir="", config_file=""
+):
 
     logger = logging.getLogger("get_time_between_captures")
     if logger.handlers:
@@ -214,14 +213,14 @@ def get_time_between_captures(filtered_file, time_interval=None,
     logger.addHandler(logging.StreamHandler())
 
     # Retrieve raw file, unfiltered capture file, and config file names
-    raw_file, capture_file = get_related_files(filtered_file,
-                                               raw_file_dir=raw_file_dir,
-                                               capture_file_dir=capture_file_dir)
+    raw_file, capture_file = get_related_files(
+        filtered_file, raw_file_dir=raw_file_dir, capture_file_dir=capture_file_dir
+    )
 
     # Process raw file
     f5 = h5py.File(raw_file)
     # Find regions where voltage is normal
-    voltage = f5.get("/Device/MetaData").value["bias_voltage"] * 5.
+    voltage = f5.get("/Device/MetaData").value["bias_voltage"] * 5.0
     voltage_changes = find_peptide_voltage_changes(voltage)
     f5.close()
 
@@ -246,8 +245,9 @@ def get_time_between_captures(filtered_file, time_interval=None,
     # If no time interval given then just take average time between captures of
     # entire run
     if time_interval:
-        time_segments = range(time_interval * 60 * 10000,
-                              len(voltage) + 1, time_interval * 60 * 10000)
+        time_segments = range(
+            time_interval * 60 * 10000, len(voltage) + 1, time_interval * 60 * 10000
+        )
     else:
         time_segments = [len(voltage)]
 
@@ -264,14 +264,12 @@ def get_time_between_captures(filtered_file, time_interval=None,
         voltage_changes_segment = []
         # Find open voltage regions that start within this time segment
         for voltage_region in voltage_changes:
-            if voltage_region[0] < timepoint and \
-                    voltage_region[0] >= checkpoint:
+            if voltage_region[0] < timepoint and voltage_region[0] >= checkpoint:
                 voltage_changes_segment.append(voltage_region)
         # If this time segment contains open voltage regions...
         if voltage_changes_segment:
             # End of last voltage region in tseg
-            end_voltage_seg = voltage_changes_segment[len(
-                voltage_changes_segment) - 1][1]
+            end_voltage_seg = voltage_changes_segment[len(voltage_changes_segment) - 1][1]
             capture_times = []  # Master list of all capture times from this seg
             # Loop through all good channels and get captures times from each
             for i, channel in enumerate(good_channels):
@@ -279,9 +277,12 @@ def get_time_between_captures(filtered_file, time_interval=None,
                 blockage_exists = False
                 # If there are any blockages in this tseg (includes both
                 # non-captures and captures)
-                blockage_segment = channel_blockages[np.logical_and(
-                    channel_blockages.start_obs <= end_voltage_seg,
-                    channel_blockages.start_obs > checkpoint)]
+                blockage_segment = channel_blockages[
+                    np.logical_and(
+                        channel_blockages.start_obs <= end_voltage_seg,
+                        channel_blockages.start_obs > checkpoint,
+                    )
+                ]
                 if not channel_blockages.empty and not blockage_segment.empty:
                     blockage_exists = True
                     blockage_starts = list(blockage_segment.start_obs)
@@ -289,17 +290,24 @@ def get_time_between_captures(filtered_file, time_interval=None,
 
                 channel_captures = captures[captures.channel == channel]
                 # Check that channel actually has captures in this tseg
-                captures_segment = channel_captures[np.logical_and(
-                    channel_captures.start_obs <= end_voltage_seg,
-                    channel_captures.start_obs > checkpoint)]
+                captures_segment = channel_captures[
+                    np.logical_and(
+                        channel_captures.start_obs <= end_voltage_seg,
+                        channel_captures.start_obs > checkpoint,
+                    )
+                ]
                 if not channel_captures.empty and not captures_segment.empty:
 
                     segment_starts = list(captures_segment.start_obs)
                     segment_ends = list(captures_segment.end_obs)
 
                     time_until_capture = calc_time_until_capture(
-                        voltage_changes_segment, segment_starts,
-                        segment_ends, blockage_starts, blockage_ends)
+                        voltage_changes_segment,
+                        segment_starts,
+                        segment_ends,
+                        blockage_starts,
+                        blockage_ends,
+                    )
                     # Add time since channel's last capture from previous
                     # tsegs to time until first capture in current tseg
                     time_until_capture[0] += time_elapsed[i]
@@ -309,13 +317,14 @@ def get_time_between_captures(filtered_file, time_interval=None,
                     time_elapsed[i] = 0
                     voltage_ix = 0
                     while voltage_ix < len(voltage_changes_segment):
-                        if voltage_changes_segment[voltage_ix][0] > \
-                                segment_ends[-1]:
-                            time_elapsed[i] += \
-                                np.sum(calc_time_until_capture_blockages(
+                        if voltage_changes_segment[voltage_ix][0] > segment_ends[-1]:
+                            time_elapsed[i] += np.sum(
+                                calc_time_until_capture_blockages(
                                     voltage_changes_segment[voltage_ix:],
                                     blockage_starts,
-                                    blockage_ends))
+                                    blockage_ends,
+                                )
+                            )
                             break
                         voltage_ix += 1
                     time_elapsed[i] += end_voltage_seg - blockage_ends[-1]
@@ -325,19 +334,21 @@ def get_time_between_captures(filtered_file, time_interval=None,
                     # No captures but still blockages, so add duration of open
                     # voltage regions minus blockages to time elapsed
                     if blockage_exists:
-                        time_elapsed[i] += \
-                            np.sum(calc_time_until_capture_blockages(
-                                voltage_changes_segment,
-                                blockage_starts,
-                                blockage_ends))
+                        time_elapsed[i] += np.sum(
+                            calc_time_until_capture_blockages(
+                                voltage_changes_segment, blockage_starts, blockage_ends
+                            )
+                        )
                         time_elapsed[i] += end_voltage_seg - blockage_ends[-1]
                     # No captures or blockages for channel in this tseg, so add
                     # total duration of open voltage regions to time elapsed
                     else:
-                        time_elapsed[i] += \
-                            np.sum([voltage_region[1] - voltage_region[0]
-                                    for voltage_region in
-                                    voltage_changes_segment])
+                        time_elapsed[i] += np.sum(
+                            [
+                                voltage_region[1] - voltage_region[0]
+                                for voltage_region in voltage_changes_segment
+                            ]
+                        )
             if capture_times:
                 timepoint_captures.append(np.mean(capture_times))
             else:
@@ -346,8 +357,13 @@ def get_time_between_captures(filtered_file, time_interval=None,
             captures_count.append(len(capture_times))
             checkpoint = end_voltage_seg
         else:
-            logger.warn("No open voltage region in time segment [" +
-                        str(checkpoint) + ", " + str(timepoint) + "]")
+            logger.warn(
+                "No open voltage region in time segment ["
+                + str(checkpoint)
+                + ", "
+                + str(timepoint)
+                + "]"
+            )
             timepoint_captures.append(-1)
             checkpoint = timepoint
 
@@ -360,8 +376,10 @@ def get_time_between_captures(filtered_file, time_interval=None,
 # interval.
 # Time intervals must be equal duration and start from zero!
 
-def get_capture_freq(filtered_file, time_interval=None,
-                     raw_file_dir="", capture_file_dir="", config_file=""):
+
+def get_capture_freq(
+    filtered_file, time_interval=None, raw_file_dir="", capture_file_dir="", config_file=""
+):
     logger = logging.getLogger("get_capture_freq")
     if logger.handlers:
         logger.handlers = []
@@ -369,22 +387,21 @@ def get_capture_freq(filtered_file, time_interval=None,
     logger.addHandler(logging.StreamHandler())
 
     # Retrieve raw file and config file names
-    raw_file, capture_file = get_related_files(filtered_file,
-                                               raw_file_dir=raw_file_dir,
-                                               capture_file_dir=capture_file_dir)
+    raw_file, capture_file = get_related_files(
+        filtered_file, raw_file_dir=raw_file_dir, capture_file_dir=capture_file_dir
+    )
 
     # Process raw file
     f5 = h5py.File(raw_file)
     # Find regions where voltage is normal
-    voltage = f5.get("/Device/MetaData").value["bias_voltage"] * 5.
+    voltage = f5.get("/Device/MetaData").value["bias_voltage"] * 5.0
     voltage_changes = find_peptide_voltage_changes(voltage)
     f5.close()
 
     # Process config file
     y = YAMLAssistant(config_file)
     # [-11:-4] gives run_seg (i.e. "run01_a")
-    good_channels = y.get_variable(
-        "fast5:good_channels:" + filtered_file[-11:-4])
+    good_channels = y.get_variable("fast5:good_channels:" + filtered_file[-11:-4])
     for i in range(0, len(good_channels)):
         good_channels[i] = "Channel_" + str(good_channels[i])
     logger.info("Number of Channels: " + str(len(good_channels)))
@@ -396,8 +413,9 @@ def get_capture_freq(filtered_file, time_interval=None,
     # If no time interval given then just take average time between captures of
     # entire run
     if time_interval:
-        time_segments = range(time_interval * 60 * 10000,
-                              len(voltage) + 1, time_interval * 60 * 10000)
+        time_segments = range(
+            time_interval * 60 * 10000, len(voltage) + 1, time_interval * 60 * 10000
+        )
     else:
         time_segments = [len(voltage)]
 
@@ -409,15 +427,13 @@ def get_capture_freq(filtered_file, time_interval=None,
         voltage_changes_segment = []
         # Find open voltage regions that start within this time segment
         for voltage_region in voltage_changes:
-            if voltage_region[0] < timepoint and \
-                    voltage_region[0] >= checkpoint:
+            if voltage_region[0] < timepoint and voltage_region[0] >= checkpoint:
                 voltage_changes_segment.append(voltage_region)
 
         # If this time segment contains open voltage regions...
         if voltage_changes_segment:
             # End of last voltage region in tseg
-            end_voltage_seg = voltage_changes_segment[len(
-                voltage_changes_segment) - 1][1]
+            end_voltage_seg = voltage_changes_segment[len(voltage_changes_segment) - 1][1]
             # List of capture counts for each channel from this tseg (length of
             # list = # of channels)
             capture_counts = []
@@ -427,19 +443,28 @@ def get_capture_freq(filtered_file, time_interval=None,
                 # Check that channel actually has captures and add the # of
                 # captures in this tseg to capture_counts
                 if not channel_captures.empty:
-                    capture_counts.append(len(channel_captures[
-                        np.logical_and(channel_captures.start_obs <=
-                                       end_voltage_seg,
-                                       channel_captures.start_obs >
-                                       checkpoint)]))
+                    capture_counts.append(
+                        len(
+                            channel_captures[
+                                np.logical_and(
+                                    channel_captures.start_obs <= end_voltage_seg,
+                                    channel_captures.start_obs > checkpoint,
+                                )
+                            ]
+                        )
+                    )
                 else:
                     capture_counts.append(0)
-            all_capture_freq.append(
-                np.mean(capture_counts) / (time_segments[0] / 600000.))
+            all_capture_freq.append(np.mean(capture_counts) / (time_segments[0] / 600000.0))
             checkpoint = end_voltage_seg
         else:
-            logger.warn("No open voltage region in time segment [" +
-                        str(checkpoint) + ", " + str(timepoint) + "]")
+            logger.warn(
+                "No open voltage region in time segment ["
+                + str(checkpoint)
+                + ", "
+                + str(timepoint)
+                + "]"
+            )
             all_capture_freq.append(0)
             checkpoint = timepoint
 
@@ -448,10 +473,11 @@ def get_capture_freq(filtered_file, time_interval=None,
 
 # Calibration Curves
 
+
 def NTER_time_fit(time):
     if time == -1:
         return 0
-    conc = np.power(time / 20384., 1 / -0.96)
+    conc = np.power(time / 20384.0, 1 / -0.96)
     if conc < 0:
         return 0
     return conc

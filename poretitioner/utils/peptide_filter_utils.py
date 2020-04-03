@@ -1,15 +1,18 @@
-import numpy as np
-import h5py
-import peptide_quantifier_utils as pepquant
-import joblib
-import os
-from NTERs_trained_cnn_05152019 import *
-import pandas as pd
 import logging
+import os
+import warnings
+
+import h5py
+import joblib
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
-import warnings
-warnings.filterwarnings('ignore')
+from NTERs_trained_cnn_05152019 import *
+
+from . import peptide_quantifier_utils as pepquant
+
+warnings.filterwarnings("ignore")
 use_cuda = True
 
 
@@ -41,7 +44,7 @@ def init_classifier(classifier_name, classifier_path):
         return nanoporeTER_cnn
     elif classifier_name is "NTER_rf":
         # Random Forest classifier
-        return joblib.load(open(classifier_path, 'rb'))
+        return joblib.load(open(classifier_path, "rb"))
     else:
         raise Exception("Invalid classifier name")
 
@@ -89,8 +92,8 @@ def classifier_predict(classifier, raw, conf_thresh, classifier_name):
         return lab[0][0]
     else:
         class_proba = classifier.predict_proba(
-            [[np.mean(raw), np.std(raw), np.min(raw), np.max(raw),
-              np.median(raw)]])[0]
+            [[np.mean(raw), np.std(raw), np.min(raw), np.max(raw), np.median(raw)]]
+        )[0]
         max_proba = np.amax(class_proba)
         if max_proba >= conf_thresh:
             return np.where(class_proba == max_proba)[0][0]
@@ -106,11 +109,20 @@ def classifier_predict(classifier, raw, conf_thresh, classifier_name):
 #   conf_thresh will be written to file
 # custom_fname is a custom string to be added to file name
 # rej_check ensures that captures which are ejected prematurely are not counted
-def filter_and_classify_peptides(runs, date, filter_name, classifier_name="",
-                                 conf_thresh=0.95,
-                                 custom_fname="", rej_check=True,
-                                 f5_dir="", classifier_path="",
-                                 capture_fname="", raw_fname="", save_dir="."):
+def filter_and_classify_peptides(
+    runs,
+    date,
+    filter_name,
+    classifier_name="",
+    conf_thresh=0.95,
+    custom_fname="",
+    rej_check=True,
+    f5_dir="",
+    classifier_path="",
+    capture_fname="",
+    raw_fname="",
+    save_dir=".",
+):
 
     logger = logging.getLogger("filter_and_classify_peptides")
     if logger.handlers:
@@ -139,9 +151,7 @@ def filter_and_classify_peptides(runs, date, filter_name, classifier_name="",
         raw_file = raw_fname % run
 
         # TODO parameterize
-        f5_file = os.path.join(f5_dir,
-                               [x for x in os.listdir(f5_dir) if
-                                run in x][0])
+        f5_file = os.path.join(f5_dir, [x for x in os.listdir(f5_dir) if run in x][0])
         logger.debug("f5_file:" + f5_file)
         logger.debug("raw_file:" + raw_file)
         logger.debug("capture_file:" + capture_file)
@@ -152,18 +162,16 @@ def filter_and_classify_peptides(runs, date, filter_name, classifier_name="",
         f5 = h5py.File(f5_file, "r")
 
         # Get the voltage & where it switches
-        voltage = f5.get("/Device/MetaData").value["bias_voltage"] * 5.
+        voltage = f5.get("/Device/MetaData").value["bias_voltage"] * 5.0
         voltage_changes = pepquant.find_peptide_voltage_changes(voltage)
         voltage_ends = [x[1] for x in voltage_changes]
 
         # Apply length filter
-        capture_meta_df = capture_meta_df[capture_meta_df.duration_obs >
-                                          filter_param[9]]
+        capture_meta_df = capture_meta_df[capture_meta_df.duration_obs > filter_param[9]]
 
         # Apply 5 feature filters and classify
         if classifier_name:
-            captures = [[] for x in range(0, get_num_classes(classifier,
-                                                             classifier_name))]
+            captures = [[] for x in range(0, get_num_classes(classifier, classifier_name))]
         else:
             captures = [[]]
         non_filtered = 0
@@ -177,8 +185,7 @@ def filter_and_classify_peptides(runs, date, filter_name, classifier_name="",
 
             # If capture is ejected early, don't count it
             if rej_check:
-                capture_rejected = check_capture_rejection(
-                    meta_i.end_obs, voltage_ends)
+                capture_rejected = check_capture_rejection(meta_i.end_obs, voltage_ends)
                 if not capture_rejected:
                     continue
 
@@ -190,28 +197,40 @@ def filter_and_classify_peptides(runs, date, filter_name, classifier_name="",
             new_max = np.max(raw_minus_10)
             new_stdv = np.std(raw_minus_10)
 
-            capture = [i, meta_i["run"], meta_i["channel"], meta_i["start_obs"],
-                       meta_i["end_obs"], meta_i["duration_obs"]]
+            capture = [
+                i,
+                meta_i["run"],
+                meta_i["channel"],
+                meta_i["start_obs"],
+                meta_i["end_obs"],
+                meta_i["duration_obs"],
+            ]
 
-            if (new_mean > filter_param[0] and new_mean < filter_param[1] and
-                new_stdv < filter_param[2] and new_med > filter_param[3] and
-                new_med < filter_param[4] and new_min > filter_param[5] and
-                new_min < filter_param[6] and new_max > filter_param[7] and
-                    new_max < filter_param[8]):
+            if (
+                new_mean > filter_param[0]
+                and new_mean < filter_param[1]
+                and new_stdv < filter_param[2]
+                and new_med > filter_param[3]
+                and new_med < filter_param[4]
+                and new_min > filter_param[5]
+                and new_min < filter_param[6]
+                and new_max > filter_param[7]
+                and new_max < filter_param[8]
+            ):
                 meta_i["mean"] = new_mean
                 meta_i["median"] = new_med
                 meta_i["min"] = new_min
                 meta_i["max"] = new_max
-                capture.extend([new_mean, new_stdv, new_med,
-                                new_min, new_max, meta_i["open_channel"]])
+                capture.extend(
+                    [new_mean, new_stdv, new_med, new_min, new_max, meta_i["open_channel"]]
+                )
 
                 if classifier_name:
                     # classifier uses obs 100-20100 of capture
                     raw_100_to_20100 = raw_captures[i][100:20100]
-                    class_predict = classifier_predict(classifier,
-                                                       raw_100_to_20100,
-                                                       conf_thresh,
-                                                       classifier_name)
+                    class_predict = classifier_predict(
+                        classifier, raw_100_to_20100, conf_thresh, classifier_name
+                    )
                     if class_predict == -1:
                         non_classified += 1
                     else:
@@ -226,8 +245,7 @@ def filter_and_classify_peptides(runs, date, filter_name, classifier_name="",
         logger.info("Did not pass filter: %0.3f %%" % no_pass)
         if classifier_name:
             semi_pass = float(non_classified) / len(capture_meta_df.index) * 100
-            logger.info("Passed filter but not classifier: %0.3f %%" %
-                        semi_pass)
+            logger.info("Passed filter but not classifier: %0.3f %%" % semi_pass)
 
         # Save filtered captures. If classifier was enabled, each class is a
         # different file.
@@ -239,15 +257,28 @@ def filter_and_classify_peptides(runs, date, filter_name, classifier_name="",
                 filtered_captures.columns = capture_meta_df.columns
 
                 if "cnn" in classifier_name:
-                    filtered_fname = "%s_segmented_peptides_filtered%s_cnn_class%02d_%s.csv" % (date, filter_param[10], i, run)
+                    filtered_fname = "%s_segmented_peptides_filtered%s_cnn_class%02d_%s.csv" % (
+                        date,
+                        filter_param[10],
+                        i,
+                        run,
+                    )
                     filtered_fname = os.path.join(save_dir, filtered_fname)
 
                 elif "rf" in classifier_name:
-                    filtered_fname = "%s_segmented_peptides_filtered%s_rf_class%02d_%s.csv" % (date, filter_param[10], i, run)
+                    filtered_fname = "%s_segmented_peptides_filtered%s_rf_class%02d_%s.csv" % (
+                        date,
+                        filter_param[10],
+                        i,
+                        run,
+                    )
                     filtered_fname = os.path.join(save_dir, filtered_fname)
                 else:
-                    filtered_fname = "%s_segmented_peptides_filtered%s_%s" % \
-                                     (date, filter_param[10], run)
+                    filtered_fname = "%s_segmented_peptides_filtered%s_%s" % (
+                        date,
+                        filter_param[10],
+                        run,
+                    )
                     filtered_fname = os.path.join(save_dir, filtered_fname)
                 logger.info("Saving to " + filtered_fname)
                 filtered_captures.to_csv(filtered_fname, sep="\t", index=True)

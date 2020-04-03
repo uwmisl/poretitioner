@@ -19,7 +19,7 @@ repos:
     -   id: isort
         name: Sort imports
         always_run: true
-        args: [-]
+        args: []
 
     #####################################
     #     Strips trailing whitespace    #
@@ -62,8 +62,7 @@ repos:
     hooks:
     -   id: tests
         name: Run tests
-        always_run: true
-        entry: pytest -v
+        entry: pytest -sv
         language: system
         types: [python]
         stages: [push]
