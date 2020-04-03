@@ -6,7 +6,7 @@ repos:
     rev: 18.9b0
     hooks:
     -   id: black
-        args: [--fast, --line-length=99]
+        args: [--verbose, --line-length=99]
         name: Prettify code
         always_run: true
 
@@ -18,8 +18,7 @@ repos:
     hooks:
     -   id: isort
         name: Sort imports
-        always_run: true
-        args: []
+        args: [-]
 
     #####################################
     #     Strips trailing whitespace    #
@@ -29,7 +28,10 @@ repos:
     hooks:
     -   id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
-        always_run: true
+    -   id: check-json
+    -   id: pretty-format-json
+        args: [--autofix, --no-sort-keys]
+    -   id: end-of-file-fixer
 
     #####################################
     #   Checks for code style issues    #
@@ -41,7 +43,6 @@ repos:
         additional_dependencies: [flake8~=3.7.3]
         args: [--max-line-length=99]
         name: Check style
-        always_run: true
         stages: [push]
 
     #####################################
@@ -52,7 +53,6 @@ repos:
     hooks:
     -   id: pydocstyle
         name: Check documentation
-        always_run: true
         stages: [push]
 
     #####################################
@@ -62,7 +62,7 @@ repos:
     hooks:
     -   id: tests
         name: Run tests
-        entry: pytest -sv
+        entry: pytest -v
         language: system
         types: [python]
         stages: [push]
