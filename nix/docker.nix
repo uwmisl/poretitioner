@@ -1,8 +1,8 @@
-{ pkgs ? import <nixpkgs> {} }:
+{ pkgs ? import <nixpkgs> {}, python ? pkgs.python37 }:
 
 with pkgs;
-let poretitioner = callPackage ../default.nix { inherit pkgs; };
-    binPath = builtins.concatStringsSep ''/'' [pore.outPath python.sitePackages ''bin'' poretitioner.pname ];
+let poretitioner = callPackage ../default.nix { inherit pkgs python; };
+    binPath = builtins.concatStringsSep ''/'' [poretitioner.outPath python.sitePackages ''bin'' poretitioner.pname ];
 in
 dockerTools.buildImage {
   name = "poretitioner";
