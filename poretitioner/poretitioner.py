@@ -48,10 +48,9 @@ def main():
         "As proof that these libraries are properly packaged and callable, drawing a basic plot..."
     )
     plt.plot([0, 1], [1, 0])
-    plt.title(
-        "The rendering of this plot demonstrates that matplotlib is properly packaged in docker and importable."
-    )
+    plt.title("matplotlib is properly packaged and importable.")
     plt.show()
+
     print("\tPlotted!")
 
 
