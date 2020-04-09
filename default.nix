@@ -12,7 +12,7 @@
 { pkgs ? import <nixpkgs> { }, python ? pkgs.python37 }:
 with pkgs;
 let
-  run_pkgs = callPackage ./nix/runDependencies.nix { inherit python; };
+  run_pkgs = (callPackage ./nix/dependencies.nix { inherit python; }).run;
 
   # To understand how `buildPythonApplication` works, check out https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/interpreters/python/mk-python-derivation.nix
   poretitioner = python.pkgs.buildPythonApplication {

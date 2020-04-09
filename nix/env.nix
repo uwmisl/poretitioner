@@ -15,6 +15,7 @@
 with import <nixpkgs> { };
 let
   python = pkgs.python37;
-  dev_pkgs = callPackage ./devDependencies.nix { inherit python; };
-  testing_pkgs = callPackage ./testingDependencies.nix { inherit python; };
+  dependencies = (callPackage ./dependencies.nix { inherit python; });
+  dev_pkgs = dependencies.build;
+  testing_pkgs = dependencies.test;
 in dev_pkgs ++ testing_pkgs

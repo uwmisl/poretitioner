@@ -2,13 +2,10 @@
 
 with pkgs;
 let poretitioner = callPackage ../default.nix { inherit pkgs python; };
-    binPath = builtins.concatStringsSep ''/'' [poretitioner.outPath ''bin'' poretitioner.pname ];
+    binPath = builtins.concatStringsSep ''/'' [ poretitioner.outPath ''bin'' poretitioner.pname ];
 in
 dockerTools.buildImage {
   name = "poretitioner";
-  runAsRoot = ''
-    echo ${binPath}
-  '';
 
   config = {
     Cmd = [ ''${binPath}'' ];

@@ -16,7 +16,5 @@ with import <nixpkgs> { };
 
 let
   python = pkgs.python37;
-  run_pkgs = callPackage ./runDependencies.nix { inherit python; };
-  dev_pkgs = callPackage ./devDependencies.nix { inherit python; };
-  test_pkgs = callPackage ./testingDependencies.nix { inherit python; };
-in mkShell { buildInputs = run_pkgs ++ dev_pkgs ++ test_pkgs; }
+  dependencies = callPackage ./dependencies.nix { inherit python; };
+in mkShell { buildInputs = dependencies.all; }
