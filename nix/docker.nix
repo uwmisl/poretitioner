@@ -2,7 +2,7 @@
 
 with pkgs;
 let poretitioner = callPackage ../default.nix { inherit pkgs python; };
-    binPath = builtins.concatStringsSep ''/'' [poretitioner.outPath python.sitePackages ''bin'' poretitioner.pname ];
+    binPath = builtins.concatStringsSep ''/'' [poretitioner.outPath ''bin'' poretitioner.pname ];
 in
 dockerTools.buildImage {
   name = "poretitioner";
