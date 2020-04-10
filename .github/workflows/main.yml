@@ -35,7 +35,7 @@ jobs:
 
     # Uploads the docker image as a build artifact
     - name: Upload the docker image
-    - uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v1
       with:
         name: poretitioner_for_docker
         path: /tmp/artifacts/poretitioner_for_docker.tar.gz
