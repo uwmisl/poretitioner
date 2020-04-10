@@ -37,6 +37,34 @@ def find_peptides(signal, voltage, signal_threshold=0.7, voltage_threshold=-180)
     return zip(diff_points[::2], diff_points[1::2])
 
 
+def find_peptide_voltage_changes(voltage, voltage_threshold=-180):
+    """find_peptide_voltage_changes
+
+    Find regions where voltage drops at or below the specified threshold.
+
+    Parameters
+    ----------
+    voltage : np.array
+        Contains voltage values recorded by a nanopore device.
+    voltage_threshold : int, optional
+        Find regions where the voltage drops at or below this value, by default -180
+
+    Returns
+    -------
+    zip iterator
+        Each item in the iterator represents the (start, end) points of regions
+        where the voltage drops at or below the threshold in the input array.
+    """
+    diff_points = np.where(np.abs(np.diff(
+        np.where(voltage <= voltage_threshold, 1, 0))) == 1)[0]
+    if voltage[0] <= voltage_threshold:
+        diff_points = np.hstack([[0], diff_points])
+    if voltage[-1] <= voltage_threshold:
+        diff_points = np.hstack([diff_points, [len(voltage)]])
+
+    return zip(diff_points[::2], diff_points[1::2])
+
+
 def _find_peptides_helper(
     raw_signal_meta,
     voltage=None,

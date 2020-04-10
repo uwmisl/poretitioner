@@ -1,26 +1,19 @@
+"""
+=====
+quantify.py
+=====
+
+This module contains functionality for quantifying nanopore captures.
+
+"""
 import logging
 import os
 import re
-
 import h5py
 import numpy as np
 import pandas as pd
-
+from .peptide_segmentation import find_peptide_voltage_changes
 from .yaml_assistant import YAMLAssistant
-
-# # Finding Regions with Normal Voltage
-# Returns tuple list of open voltage regions (between flips)
-
-
-def find_peptide_voltage_changes(voltage, voltage_threshold=-180):
-    diff_points = np.where(np.abs(np.diff(np.where(voltage <= voltage_threshold, 1, 0))) == 1)[0]
-    if voltage[0] <= voltage_threshold:
-        diff_points = np.hstack([[0], diff_points])
-    if voltage[-1] <= voltage_threshold:
-        diff_points = np.hstack([diff_points, [len(voltage)]])
-
-    return zip(diff_points[::2], diff_points[1::2])
-
 
 # # Retrieving Related Data Files from Filtered File or Capture File
 # Returns list containing path names of `[raw_file, capture_file, config_file]`
@@ -69,14 +62,72 @@ def get_related_files(input_file, raw_file_dir="", capture_file_dir=""):
     return raw_file, capture_file
 
 
-# # Finding Capture Times for One Channel
-# Returns list of all capture times from a single channel. Called by
-# `get_capture_time` and `get_capture_time_tseg`
+def get_overlapping_regions(window, regions):
+    """get_overlapping_regions
+
+    Finds all of the regions in the given list that overlap with the window.
+    Needs to have at least one overlapping point; cannot be just adjacent.
+    Incomplete overlaps are returned.
+
+    Parameters
+    ----------
+    window : tuple of numerics (start, end)
+        Specifies the start and end points of the desired overlap.
+    regions : list of tuples of numerics [(start, end), ...]
+        Start and end points to check for overlap with the specified window.
+        All regions are assumed to be mutually exclusive and sorted in
+        ascending order.
+
+    Returns
+    -------
+    overlapping_regions : list of tuples of numerics [(start, end), ...]
+        Regions that overlap with the window in whole or part, returned in
+        ascending order.
+    """
+    window_start, window_end = window
+    overlapping_regions = []
+    for region in regions:
+        region_start, region_end = region
+        if region_start >= window_end:
+            # Region comes after the window, we're done searching
+            break
+        elif region_end < window_start:
+            # Region ends before the window starts
+            continue
+        elif region_end >= window_start or region_start >= window_start:
+            # Overlapping
+            overlapping_regions.append(region)
+        else:
+            raise Exception(f"Shouldn't have gotten here! "
+                            f"Region: {region}, Window: {window}.")
+    return overlapping_regions
 
 
-def calc_time_until_capture(
-    voltage_changes, segment_starts, segment_ends, blockage_starts, blockage_ends
-):
+def calc_time_until_capture(capture_windows, captures, blockages):
+    """calc_time_until_capture
+
+        Finds all times between captures from a single channel.
+        TODO: Improve this description. Include info about blockages & how
+        "time until capture" is defined.
+
+        Note: called by "get_capture_time" and "get_capture_time_tseg"
+
+        Parameters
+        ----------
+        capture_windows : list # TODO: list of tuples?
+            Regions of current where the nanopore is available to accept a
+            capture. (I.e., is in a "normal" voltage state.)
+        captures : list of tuples
+            [description]
+        blockages : list of tuples
+            [description]
+
+        Returns
+        -------
+        list of floats
+            List of all capture times from a single channel.
+        """
+    # TODO: Implement logger best practices : https://github.com/uwmisl/poretitioner/issues/12
     logger = logging.getLogger("calc_time_until_capture")
     if logger.handlers:
         logger.handlers = []
@@ -85,63 +136,81 @@ def calc_time_until_capture(
 
     all_capture_times = []
 
-    # If there are no captures for the entire channel
-    if not segment_starts:
+    if captures is None or len(captures) == 0:
         return None
 
-    capture_time = 0
-    voltage_ix = 0
-    segment_ix = 0
-    blockage_ix = 0
-    while voltage_ix < len(voltage_changes) and segment_ix < len(segment_starts):
-        voltage_start, voltage_end = voltage_changes[voltage_ix]
+    # elapsed_time_until_capture = 0
+    # for capture_window_i, capture_window in enumerate(capture_windows):
+    #     # Get all the captures & blockages within that window
+    #     captures_in_window = get_overlapping_regions(capture_window, captures)
+    #     blockages_in_window = get_overlapping_regions(capture_window,
+    #                                                   blockages)
+    #     if len(captures_in_window) == 0 and len(blockages_in_window) == 0:
+    #         elapsed_time_until_capture += capture_window[1] - capture_window[0]
+    #         continue
+        
+    #     pass
 
-        # Check if voltage region contains captures
-        if segment_starts[segment_ix] < voltage_end:
+    capture_time = 0
+    capture_window_ix = 0
+    capture_ix = 0
+    blockage_ix = 0
+
+
+    while capture_window_ix < len(capture_windows) and \
+            capture_ix < len(captures):
+        capture_window_start, capture_window_end = capture_windows[capture_window_ix]
+
+        capture_start = captures[capture_ix].start_obs
+        capture_end = captures[capture_ix].end_obs
+
+        # Check if capture window contains captures
+        if capture_start < capture_window_end:
 
             # Point of reference for calculating capture time. For first capture
-            # in voltage region, this will be the start time of the voltage
-            # region. For subsequent captures it will be the end time of the
+            # in capture window, this will be the start time of the capture
+            # window. For subsequent captures it will be the end time of the
             # previous capture.
-            start_time = voltage_start
+            start_time = capture_window_start
 
-            # Loop through captures within the current voltage region
-            while segment_ix < len(segment_starts) and segment_starts[segment_ix] < voltage_end:
-                segment_start = segment_starts[segment_ix]
-                segment_end = segment_ends[segment_ix]
+            # Loop through captures within the current capture window
+            while capture_ix < len(captures) and capture_start < capture_window_end:
+                capture_start = captures[capture_ix].start_obs
+                capture_end = captures[capture_ix].end_obs
 
-                if segment_start >= voltage_start:
+                if capture_start >= capture_window_start:
 
                     # Don't count times when channel is blocked from other junk
                     # Subtracts all blockages that have occurred since the last
                     # capture
-                    while blockage_starts[blockage_ix] < segment_start:
-                        capture_time -= blockage_ends[blockage_ix] - blockage_starts[blockage_ix]
+                    while blockages[blockage_ix].start_obs < capture_start:
+                        capture_time -= blockages[blockage_ix].end_obs - \
+                            blockages[blockage_ix].start_obs
                         blockage_ix += 1
 
                     # Add capture time to list & reset stuff
-                    all_capture_times.append(segment_start - start_time + capture_time)
-                    start_time = segment_end
-                    segment_ix += 1
+                    all_capture_times.append(capture_start - start_time + capture_time)
+                    start_time = capture_end
+                    capture_ix += 1
                     capture_time = 0
                     blockage_ix += 1  # Skip blockage caused by current segment
 
                 # Something weird is happening... report it and move on
                 else:
-                    logger.debug(voltage_start, voltage_end)
-                    logger.debug(segment_start)
-                    segment_ix += 1
+                    logger.debug(capture_window_start, capture_window_end)
+                    logger.debug(capture_start)
+                    capture_ix += 1
 
-            # Last capture in current voltage region sets up capture time for
-            # first capture in next voltage region
-            capture_time = voltage_end - segment_end
+            # Last capture in current capture window sets up capture time for
+            # first capture in next capture window
+            capture_time = capture_window_end - capture_end
 
-        # If no captures in current voltage region, extend capture time for
+        # If no captures in current capture window, extend capture time for
         # duration of region
         else:
-            capture_time += voltage_end - voltage_start
+            capture_time += capture_window_end - capture_window_start
 
-        voltage_ix += 1
+        capture_window_ix += 1
 
     return all_capture_times
 
@@ -205,7 +274,7 @@ def calc_time_until_capture_blockages(voltage_changes, blockage_starts, blockage
 def get_time_between_captures(
     filtered_file, time_interval=None, raw_file_dir="", capture_file_dir="", config_file=""
 ):
-
+    # TODO: Implement logger best practices : https://github.com/uwmisl/poretitioner/issues/12
     logger = logging.getLogger("get_time_between_captures")
     if logger.handlers:
         logger.handlers = []
@@ -298,16 +367,10 @@ def get_time_between_captures(
                 ]
                 if not channel_captures.empty and not captures_segment.empty:
 
-                    segment_starts = list(captures_segment.start_obs)
-                    segment_ends = list(captures_segment.end_obs)
-
                     time_until_capture = calc_time_until_capture(
                         voltage_changes_segment,
-                        segment_starts,
-                        segment_ends,
-                        blockage_starts,
-                        blockage_ends,
-                    )
+                        captures_segment,
+                        blockage_segment)
                     # Add time since channel's last capture from previous
                     # tsegs to time until first capture in current tseg
                     time_until_capture[0] += time_elapsed[i]
@@ -317,7 +380,7 @@ def get_time_between_captures(
                     time_elapsed[i] = 0
                     voltage_ix = 0
                     while voltage_ix < len(voltage_changes_segment):
-                        if voltage_changes_segment[voltage_ix][0] > segment_ends[-1]:
+                        if voltage_changes_segment[voltage_ix][0] > captures_segment[-1].end_obs:
                             time_elapsed[i] += np.sum(
                                 calc_time_until_capture_blockages(
                                     voltage_changes_segment[voltage_ix:],
@@ -380,6 +443,7 @@ def get_time_between_captures(
 def get_capture_freq(
     filtered_file, time_interval=None, raw_file_dir="", capture_file_dir="", config_file=""
 ):
+    # TODO: Implement logger best practices : https://github.com/uwmisl/poretitioner/issues/12
     logger = logging.getLogger("get_capture_freq")
     if logger.handlers:
         logger.handlers = []
