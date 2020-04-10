@@ -25,16 +25,16 @@ jobs:
     - name: Install Nix
       uses: cachix/install-nix-action@v8
     # Runs a set of commands using the runners shell
-    - name: Create temporary artifacts directory
+    - name: Build docker image 
       shell: bash
       run: | 
            mkdir /tmp/artifacts 
            dockerImagePath=`nix-build -A docker`
-           mv $dockerImagePath /tmp/artifacts/poretitioner_for_docker.tar.gz
+           cp $dockerImagePath /tmp/artifacts/poretitioner_for_docker.tar.gz
 
 
     # Uploads the docker image as a build artifact
-    - name: Upload the docker image
+    - name: Upload docker image
       uses: actions/upload-artifact@v1
       with:
         name: poretitioner_for_docker
