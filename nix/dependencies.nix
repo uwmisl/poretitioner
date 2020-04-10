@@ -47,7 +47,7 @@ with python.pkgs; rec {
     notebook
     # For interactive builds
     jupyter
-  ];
+  ] ++ lib.optional (stdenv.isLinux) qt5.full;  # Needed for certain graphical packages like matplotlib.
 
   ###########################################################################################
   #
@@ -60,16 +60,15 @@ with python.pkgs; rec {
   build = [
     # Git hooks
     precommit
-
     # Import sorter
-    pythonPackages.isort
+    isort
     # Highly opinionated code-formatter
-    pythonPackages.black
+    black
     # Style-guide enforcer
-    pythonPackages.flake8
+    flake8
     # Docstring static analyzer
-    pythonPackages.pydocstyle
-  ] ++ lib.optional (stdenv.isLinux) qt5.full;  # Needed for certain graphical packages like matplotlib.
+    pydocstyle
+  ];
 
 
   ###########################################################################################
