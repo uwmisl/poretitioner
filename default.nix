@@ -15,11 +15,11 @@ with pkgs;
 let
   name = "poretitioner";
 
-  ###########################################################################################
+  ############################################################
   #
   # App - Builds the actual poretitioner application.
   #
-  ###########################################################################################
+  ############################################################
   dependencies = (callPackage ./nix/dependencies.nix { inherit python; });
   run_pkgs = dependencies.run;
   test_pkgs = dependencies.test;
@@ -33,26 +33,27 @@ let
 
     checkInputs = test_pkgs;
     doCheck = true;
-    checkPhase = ''
-      pytest tests
-    '';
-
+    checkPhase = ''pytest tests'';
 
     # Run-time dependencies
     propagatedBuildInputs = run_pkgs;
   };
 
-  ###########################################################################################
+  ####################################################################
   #
-  # Docker - Builds a Docker image for the poretitioner application.
+  # Docker - Builds the Docker image for the poretitioner application.
   #
-  ###########################################################################################
+  ####################################################################
 
-  # The docker image we distribute.
   binPath = builtins.concatStringsSep ''/'' [ poretitioner.outPath ''bin'' poretitioner.pname ];
+
   dockerImage = dockerTools.buildImage {
     name = name;
+    tag = "latest";
 
+    # Setting 'created' to 'now' will correctly set the file's creation date
+    # (instead of setting it to Unix epoch + 1). This is impure, but fine for our purposes.
+    created = "now";
     config = {
       # Runs 'poretitioner' by default.
       Cmd = [ ''${binPath}'' ];
