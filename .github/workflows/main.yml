@@ -6,9 +6,9 @@ name: CI
 # events but only for the master branch
 on:
   push:
-    branches: [ master ]
+    branches: [ jdunstan/docker-image ]
   pull_request:
-    branches: [ master ]
+    branches: [ jdunstan/docker-image ]
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -25,6 +25,12 @@ jobs:
     - name: Install Nix
       uses: cachix/install-nix-action@v8
     # Runs a set of commands using the runners shell
-    - name: Run a multi-line script
+    - name: Run build a docker 
       run: |
-        nix-build
+        dockerImagePath=$(nix-build -A docker)
+
+    # Uploads the docker image as a build artifact
+    - uses: actions/upload-artifact@v1
+      with:
+        name: poretitioner_for_docker
+        path: $(dockerImagePath)
