@@ -26,10 +26,9 @@ jobs:
       uses: cachix/install-nix-action@v8
     # Runs a set of commands using the runners shell
     - name: Build a docker image 
-      run: |
-        mkdir /tmp/artifacts
-        dockerImagePath=nix-build -A docker
-        mv ${{dockerImagePath}} /tmp/artifacts/poretitioner_for_docker
+    - run: mkdir /tmp/artifacts
+    - run: dockerImagePath=nix-build -A docker
+    - run: mv ${{dockerImagePath}} /tmp/artifacts/poretitioner_for_docker
 
     # Uploads the docker image as a build artifact
     - uses: actions/upload-artifact@v1
