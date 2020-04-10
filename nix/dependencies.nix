@@ -47,7 +47,7 @@ with python.pkgs; rec {
     notebook
     # For interactive builds
     jupyter
-  ] ++ lib.optional (stdenv.isLinux) qt5.full;  # Needed for certain graphical packages like matplotlib.
+  ] ++ lib.optional (stdenv.isLinux) pkgs.qt5.full;  # Needed for certain graphical packages like matplotlib.
 
   ###########################################################################################
   #
