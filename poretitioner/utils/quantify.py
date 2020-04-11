@@ -11,6 +11,7 @@ import os
 import re
 import h5py
 import numpy as np
+import math
 import pandas as pd
 from .peptide_segmentation import find_peptide_voltage_changes
 from .yaml_assistant import YAMLAssistant
@@ -103,7 +104,7 @@ def get_overlapping_regions(window, regions):
     return overlapping_regions
 
 
-def calc_time_until_capture(capture_windows, captures, blockages):
+def calc_time_until_capture_alt(capture_windows, captures, blockages):
     """calc_time_until_capture
 
         Finds all times between captures from a single channel.
@@ -114,13 +115,14 @@ def calc_time_until_capture(capture_windows, captures, blockages):
 
         Parameters
         ----------
-        capture_windows : list # TODO: list of tuples?
+        capture_windows : list of tuples of ints [(start, end), ...]
             Regions of current where the nanopore is available to accept a
-            capture. (I.e., is in a "normal" voltage state.)
-        captures : list of tuples
-            [description]
-        blockages : list of tuples
-            [description]
+            capture. (I.e., is in a "normal" voltage state.) [(start, end), ...]
+        captures : list of tuples of ints [(start, end), ...]
+            Regions of current where an assumed valid capture is residing in
+            the pore. [(start, end), ...]
+        blockages : list of tuples of ints [(start, end), ...]
+            Regions of current where the pore is blocked by anything.
 
         Returns
         -------
@@ -139,58 +141,96 @@ def calc_time_until_capture(capture_windows, captures, blockages):
     if captures is None or len(captures) == 0:
         return None
 
-    # elapsed_time_until_capture = 0
-    # for capture_window_i, capture_window in enumerate(capture_windows):
-    #     # Get all the captures & blockages within that window
-    #     captures_in_window = get_overlapping_regions(capture_window, captures)
-    #     blockages_in_window = get_overlapping_regions(capture_window,
-    #                                                   blockages)
-    #     if len(captures_in_window) == 0 and len(blockages_in_window) == 0:
-    #         elapsed_time_until_capture += capture_window[1] - capture_window[0]
-    #         continue
-        
-    #     pass
+    elapsed_time_until_capture = 0
+    for capture_window_i, capture_window in enumerate(capture_windows):
+        # Get all the captures & blockages within that window
+        captures_in_window = get_overlapping_regions(capture_window, captures)
+        blockages_in_window = get_overlapping_regions(capture_window,
+                                                      blockages)
+        # If there are no captures in the window, add the window to the elapsed
+        # time and subtract any blockages.
+        if len(captures_in_window) == 0:
+            elapsed_time_until_capture += capture_window[1] - capture_window[0]
+            for blockage in blockages_in_window:
+                elapsed_time_until_capture -= (blockage[1] - blockage[0])
+            continue
+        # If there's a capture in the window, add the partial window to the
+        # elapsed time. Subtract blockages that came before the capture.
+        else:
+            last_capture_end = capture_window[0]
+            for capture_i, capture in enumerate(captures_in_window):
+                elapsed_time_until_capture += (capture[0] - last_capture_end)
+                for blockage in blockages_in_window:
+                    # Blockage must start after the last capture ended and
+                    # finish before the next capture starts; otherwise skip
+                    if blockage[0] >= last_capture_end \
+                            and blockage[1] < capture[0]:
+                        elapsed_time_until_capture -= (blockage[1] - blockage[0])
+                        blockages.pop(0)
+                all_capture_times.append(elapsed_time_until_capture)
+                # Reset elapsed time.
+                elapsed_time_until_capture = max(capture_window[1] - capture[1], 0)
+                captures.pop(0)
+                last_capture_end = capture[1]
+    return all_capture_times
+
+
+def calc_time_until_capture(capture_windows, captures, blockages):
+    capture_starts, capture_ends = zip(*captures)
+    blockage_starts, blockage_ends = zip(*blockages)
+    logger = logging.getLogger("calc_time_until_capture")
+    if logger.handlers:
+        logger.handlers = []
+    logger.setLevel(logging.INFO)
+    logger.addHandler(logging.StreamHandler())
+
+    all_capture_times = []
+
+    # If there are no captures for the entire channel
+    if not capture_starts:
+        return None
 
     capture_time = 0
     capture_window_ix = 0
     capture_ix = 0
     blockage_ix = 0
-
-
-    while capture_window_ix < len(capture_windows) and \
-            capture_ix < len(captures):
+    while capture_window_ix < len(capture_windows) and capture_ix < len(captures):
         capture_window_start, capture_window_end = capture_windows[capture_window_ix]
+        capture_start, capture_end = captures[capture_ix]
 
-        capture_start = captures[capture_ix].start_obs
-        capture_end = captures[capture_ix].end_obs
-
-        # Check if capture window contains captures
+        # Check if voltage region contains captures
         if capture_start < capture_window_end:
 
             # Point of reference for calculating capture time. For first capture
-            # in capture window, this will be the start time of the capture
-            # window. For subsequent captures it will be the end time of the
+            # in voltage region, this will be the start time of the voltage
+            # region. For subsequent captures it will be the end time of the
             # previous capture.
             start_time = capture_window_start
 
-            # Loop through captures within the current capture window
-            while capture_ix < len(captures) and capture_start < capture_window_end:
-                capture_start = captures[capture_ix].start_obs
-                capture_end = captures[capture_ix].end_obs
+            # Loop through captures within the current voltage region
+            while capture_ix < len(captures) and capture_starts[capture_ix] < capture_window_end:
+                capture_start, capture_end = captures[capture_ix]
+                segment_start = capture_start
+                segment_end = capture_end
 
-                if capture_start >= capture_window_start:
+                if segment_start >= capture_window_start:
 
                     # Don't count times when channel is blocked from other junk
                     # Subtracts all blockages that have occurred since the last
                     # capture
-                    while blockages[blockage_ix].start_obs < capture_start:
-                        capture_time -= blockages[blockage_ix].end_obs - \
-                            blockages[blockage_ix].start_obs
+                    while blockage_starts[blockage_ix] < segment_start:
+                        capture_time -= blockage_ends[blockage_ix] - blockage_starts[blockage_ix]
+                        # logger.info(f"-{blockage_ends[blockage_ix]}")
+                        # logger.info(f"+{blockage_starts[blockage_ix]}")
                         blockage_ix += 1
 
                     # Add capture time to list & reset stuff
-                    all_capture_times.append(capture_start - start_time + capture_time)
-                    start_time = capture_end
+                    logger.info(f"+{segment_start}")
+                    logger.info(f"-{start_time}")
+                    logger.info(f"+{capture_time}")
+                    all_capture_times.append(segment_start - start_time + capture_time)
+                    logger.info(f"={all_capture_times[-1]}")
+                    start_time = segment_end
                     capture_ix += 1
                     capture_time = 0
                     blockage_ix += 1  # Skip blockage caused by current segment
@@ -198,14 +238,16 @@ def calc_time_until_capture(capture_windows, captures, blockages):
                 # Something weird is happening... report it and move on
                 else:
                     logger.debug(capture_window_start, capture_window_end)
-                    logger.debug(capture_start)
+                    logger.debug(segment_start)
                     capture_ix += 1
 
-            # Last capture in current capture window sets up capture time for
-            # first capture in next capture window
-            capture_time = capture_window_end - capture_end
 
-        # If no captures in current capture window, extend capture time for
+            # Last capture in current voltage region sets up capture time for
+            # first capture in next voltage region
+            capture_time = capture_window_end - segment_end
+            logger.info(f"Next capture time: {capture_time}")
+
+        # If no captures in current voltage region, extend capture time for
         # duration of region
         else:
             capture_time += capture_window_end - capture_window_start
