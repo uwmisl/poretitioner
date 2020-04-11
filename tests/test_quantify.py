@@ -41,3 +41,13 @@ def calc_time_until_capture_test():
     assert len(original_output) == len(tested_output)
     for i in range(len(original_output)):
         assert original_output[i] == tested_output[i]
+
+
+def get_overlapping_regions_test():
+    window = (10, 100)
+    excl_regions = [(0, 9), (9, 10), (100, 101), (1000, 1001)]
+    overlap = quantify.get_overlapping_regions(window, excl_regions)
+    assert len(overlap) == 0
+    incl_regions = [(9, 11), (20, 40), (99, 100), (99, 1000)]
+    overlap = quantify.get_overlapping_regions(window, incl_regions)
+    assert len(overlap) == len(incl_regions)
