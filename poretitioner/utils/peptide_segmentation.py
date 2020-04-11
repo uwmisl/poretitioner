@@ -5,7 +5,7 @@ import dask.bag as db
 import h5py
 import numpy as np
 import pandas as pd
-import raw_signal_utils
+from . import raw_signal_utils
 from dask.diagnostics import ProgressBar
 
 ProgressBar().register()

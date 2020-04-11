@@ -1,5 +1,6 @@
 import logging
 import re
+import os
 import subprocess
 import sys
 import time
@@ -8,7 +9,7 @@ from shutil import copyfile
 import h5py
 import numpy as np
 from matplotlib import pyplot as plt
-from yaml_assistant import *
+from .yaml_assistant import *
 
 _raw_data_paths = {
     "read-based": {
@@ -56,7 +57,7 @@ def get_local_fractional_blockage(
     signal = get_scaled_raw_for_channel(f5, channel=channel, read=read)
     open_pore = find_open_pore_current(signal, open_pore_guess, bound=open_pore_bound)
     if open_pore is None:
-        print "open pore is None"
+        print("open pore is None")
 
         return None
 
@@ -160,7 +161,7 @@ def find_open_pore_current(raw, open_pore_guess, bound=None):
 def find_signal_off_regions(raw, window_sz=200, slide=100, current_range=50):
     off = []
     for start in range(0, len(raw), slide):
-        window_mean = np.mean(raw[start : start + window_sz])
+        window_mean = np.mean(raw[start: start + window_sz])
         if window_mean < np.abs(current_range) and window_mean > -np.abs(current_range):
             off.append(True)
         else:
@@ -186,7 +187,7 @@ def find_signal_off_regions(raw, window_sz=200, slide=100, current_range=50):
 def find_high_regions(raw, window_sz=200, slide=100, open_pore=1400, current_range=300):
     off = []
     for start in range(0, len(raw), slide):
-        window_mean = np.mean(raw[start : start + window_sz])
+        window_mean = np.mean(raw[start: start + window_sz])
         if window_mean > (open_pore + np.abs(current_range)):
             off.append(True)
         else:
