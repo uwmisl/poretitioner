@@ -91,10 +91,10 @@ def get_overlapping_regions(window, regions):
         if region_start >= window_end:
             # Region comes after the window, we're done searching
             break
-        elif region_end < window_start:
+        elif region_end <= window_start:
             # Region ends before the window starts
             continue
-        elif region_end >= window_start or region_start >= window_start:
+        elif region_end > window_start or region_start >= window_start:
             # Overlapping
             overlapping_regions.append(region)
         else:
