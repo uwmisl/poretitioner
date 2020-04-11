@@ -30,7 +30,7 @@ jobs:
       run: | 
            mkdir /tmp/artifacts 
            dockerImagePath=`nix-build -A docker`
-           cp $dockerImagePath /tmp/artifacts/poretitioner_for_docker.tar.gz
+           cp $dockerImagePath /tmp/artifacts/poretitioner_docker.tar.gz
 
 
     # Uploads the docker image as a build artifact
@@ -38,5 +38,4 @@ jobs:
       uses: actions/upload-artifact@v1
       with:
         name: poretitioner_for_docker
-        path: /tmp/artifacts/poretitioner_for_docker.tar.gz
-
+        path: /tmp/artifacts/poretitioner_docker.tar.gz
