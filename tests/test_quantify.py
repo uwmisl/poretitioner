@@ -41,4 +41,3 @@ def calc_time_until_capture_test():
     assert len(original_output) == len(tested_output)
     for i in range(len(original_output)):
         assert original_output[i] == tested_output[i]
-

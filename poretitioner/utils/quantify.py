@@ -11,7 +11,6 @@ import os
 import re
 import h5py
 import numpy as np
-import math
 import pandas as pd
 from .peptide_segmentation import find_peptide_voltage_changes
 from .yaml_assistant import YAMLAssistant
