@@ -61,8 +61,6 @@ Docker images can only be built on Linux machines.
 
 # How it works 
 
-The full paper, *Multiplexed direct detection of barcoded protein reporters on a nanopore array*, be found [here](nanoporter_paper).
+The full paper, [*Multiplexed direct detection of barcoded protein reporters on a nanopore array*,](https://www.biorxiv.org/content/10.1101/837542v1), describes the application in detail. Here's a summary in GIF form:
 ![](NTER_gif_1_sm.gif)
 
-
-[nanoporter_paper][https://www.biorxiv.org/content/10.1101/837542v1]
