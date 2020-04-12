@@ -3,9 +3,9 @@ Poretitioner
 
 Reading peptide barcodes 
 
-## Description 
+# Description 
 
-![](NTER_gif_1_sm.gif)
+Using nanopores to read reporter proteins.
 
 
 ## Getting Started: Users  
@@ -61,3 +61,9 @@ Docker images can only be built on Linux machines.
 - The environment variable `docker_image` now contains a path to the docker image, copy this file wherever you need it. 
 
 ```docker load < ${docker_image}```
+
+
+# How it works 
+
+
+![](NTER_gif_1_sm.gif)
