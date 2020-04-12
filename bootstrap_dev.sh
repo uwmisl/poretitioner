@@ -140,7 +140,6 @@ configure_nix_env_if_necessary () {
                     source $fn
                 fi
                 added=1
-                break
             fi
         done
     fi
