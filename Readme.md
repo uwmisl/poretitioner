@@ -1,11 +1,7 @@
 Poretitioner 
 =============
 
-Reading peptide barcodes 
-
-# Description 
-
-Using nanopores to read reporter proteins.
+Poretitioner is an application for reading reporter proteins from nanopores sensors.
 
 
 ## Getting Started: Users  
@@ -65,5 +61,8 @@ Docker images can only be built on Linux machines.
 
 # How it works 
 
-
+The full paper, *Multiplexed direct detection of barcoded protein reporters on a nanopore array*, be found [here](nanoporter_paper).
 ![](NTER_gif_1_sm.gif)
+
+
+[nanoporter_paper][https://www.biorxiv.org/content/10.1101/837542v1]
