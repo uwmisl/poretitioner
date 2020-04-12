@@ -39,4 +39,3 @@ jobs:
       with:
         name: poretitioner_for_docker
         path: /tmp/artifacts/poretitioner_docker.tar.gz
-
