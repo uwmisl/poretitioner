@@ -22,6 +22,25 @@ from .yaml_assistant import YAMLAssistant
 
 
 def get_related_files(input_file, raw_file_dir="", capture_file_dir=""):
+    """Find files matching the input file in the data directory tree.
+
+    Parameters
+    ----------
+    input_file : string
+        # TODO ???
+        Seems like this can be the filtered or unfiltered captures file.
+    raw_file_dir : str, optional
+        Directory to search for the capture files (for us that's
+        /disk1/pore_data/MinION_raw_data_YYYYMMDD/), by default, the cwd.
+    capture_file_dir : str, optional
+        Directory to search for the capture files (for us that's
+        /disk1/pore_data/segmented/peptides/YYYYMMDD/), by default, the cwd.
+
+    Returns
+    -------
+    Iterable of filenames (strings)
+        The raw file (fast5) and capture file (unfiltered).
+    """
     logger = logging.getLogger("get_related_files")
     if logger.handlers:
         logger.handlers = []
@@ -103,12 +122,13 @@ def get_overlapping_regions(window, regions):
     return overlapping_regions
 
 
-def calc_time_until_capture(capture_windows, captures, blockages):
+def calc_time_until_capture(capture_windows, captures, blockages=None):
     """calc_time_until_capture
 
-        Finds all times between captures from a single channel.
-        TODO: Improve this description. Include info about blockages & how
-        "time until capture" is defined.
+        Finds all times between captures from a single channel. This is defined
+        as the open pore time from the end of the previous capture to the
+        current capture. Includes subtracting other non-capture blockages since
+        those blockages reduce the amount of overall open pore time.
 
         Note: called by "get_capture_time" and "get_capture_time_tseg"
 
@@ -118,10 +138,12 @@ def calc_time_until_capture(capture_windows, captures, blockages):
             Regions of current where the nanopore is available to accept a
             capture. (I.e., is in a "normal" voltage state.) [(start, end), ...]
         captures : list of tuples of ints [(start, end), ...]
-            Regions of current where an assumed valid capture is residing in
-            the pore. [(start, end), ...]
+            Regions of current where a capture is residing in the pore. The
+            function is calculating time between these values (minus blockages).
         blockages : list of tuples of ints [(start, end), ...]
-            Regions of current where the pore is blocked by anything.
+            Regions of current where the pore is blocked by any capture or non-
+            capture. These are removed from the time between captures, if
+            specified.
 
         Returns
         -------
@@ -144,8 +166,11 @@ def calc_time_until_capture(capture_windows, captures, blockages):
     for capture_window_i, capture_window in enumerate(capture_windows):
         # Get all the captures & blockages within that window
         captures_in_window = get_overlapping_regions(capture_window, captures)
-        blockages_in_window = get_overlapping_regions(capture_window,
-                                                      blockages)
+        if blockages is not None:
+            blockages_in_window = get_overlapping_regions(capture_window,
+                                                          blockages)
+        else:
+            blockages_in_window = []
         # If there are no captures in the window, add the window to the elapsed
         # time and subtract any blockages.
         if len(captures_in_window) == 0:
@@ -174,10 +199,8 @@ def calc_time_until_capture(capture_windows, captures, blockages):
     return all_capture_times
 
 
-# Find time between all blockages:
-
-
 def calc_time_until_capture_blockages(voltage_changes, blockage_starts, blockage_ends):
+    # TODO: check logical equivalency to calc_time_until_capture : https://github.com/uwmisl/poretitioner/issues/15
     time_until_capture = []
 
     # If there are no captures for the entire channel
