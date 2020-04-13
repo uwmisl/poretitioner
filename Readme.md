@@ -1,5 +1,7 @@
 Poretitioner 
 =============
+![CI](https://github.com/uwmisl/poretitioner/workflows/CI/badge.svg?branch=master)
+
 
 Poretitioner is an application for reading reporter proteins from nanopore sensors.
 
