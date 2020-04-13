@@ -37,7 +37,7 @@ def calc_time_until_capture_test():
                  (3546470, 3553166)]
     original_output = [441029, 813623]
     tested_output = quantify.calc_time_until_capture(capture_windows, captures,
-                                                     blockages)
+                                                     blockages=blockages)
     assert len(original_output) == len(tested_output)
     for i in range(len(original_output)):
         assert original_output[i] == tested_output[i]
