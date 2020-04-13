@@ -1,7 +1,7 @@
 Poretitioner 
 =============
 
-Poretitioner is an application for reading reporter proteins from nanopores sensors.
+Poretitioner is an application for reading reporter proteins from nanopore sensors.
 
 
 ## Getting Started: Users  
@@ -18,7 +18,7 @@ Here's how to use Poretitioner out of the box.
 docker load < docker_poretitioner.tar.gz
 ```
 
-- Now you're ready to use poretitioner 
+- Now you're ready to use poretitioner. Run
 
 ```
 docker run poretitioner:latest
@@ -45,7 +45,12 @@ git clone https://github.com/uwmisl/poretitioner.git
 #### Build the application 
 
 - Run `nix-build -A app`
-- `./result/bin/poretitioner`
+- The poretitioner binary now exists at `./result/bin/poretitioner`
+- Run 
+
+```
+./result/bin/poretitioner
+```
 
 #### Build a docker image of the application 
 Docker images can only be built on Linux machines. 
@@ -61,6 +66,6 @@ Docker images can only be built on Linux machines.
 
 # How it works 
 
-The full paper, [*Multiplexed direct detection of barcoded protein reporters on a nanopore array*,](https://www.biorxiv.org/content/10.1101/837542v1), describes the application in detail. Here's a summary in GIF form:
+The full paper, [*Multiplexed direct detection of barcoded protein reporters on a nanopore array*](https://www.biorxiv.org/content/10.1101/837542v1), describes the application in detail. Here's a summary in GIF form:
 ![](NTER_gif_1_sm.gif)
 
