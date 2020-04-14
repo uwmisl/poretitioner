@@ -199,55 +199,6 @@ def calc_time_until_capture(capture_windows, captures, blockages=None):
     return all_capture_times
 
 
-def calc_time_until_capture_blockages(voltage_changes, blockage_starts, blockage_ends):
-    # TODO: check logical equivalency to calc_time_until_capture : https://github.com/uwmisl/poretitioner/issues/15
-    time_until_capture = []
-
-    # If there are no captures for the entire channel
-    if not blockage_starts:
-        return None
-
-    blockage_extend = 0
-    voltage_ix = 0
-    blockage_ix = 0
-    first = True
-    while voltage_ix < len(voltage_changes) and blockage_ix < len(blockage_starts):
-        voltage_start, voltage_end = voltage_changes[voltage_ix]
-        blockage_start = blockage_starts[blockage_ix]
-
-        # Check for a blockage in the region
-        if blockage_start < voltage_end:
-            # If there's a blockage start between the voltage start & end...
-            if blockage_start >= voltage_start:
-                # If this is the first blockage in this voltage region
-                if first:
-                    time_until_capture.append(blockage_start - voltage_start + blockage_extend)
-                    blockage_extend = 0
-                    blockage_ix += 1
-                    first = False
-                else:
-                    time_until_capture.append(blockage_start - blockage_ends[blockage_ix - 1])
-                    blockage_ix += 1
-            # Blockage was captured before this voltage region, so move on to
-            # next blockage
-            else:
-                blockage_ix += 1
-        # If blockage is no longer in the region
-        else:
-            # If there actually aren't any blockages in this region
-            if first:
-                blockage_extend += voltage_end - voltage_start
-                voltage_ix += 1
-            # If this is due to the fact that there were multiple blockages in
-            # the previous region
-            else:
-                blockage_extend += voltage_end - blockage_ends[blockage_ix - 1]
-                voltage_ix += 1
-                first = True
-
-    return time_until_capture
-
-
 # # Getting Time Between Captures
 # Returns list of average times until capture for given time intervals of a
 # single run
@@ -256,6 +207,28 @@ def calc_time_until_capture_blockages(voltage_changes, blockage_starts, blockage
 def get_time_between_captures(
     filtered_file, time_interval=None, raw_file_dir="", capture_file_dir="", config_file=""
 ):
+    """Get the average time between captures across all channels. Can be
+    computed for the specified time interval, or across the entire run if not
+    specified.
+
+    Parameters
+    ----------
+    filtered_file : [type]
+        [description]
+    time_interval : [type], optional
+        [description], by default None
+    raw_file_dir : str, optional
+        [description], by default ""
+    capture_file_dir : str, optional
+        [description], by default ""
+    config_file : str, optional
+        [description], by default ""
+
+    Returns
+    -------
+    [type]
+        [description]
+    """
     # TODO: Implement logger best practices : https://github.com/uwmisl/poretitioner/issues/12
     logger = logging.getLogger("get_time_between_captures")
     if logger.handlers:
@@ -296,6 +269,7 @@ def get_time_between_captures(
     # If no time interval given then just take average time between captures of
     # entire run
     if time_interval:
+        # TODO un-hardcode 10k number -- look up from fast5 file directly.
         time_segments = range(
             time_interval * 60 * 10000, len(voltage) + 1, time_interval * 60 * 10000
         )
@@ -338,6 +312,8 @@ def get_time_between_captures(
                     blockage_exists = True
                     blockage_starts = list(blockage_segment.start_obs)
                     blockage_ends = list(blockage_segment.end_obs)
+                    # TODO temporary fix; may be equivalent to blockage_segment
+                    blockages = list(zip(blockage_starts, blockage_ends))
 
                 channel_captures = captures[captures.channel == channel]
                 # Check that channel actually has captures in this tseg
@@ -352,7 +328,7 @@ def get_time_between_captures(
                     time_until_capture = calc_time_until_capture(
                         voltage_changes_segment,
                         captures_segment,
-                        blockage_segment)
+                        blockages=blockages)
                     # Add time since channel's last capture from previous
                     # tsegs to time until first capture in current tseg
                     time_until_capture[0] += time_elapsed[i]
@@ -364,10 +340,9 @@ def get_time_between_captures(
                     while voltage_ix < len(voltage_changes_segment):
                         if voltage_changes_segment[voltage_ix][0] > captures_segment[-1].end_obs:
                             time_elapsed[i] += np.sum(
-                                calc_time_until_capture_blockages(
+                                calc_time_until_capture(
                                     voltage_changes_segment[voltage_ix:],
-                                    blockage_starts,
-                                    blockage_ends,
+                                    blockages
                                 )
                             )
                             break
@@ -380,7 +355,7 @@ def get_time_between_captures(
                     # voltage regions minus blockages to time elapsed
                     if blockage_exists:
                         time_elapsed[i] += np.sum(
-                            calc_time_until_capture_blockages(
+                            calc_time_until_capture(
                                 voltage_changes_segment, blockage_starts, blockage_ends
                             )
                         )
