@@ -230,7 +230,7 @@ def extract_raw_data(
                 logger.debug("Computing fractional current.")
                 frac_signal = compute_fractional_blockage(raw_signal, open_pore)
 
-            peptide_signal = frac_signal[row["start_obs"] : row["end_obs"]]
+            peptide_signal = frac_signal[row["start_obs"]: row["end_obs"]]
             logger.debug(
                 "Mean in df: %0.4f, \tMean in extracted: %0.4f"
                 % (row["mean"], np.mean(peptide_signal))
