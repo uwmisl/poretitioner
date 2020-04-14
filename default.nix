@@ -10,7 +10,7 @@
 #
 ###########################################################################################
 
-{ pkgs ? import <nixpkgs> { config = (import ./nix/config.nix); }
+{ pkgs ? import <nixpkgs> { config = import ./nix/config.nix ; }
 , cudaSupport ? true
 , python ? (pkgs.callPackage ./nix/python.nix) { inherit pkgs cudaSupport; }
 }:
@@ -59,6 +59,11 @@ let
   dockerImage = dockerTools.buildImage {
     name = name;
     tag = "latest";
+
+    contents = [
+      pkgs.fontconfig
+      pkgs.dejavu_fonts
+    ];
 
     # Setting 'created' to 'now' will correctly set the file's creation date
     # (instead of setting it to Unix epoch + 1). This is impure, but fine for our purposes.

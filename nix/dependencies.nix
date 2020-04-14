@@ -17,7 +17,7 @@
 #
 ###########################################################################################
 
-{ pkgs, python, lib ? pkgs.lib, stdenv ? pkgs.stdenv, cudaSupport ? false }:
+{ pkgs, python, lib ? pkgs.lib, stdenv ? pkgs.stdenv  }:
 let precommit = (import ./pkgs/pre-commit/pre-commit.nix) { inherit python; };
 in with python.pkgs; rec {
 
@@ -45,11 +45,10 @@ in with python.pkgs; rec {
     notebook
     # For interactive builds
     jupyter
-    #
+    # Neural networks
     pytorch
     torchvision
-  ] ++ lib.optional (stdenv.isLinux)
-    pkgs.qt5.full; # Needed for certain graphical packages like matplotlib.
+  ];
 
   ###########################################################################################
   #

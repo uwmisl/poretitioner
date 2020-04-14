@@ -13,7 +13,7 @@ def main():
     plt.title("matplotlib is properly packaged and importable.")
     plt.show()
 
-    print("\tPlotted!")
+    print("Plotted!")
 
 
 if __name__ == "__main__":
