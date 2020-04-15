@@ -12,9 +12,9 @@
 #
 ###########################################################################################
 
-with import <nixpkgs> { };
-
+{ pkgs ? import <nixpkgs> { config = import ./config.nix; }, cudaSupport ? true }:
+with pkgs;
 let
-  python = pkgs.python37;
+  python = callPackage ./python.nix { inherit pkgs cudaSupport; };
   dependencies = callPackage ./dependencies.nix { inherit python; };
 in mkShell { buildInputs = dependencies.all; }
