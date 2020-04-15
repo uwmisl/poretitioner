@@ -10,7 +10,11 @@
 #
 ###########################################################################################
 
-{ pkgs ? import <nixpkgs> { }, python ? pkgs.python37 }:
+{ pkgs ? import <nixpkgs> { config = (import ./nix/config.nix); }
+, cudaSupport ? true
+, python ? (pkgs.callPackage ./nix/python.nix) { inherit pkgs cudaSupport; }
+}:
+
 with pkgs;
 let
   name = "poretitioner";
@@ -20,7 +24,8 @@ let
   # App - Builds the actual poretitioner application.
   #
   ############################################################
-  dependencies = (callPackage ./nix/dependencies.nix { inherit python; });
+  dependencies =
+    (callPackage ./nix/dependencies.nix { inherit python; });
   run_pkgs = dependencies.run;
   test_pkgs = dependencies.test;
 
@@ -33,7 +38,7 @@ let
 
     checkInputs = test_pkgs;
     doCheck = true;
-    checkPhase = ''pytest tests'';
+    checkPhase = "pytest tests";
 
     # Run-time dependencies
     propagatedBuildInputs = run_pkgs;
@@ -45,7 +50,11 @@ let
   #
   ####################################################################
 
-  binPath = builtins.concatStringsSep ''/'' [ poretitioner.outPath ''bin'' poretitioner.pname ];
+  binPath = builtins.concatStringsSep "/" [
+    poretitioner.outPath
+    "bin"
+    poretitioner.pname
+  ];
 
   dockerImage = dockerTools.buildImage {
     name = name;
@@ -56,7 +65,7 @@ let
     created = "now";
     config = {
       # Runs 'poretitioner' by default.
-      Cmd = [ ''${binPath}'' ];
+      Cmd = [ "${binPath}" ];
     };
   };
 

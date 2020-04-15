@@ -17,11 +17,9 @@
 #
 ###########################################################################################
 
-
-{ pkgs, python, lib ? pkgs.lib, stdenv ? pkgs.stdenv }:
+{ pkgs, python, lib ? pkgs.lib, stdenv ? pkgs.stdenv  }:
 let precommit = (import ./pkgs/pre-commit/pre-commit.nix) { inherit python; };
-in
-with python.pkgs; rec {
+in with python.pkgs; rec {
 
   ###########################################################################################
   #
@@ -47,7 +45,10 @@ with python.pkgs; rec {
     notebook
     # For interactive builds
     jupyter
-  ] ++ lib.optional (stdenv.isLinux) pkgs.qt5.full;  # Needed for certain graphical packages like matplotlib.
+    # Neural networks
+    pytorch
+    torchvision
+  ];
 
   ###########################################################################################
   #
@@ -69,7 +70,6 @@ with python.pkgs; rec {
     # Docstring static analyzer
     pydocstyle
   ];
-
 
   ###########################################################################################
   #
