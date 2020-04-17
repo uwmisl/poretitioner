@@ -169,10 +169,6 @@ uninstall_clean() {
         rm -rf $HOME/.config/nixpkgs
         rm -rf $HOME/.cache/nix
         rm -rf $HOME/.nixpkgs
-        echo "Running 'sudo rm -rf /nix'"
-        sudo rm -rf /nix
-        echo "Finished 'sudo rm -rf /nix'"
-        green "Nix uninstalled."
     fi
 
     if [[ -d "/nix" && $is_separate_nix_volume_necessary ]]; then
@@ -208,6 +204,11 @@ uninstall_clean() {
         echo ""
         echo "Then uninstall will be complete and you'll be starting fresh."
         echo ""
+    elif [[ -d "/nix" ]]; then
+        echo "Running 'sudo rm -rf /nix'"
+        sudo rm -rf /nix
+        echo "Finished 'sudo rm -rf /nix'"
+        green "Nix uninstalled."
     fi;
 }
 
