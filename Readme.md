@@ -44,7 +44,7 @@ git clone https://github.com/uwmisl/poretitioner.git
    
 - You're all set! 
 
-#### Build the application 
+### Build the application 
 
 - Run `nix-build -A app`
 - The poretitioner binary now exists at `./result/bin/poretitioner`
@@ -54,7 +54,7 @@ git clone https://github.com/uwmisl/poretitioner.git
 ./result/bin/poretitioner
 ```
 
-#### Build a docker image of the application 
+### Build a docker image of the application 
 Docker images can only be built on Linux machines. 
 
 - Run 
@@ -64,6 +64,17 @@ Docker images can only be built on Linux machines.
 - The environment variable `docker_image` now contains a path to the docker image, copy this file wherever you need it. 
 
 ```docker load < ${docker_image}```
+
+
+### Uninstall 
+
+To uninstall Nix and this project's dependencies (for example, if you want to wipe your workspace totally clean and start over), run
+
+```
+./boostrap_dev uninstall 
+```
+
+On Mac OS 10.15 (Catalina) and up, this will require some additional steps that the script will elaborate on. 
 
 
 # How it works 
