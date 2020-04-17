@@ -105,14 +105,14 @@ is_separate_nix_volume_necessary () {
     # However, Nix expects to be installed at this location. To get around this,
     # we borrowed a script from the NixOS repository that creates a separate
     # volume where Nix can be hosted at root (i.e. /nix/).
-    if [[ ! -w "/" && "$OSTYPE" == "darwin"* ]]; then
+    if [[ ! -w "/" && "$OSTYPE" == "darwin"*  && ("$(sw_vers -productVersion)" > "10.15" || "$(sw_vers -productVersion)" = "10.15") ]]; then
         true
     else false
     fi
 }
 
 create_root_nix_if_necessaary () {
-    if [[ ! -d "/nix" && is_separate_nix_volume_necessary ]] ; then
+    if [[ ! -d "/nix" && $is_separate_nix_volume_necessary ]] ; then
         yellow "Detected operating system is MacOS X Catalina or higher ( >= 10.15), so we'll have to do a little extra disk set up."
         yellow "Creating Nix volume..."
 
@@ -165,13 +165,17 @@ uninstall_clean() {
     then
         yellow "Uninstalling Nix..."
         nix-env -e "*"
-        rm -rf $HOME/.nix-channels
-        rm -rf $HOME/.nix-defexpr
-        rm -rf $HOME/.nix-profile
+        rm -rf $HOME/.nix-*
+        rm -rf $HOME/.config/nixpkgs
+        rm -rf $HOME/.cache/nix
+        rm -rf $HOME/.nixpkgs
+        echo "Running 'sudo rm -rf /nix'"
+        sudo rm -rf /nix
+        echo "Finished 'sudo rm -rf /nix'"
         green "Nix uninstalled."
     fi
 
-    if [[ is_separate_nix_volume_necessary ]]; then
+    if [[ -d "/nix" && $is_separate_nix_volume_necessary ]]; then
         echo ""
         red "These next steps need to be done manually, as they involve modifying your disk."
         echo ""
