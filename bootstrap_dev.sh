@@ -175,8 +175,8 @@ uninstall_clean() {
         echo ""
         red "These next steps need to be done manually, as they involve modifying your disk."
         echo ""
-        echo "  1. Remove the Nix entry from fstab using 'sudo vifs'"
-        echo "  2. Destroy the Nix data volume using 'diskutil apfs deleteVolume' (for example, 'diskutil apfs deleteVolume dissk1s6')"
+        yellow "  1. Remove the Nix entry from fstab using 'sudo vifs'"
+        yellow "  2. Destroy the Nix data volume using 'diskutil apfs deleteVolume' (for example, 'diskutil apfs deleteVolume dissk1s6')"
 
         if [[ $(diskutil apfs list | grep --extended-regexp "Mount Point:[ ]* /nix" -B 3 -A 3) ]];
         then
@@ -187,14 +187,17 @@ uninstall_clean() {
         fi;
 
         echo ""
-        echo "  3. Remove the 'nix' line from /etc/synthetic.conf or the file"
+        yellow "  3. Remove the 'nix' line from /etc/synthetic.conf or the file"
         echo ""
-        echo "    To do this, consider running 'sudo grep -vE '^nix$' /etc/synthetic.conf > synthetic-temp.conf; sudo mv synthetic-temp.conf /etc/synthetic.conf'"
+        echo "    To do this, consider running: "
+        echo ""
+        echo "    $ sudo grep -vE '^nix$' /etc/synthetic.conf > synthetic-temp.conf; sudo mv synthetic-temp.conf /etc/synthetic.conf "
+        echo ""
         echo "    Which will rewrite '/etc/synthetic.conf' with every line that does not contain the exact word 'nix'."
         echo ""
         echo "After doing all of the above steps"
         echo ""
-        red "  4. Reboot your computer"
+        yellow "  4. Reboot your computer"
         echo ""
         echo "And you'll be ready to start fresh."
         echo ""
