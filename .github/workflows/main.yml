@@ -1,4 +1,3 @@
-# This is a basic workflow to help you get started with Actions
 
 name: CI
 
@@ -24,18 +23,11 @@ jobs:
 
     - name: Install Nix
       uses: cachix/install-nix-action@v8
-    # Runs a set of commands using the runners shell
-    - name: Build docker image 
+
+    # Build the app and its docker image, but don't upload the artifact.
+    # We only upload the artifact on release branch builds, to conserve
+    # storage space.
+    - name: Build docker image
       shell: bash
-      run: | 
-           mkdir /tmp/artifacts 
-           dockerImagePath=`nix-build -A docker`
-           cp $dockerImagePath /tmp/artifacts/poretitioner_docker.tar.gz
-
-
-    # Uploads the docker image as a build artifact
-    - name: Upload docker image
-      uses: actions/upload-artifact@v1
-      with:
-        name: poretitioner_for_docker
-        path: /tmp/artifacts/poretitioner_docker.tar.gz
+      run: |
+           nix-build -A docker
