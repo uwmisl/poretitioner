@@ -170,21 +170,6 @@ install_nix () {
     green "Nix installed."
 }
 
-install_nix_python () {
-    if nix-env --query | grep python3- &> /dev/null
-    then
-        # Python 3 Nix is already installed!
-        bold "Python is already installed through Nix. Skipping."
-        return 0
-    fi
-
-    bold "Installing Python (via Nix)..."
-    # Installs Python 3.7
-    nix-env --file "<nixpkgs>" --install "python3-3.7.6" --show-trace
-
-    green "Python installed."
-}
-
 install_misl_env () {
 
     bold "Installing MISL env..."
@@ -204,7 +189,6 @@ main () {
     # with Mac OS Catalina and above.
     create_root_nix_if_necessaary
     install_nix
-    install_nix_python
     install_misl_env
     green "All done!"
 
