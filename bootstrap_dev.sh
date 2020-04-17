@@ -152,7 +152,7 @@ uninstall_clean() {
     # Doesn't modify the shell .rc or .profile files, which might have lingering Nix references. These can be deleted manually.
 
     # Uninstall pre-commit and clean its dependencies, since it touches the user's home directory.
-    if [ -x "$(command -v pre-commit)" ]
+    if [ -x "$(command -v pre-commit)" ];
     then
         yellow "Uninstalling pre-commit..."
         pre-commit clean;
@@ -161,7 +161,7 @@ uninstall_clean() {
     fi
 
     # Uninstall all Nix dependencies, including Nix itself.
-    if [ -x "$(command -v nix-env)" ]
+    if [ -x "$(command -v nix-env)" ];
     then
         yellow "Uninstalling Nix..."
         nix-env -e "*"
@@ -176,7 +176,10 @@ uninstall_clean() {
         red "These next steps need to be done manually, as they involve modifying your disk."
         echo ""
         yellow "  1. Remove the Nix entry from fstab using 'sudo vifs'"
-        yellow "  2. Destroy the Nix data volume using 'diskutil apfs deleteVolume' (for example, 'diskutil apfs deleteVolume dissk1s6')"
+        echo ""
+        echo "       Once in vifs, arrow-key down to the line that says 'LABEL=Nix\040Store /nix apfs', type 'dd' (this deletes the line), then type ':wq'."
+        echo ""
+        yellow "  2. Destroy the Nix data volume using 'diskutil apfs deleteVolume' (for example, 'diskutil apfs deleteVolume disk1s6_foo')"
 
         if [[ $(diskutil apfs list | grep --extended-regexp "Mount Point:[ ]* /nix" -B 3 -A 3) ]];
         then
@@ -199,7 +202,7 @@ uninstall_clean() {
         echo ""
         yellow "  4. Reboot your computer"
         echo ""
-        echo "And you'll be ready to start fresh."
+        echo "Then uninstall will be complete and you'll be starting fresh."
         echo ""
     fi;
 }
