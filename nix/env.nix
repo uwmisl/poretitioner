@@ -14,8 +14,8 @@
 { pkgs ? import <nixpkgs> { config = import ./config.nix; }, cudaSupport ? false }:
 with pkgs;
 let
-  python = callPackage ./python.nix { inherit pkgs cudaSupport; };
-  dependencies = callPackage ./dependencies.nix { inherit python; };
+  python = callPackage ./python.nix { inherit pkgs; };
+  dependencies = callPackage ./dependencies.nix { inherit python cudaSupport; };
   dev_pkgs = dependencies.build;
   testing_pkgs = dependencies.test;
 in [ python ] ++ dev_pkgs ++ testing_pkgs
