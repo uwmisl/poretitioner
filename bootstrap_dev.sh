@@ -112,7 +112,7 @@ is_separate_nix_volume_necessary () {
 }
 
 create_root_nix_if_necessaary () {
-    if [[ ! -d "/nix" && $is_separate_nix_volume_necessary ]] ; then
+    if [[ ! -d "/nix" && is_separate_nix_volume_necessary ]]; then
         yellow "Detected operating system is MacOS X Catalina or higher ( >= 10.15), so we'll have to do a little extra disk set up."
         yellow "Creating Nix volume..."
 
@@ -171,7 +171,7 @@ uninstall_clean() {
         rm -rf $HOME/.nixpkgs
     fi
 
-    if [[ -d "/nix" && $is_separate_nix_volume_necessary ]]; then
+    if [[ -d "/nix" && is_separate_nix_volume_necessary ]]; then
         echo ""
         red "These next steps need to be done manually, as they involve modifying your disk."
         echo ""
