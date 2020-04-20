@@ -10,6 +10,9 @@ from dask.diagnostics import ProgressBar
 
 ProgressBar().register()
 
+__version__ = "0.1"
+__name__ = "poretitioner"
+
 
 def compute_fractional_blockage(scaled_raw, open_channel):
     scaled_raw = np.array(scaled_raw, dtype=float)
@@ -65,16 +68,37 @@ def find_peptide_voltage_changes(voltage, voltage_threshold=-180):
     return zip(diff_points[::2], diff_points[1::2])
 
 
-def _find_peptides_helper(
-    raw_signal_meta,
-    voltage=None,
-    open_channel_prior=220,
-    open_channel_prior_stdv=35,
-    signal_threshold=0.7,
-    voltage_threshold=-180,
-    min_duration_obs=0,
-    voltage_change_delay=3,
-):
+def _find_peptides_helper(raw_signal_meta, voltage=None,
+                          open_channel_prior=220,
+                          open_channel_prior_stdv=35, signal_threshold=0.7,
+                          voltage_threshold=-180, min_duration_obs=0,
+                          voltage_change_delay=3):
+    """Identify blockages in a single channel of raw current.
+
+    Parameters
+    ----------
+    raw_signal_meta : [type]
+        [description]
+    voltage : [type], optional
+        [description], by default None
+    open_channel_prior : int, optional
+        [description], by default 220
+    open_channel_prior_stdv : int, optional
+        [description], by default 35
+    signal_threshold : float, optional
+        [description], by default 0.7
+    voltage_threshold : int, optional
+        [description], by default -180
+    min_duration_obs : int, optional
+        [description], by default 0
+    voltage_change_delay : int, optional
+        [description], by default 3
+
+    Returns
+    -------
+    [type]
+        [description]
+    """
     run, channel, raw_signal = raw_signal_meta
     peptide_metadata = []
     open_channel = raw_signal_utils.find_open_channel_current(
@@ -83,12 +107,9 @@ def _find_peptides_helper(
     if open_channel is None:
         open_channel = open_channel_prior
     frac_signal = compute_fractional_blockage(raw_signal, open_channel)
-    peptide_segments = find_peptides(
-        frac_signal,
-        voltage,
-        signal_threshold=signal_threshold,
-        voltage_threshold=voltage_threshold,
-    )
+    peptide_segments = find_peptides(frac_signal, voltage,
+                                     signal_threshold=signal_threshold,
+                                     voltage_threshold=voltage_threshold)
     for peptide_segment in peptide_segments:
         if peptide_segment[1] - peptide_segment[0] - voltage_change_delay < min_duration_obs:
             continue
@@ -111,6 +132,102 @@ def _find_peptides_helper(
             )
         )
     return peptide_metadata
+
+
+def create_capture_fast5(bulk_f5_fname, capture_f5_fname, config,
+                         overwrite=False, sub_run=(None, None, None)):
+    """Prepare a fast5 file to contain the results of segmentation (capture
+    fast5 file).
+
+    Parameters
+    ----------
+    bulk_f5_fname : str
+        Filename of the bulk fast5 that will eventually be segmented into
+        captures.
+        # TODO not sure if this should be a fname or open h5py obj
+        The implication is for parallelization, competing for the fh.
+    capture_f5_fname : str
+        Filename of the capture fast5 file to be created/written. Directory
+        containing this file must already exist.
+    config : dict
+        Configuration parameters for the segmenter.
+        # TODO document allowed values
+    overwrite : bool, optional
+        Flag whether or not to overwrite capture_f5_fname, by default False
+    sub_run : tuple, optional
+        If the bulk fast5 contains multiple runs (shorter sub-runs throughout
+        the data collection process), this can be used to record additional
+        context about the sub run: (sub_run_id : str, sub_run_offset : int, and
+        sub_run_duration : int). sub_run_id is the identifier for the sub run,
+        sub_run_offset is the time the sub run starts in the bulk fast5,
+        measured in #/time series points.
+    """
+    if not os.path.exists(bulk_f5_fname):
+        raise OSError(f"Bulk fast5 file does not exist: {bulk_f5_fname}")
+    if overwrite:
+        if os.path.exists(capture_f5_fname):
+            os.remove(capture_f5_fname)
+    else:
+        try:
+            assert not os.path.exists(capture_f5_fname)
+        except AssertionError:
+            raise FileExistsError()
+
+    path, fname = os.path.split(capture_f5_fname)
+    if not os.path.exists(path):
+        raise OSError(f"Path for the new capture fast5 does not exist: {path}")
+
+    with h5py.File(capture_f5_fname, "w") as capture_f5:
+        with h5py.File(bulk_f5_fname, "r") as bulk_f5:
+            ugk = bulk_f5.get("/UniqueGlobalKey")
+
+            # Referencing spec v0.1.1
+            # /Meta
+            capture_f5.create_group("/Meta")
+
+            # /Meta/context_tags
+            attrs = ugk["context_tags"].attrs
+            g = capture_f5.create_group("/Meta/context_tags")
+            for k, v in attrs.items():
+                g.attrs.create(k, v)
+            g.attrs.create("bulk_filename", bulk_f5_fname,
+                           dtype=f"S{len(bulk_f5_fname)}")
+
+            # /Meta/tracking_id
+            attrs = ugk["tracking_id"].attrs
+            g = capture_f5.create_group("/Meta/tracking_id")
+            for k, v in attrs.items():
+                g.attrs.create(k, v)
+
+            if sub_run is not None:
+                sub_run_id, sub_run_offset, sub_run_duration = sub_run
+                if sub_run_id is not None:
+                    g.attrs.create("sub_run_id", sub_run_id,
+                                   dtype=f"S{len(sub_run_id)}")
+                if sub_run_offset is not None:
+                    g.attrs.create("sub_run_offset", sub_run_offset)
+                if sub_run_duration is not None:
+                    g.attrs.create("sub_run_duration", sub_run_duration)
+
+            # /Meta/Segmentation
+            # TODO: define config param structure : https://github.com/uwmisl/poretitioner/issues/27
+            # config = {"param": "value",
+            #           "filters": {"f1": (min, max), "f2: (min, max)"}}
+            g = capture_f5.create_group("/Meta/Segmentation")
+            print(__name__)
+            g.attrs.create("segmenter", __name__, dtype=f"S{len(__name__)}")
+            g.attrs.create("segmenter_version", __version__, dtype=f"S{len(__version__)}")
+            g_filt = capture_f5.create_group("/Meta/Segmentation/filters")
+            for k, v in config.items():
+                if k == "filters":
+                    for filt, (min_filt, max_filt) in v.items():
+                        # Create compound dset for filters
+                        dtypes = np.dtype([('min', type(min_filt),
+                                           ('max', type(max_filt)))])
+                        d = g_filt.create_dataset(k, (2,), dtype=dtypes)
+                        d[...] = (min_filt, max_filt)
+                else:
+                    g.create(k, v)
 
 
 def parallel_find_peptides(
