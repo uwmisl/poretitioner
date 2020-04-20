@@ -5,36 +5,71 @@
 ###########################################################################################
 #
 # This expression builds the Poretitioner application.
-# It runs the test suite before building and will fail if any tests fail.
+#   - To see how this application is built, see the `App` section.
+#   - To see how this application is packaged for Docker, see the `Docker` section.
 #
 ###########################################################################################
 
-with import <nixpkgs> { };
+{ pkgs ? import <nixpkgs> { config = (import ./nix/config.nix); }
+, cudaSupport ? true
+, python ? (pkgs.callPackage ./nix/python.nix) { inherit pkgs cudaSupport; }
+}:
 
+with pkgs;
 let
-  python = python37;
-  run_pkgs = callPackage ./nix/runDependencies.nix { inherit python; };
-  dev_pkgs = callPackage ./nix/devDependencies.nix { inherit python; };
-  test_pkgs = callPackage ./nix/testingDependencies.nix { inherit python; };
+  name = "poretitioner";
+
+  ############################################################
+  #
+  # App - Builds the actual poretitioner application.
+  #
+  ############################################################
+  dependencies =
+    (callPackage ./nix/dependencies.nix { inherit python; });
+  run_pkgs = dependencies.run;
+  test_pkgs = dependencies.test;
 
   # To understand how `buildPythonApplication` works, check out https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/interpreters/python/mk-python-derivation.nix
-in python.pkgs.buildPythonApplication {
-  pname = "poretitioner";
-  version = "0.0.1";
+  poretitioner = python.pkgs.buildPythonApplication {
+    pname = name;
+    version = "0.0.1";
 
-  src = ./.;
+    src = ./.;
 
-  # Build-time exclusive dependencies
-  nativeBuildInputs = dev_pkgs;
+    checkInputs = test_pkgs;
+    doCheck = true;
+    checkPhase = "pytest tests";
 
-  # Test Dependencies
-  doCheck = true;
-  checkInputs = test_pkgs;
-  checkPhase = ''
-    py.test tests
-  '';
+    # Run-time dependencies
+    propagatedBuildInputs = run_pkgs;
+  };
 
-  # Run-time dependencies
-  buildInputs = run_pkgs;
-  propagatedBuildInputs = run_pkgs;
+  ####################################################################
+  #
+  # Docker - Builds the Docker image for the poretitioner application.
+  #
+  ####################################################################
+
+  binPath = builtins.concatStringsSep "/" [
+    poretitioner.outPath
+    "bin"
+    poretitioner.pname
+  ];
+
+  dockerImage = dockerTools.buildImage {
+    name = name;
+    tag = "latest";
+
+    # Setting 'created' to 'now' will correctly set the file's creation date
+    # (instead of setting it to Unix epoch + 1). This is impure, but fine for our purposes.
+    created = "now";
+    config = {
+      # Runs 'poretitioner' by default.
+      Cmd = [ "${binPath}" ];
+    };
+  };
+
+in {
+  app = poretitioner;
+  docker = dockerImage;
 }

@@ -11,10 +11,12 @@
 # replacing '<<path to this file>>' with the absolute path to this `env.nix` file.
 #
 ###########################################################################################
-
-with import <nixpkgs> { };
+{ pkgs ? import <nixpkgs> { config = import ./config.nix; }, cudaSupport ? true }:
+with pkgs;
+assert pkgs.lib.assertMsg (cudaSupport) "No cuda support!";
 let
-  python = pkgs.python37;
-  dev_pkgs = callPackage ./devDependencies.nix { inherit python; };
-  testing_pkgs = callPackage ./testingDependencies.nix { inherit python; };
+  python = callPackage ./python.nix { inherit pkgs cudaSupport; };
+  dependencies = callPackage ./dependencies.nix { inherit python; };
+  dev_pkgs = dependencies.build;
+  testing_pkgs = dependencies.test;
 in dev_pkgs ++ testing_pkgs

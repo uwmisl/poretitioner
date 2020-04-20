@@ -1,14 +1,19 @@
-# The following imports are simply a code-review proof-of-concept to illustrate that
-# dependency management works.
-import dask  # noqa: F401
-import jupyter  # noqa: F401
-import numpy  # noqa: F401
-import pandas  # noqa: F401
+import torch  # noqa: F401
+import torchvision  # noqa: F401
+from matplotlib import pyplot as plt
 
 
 def main():
-    # Stub for the command line
-    print("This print statement is a placeholder.")
+    # The following imports are simply a code-review proof-of-concept to illustrate that
+    # dependency management works.
+    print(
+        "As proof that these libraries are properly packaged and callable, drawing a basic plot..."
+    )
+    plt.plot([0, 1], [1, 0])
+    plt.title("matplotlib is properly packaged and importable.")
+    plt.show()
+
+    print("Plotted!")
 
 
 if __name__ == "__main__":
