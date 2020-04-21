@@ -15,6 +15,7 @@
 pkgs:
 {
   allowUnfreePredicate = pkg: builtins.elem pkg.pname or (builtins.parseDrvName pkg.name) [
+    "cudatoolkit"
     # The Intel Math Kernel Libary (mkl) is needed for Pytorch, but uses the ISSL license. [2]
     "mkl"
   ];

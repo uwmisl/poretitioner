@@ -1,4 +1,4 @@
-###########################################################################################
+# ##########################################################################################
 #
 # dependencies.nix
 #
@@ -17,7 +17,7 @@
 #
 ###########################################################################################
 
-{ pkgs, python, lib ? pkgs.lib, stdenv ? pkgs.stdenv  }:
+{ pkgs, python, lib ? pkgs.lib, stdenv ? pkgs.stdenv, cudaSupport ? false }:
 let precommit = (import ./pkgs/pre-commit/pre-commit.nix) { inherit python; };
 in with python.pkgs; rec {
 
@@ -46,9 +46,9 @@ in with python.pkgs; rec {
     # For interactive builds
     jupyter
     # Neural networks
-    pytorch
     torchvision
-  ];
+  ] ++ lib.optional (cudaSupport) pytorchWithCuda
+    ++ lib.optional (!cudaSupport) pytorchWithoutCuda;
 
   ###########################################################################################
   #
