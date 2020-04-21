@@ -2,12 +2,10 @@ import logging
 import re
 import os
 import subprocess
-import sys
 import time
 from shutil import copyfile
 import h5py
 import numpy as np
-from matplotlib import pyplot as plt
 from .yaml_assistant import YAMLAssistant
 
 
@@ -508,19 +506,15 @@ def split_multi_fast5(yml_file, temp_f5_fname=None):
     logger.info("Done")
 
 
-def judge_channels(fast5_fname, plot_grid=False, cmap=None, expected_open_channel=235):
+def judge_channels(fast5_fname, expected_open_channel=235):
     # TODO: decouple visualization from judging channels : https://github.com/uwmisl/poretitioner/issues/24
     """Judge channels based on quality of current. If the current is too
     low, the channel is probably off (bad), etc."""
-    if cmap is None:
-        cmap = make_cmap([(0.02, 0.02, 0.02), (0.7, 0.7, 0.7), (0.98, 0.98, 1)])
     f5 = h5py.File(name=fast5_fname)
     channels = f5.get("Raw").keys()
     channels.sort(key=natkey)
     nrows, ncols = 16, 32  # = 512 channels
     channel_grid = np.zeros((nrows, ncols))
-    if plot_grid:
-        fig, ax = plt.subplots(figsize=(16, 32))
     for channel in channels:
         i = int(re.findall(r"Channel_(\d+)", channel)[0])
         row_i = (i - 1) / ncols
@@ -530,8 +524,6 @@ def judge_channels(fast5_fname, plot_grid=False, cmap=None, expected_open_channe
 
         # Case 1: Channel might not be totally off, but has little variance
         if np.abs(np.mean(raw)) < 20 and np.std(raw) < 50:
-            if plot_grid:
-                ax.text(col_j, row_i, str(i), va="center", ha="center", color="white")
             continue
 
         # Case 2: Neither the median or 75th percentile value contains the
@@ -545,8 +537,6 @@ def judge_channels(fast5_fname, plot_grid=False, cmap=None, expected_open_channe
             upper_outside_rng = np.abs(sorted_raw[q_75] - expected_open_channel) > 25
             if median_outside_rng and upper_outside_rng:
                 channel_grid[row_i, col_j] = 0.5
-                if plot_grid:
-                    ax.text(col_j, row_i, str(i), va="center", ha="center", color="white")
                 continue
 
         # Case 3: The channel is off
@@ -555,96 +545,10 @@ def judge_channels(fast5_fname, plot_grid=False, cmap=None, expected_open_channe
         for start, end in off_regions:
             off_points.extend(range(start, end))
         if len(off_points) + 50000 > len(raw):
-            if plot_grid:
-                ax.text(col_j, row_i, str(i), va="center", ha="center", color="white")
             continue
 
         # Case 4: The channel is assumed to be good
         channel_grid[row_i, col_j] = 1
-        if plot_grid:
-            ax.text(col_j, row_i, str(i), va="center", ha="center", color="black")
-    if plot_grid:
-        ax.imshow(channel_grid, cmap=cmap)
-        ax.set_xticks(np.arange(-0.5, ncols, 1))
-        ax.set_yticks(np.arange(-0.5, nrows, 1))
-        ax.get_xaxis().set_ticks([])
-        ax.get_yaxis().set_ticks([])
-        ax.grid(color="white", linestyle="-", linewidth=10)
 
     good_channels = np.add(np.where(channel_grid.flatten() == 1), 1).flatten()
     return channel_grid, good_channels
-
-
-def plot_channel_grid(
-    channel_grid,
-    cmap,
-    title=None,
-    colorbar=False,
-    cbar_minmax=(0, None),
-    grid_kwargs={"color": "white", "linestyle": "-", "linewidth": 10},
-):
-    """Simple version of judge_channels that makes a channel visualization
-    plot given an arbitrary channel grid."""
-    fig, ax = plt.subplots(figsize=(16, 32))
-    cbar_min, cbar_max = cbar_minmax
-    if cbar_min is None:
-        cbar_min = np.min(channel_grid)
-    if cbar_max is None:
-        cbar_max = np.max(channel_grid)
-    im = ax.imshow(channel_grid, cmap=cmap, vmin=cbar_min, vmax=cbar_max)
-    channel_no = 1
-    z = np.max(channel_grid)
-    for i in range(channel_grid.shape[0]):
-        for j in range(channel_grid.shape[1]):
-            label_color = cmap(channel_grid[i, j] / z)
-            if np.mean(label_color[:3]) < 0.5:
-                text_color = "white"
-            else:
-                text_color = "black"
-            ax.text(j, i, str(channel_no), va="center", ha="center", color=text_color)
-            channel_no += 1
-    ax.set_xticks(np.arange(-0.5, channel_grid.shape[1], 1))
-    ax.set_yticks(np.arange(-0.5, channel_grid.shape[0], 1))
-    ax.get_xaxis().set_ticks([])
-    ax.get_yaxis().set_ticks([])
-    ax.grid(**grid_kwargs)
-    if colorbar:
-        pos = fig.add_axes([0.185, 0.39, 0.65, 0.01])
-        plt.colorbar(im, orientation="horizontal", cax=pos)
-    if title is not None:
-        ax.set_title(title)
-    return fig, ax
-
-
-def make_cmap(colors, position=None, bit=False):
-    """
-    Source: http://schubert.atmos.colostate.edu/~cslocum/custom_cmap.html
-    make_cmap takes a list of tuples which contain RGB values. The RGB
-    values may either be in 8-bit [0 to 255] (in which bit must be set to
-    True when called) or arithmetic [0 to 1] (default). make_cmap returns
-    a cmap with equally spaced colors.
-    Arrange your tuples so that the first color is the lowest value for the
-    colorbar and the last is the highest.
-    position contains values from 0 to 1 to dictate the location of each color.
-    """
-    import matplotlib as mpl
-    import numpy as np
-
-    bit_rgb = np.linspace(0, 1, 256)
-    if position is None:
-        position = np.linspace(0, 1, len(colors))
-    else:
-        if len(position) != len(colors):
-            sys.exit("position length must be the same as colors")
-        elif position[0] != 0 or position[-1] != 1:
-            sys.exit("position must start with 0 and end with 1")
-    if bit:
-        for i in range(len(colors)):
-            colors[i] = (bit_rgb[colors[i][0]], bit_rgb[colors[i][1]], bit_rgb[colors[i][2]])
-    cdict = {"red": [], "green": [], "blue": []}
-    for pos, color in zip(position, colors):
-        cdict["red"].append((pos, color[0], color[0]))
-        cdict["green"].append((pos, color[1], color[1]))
-        cdict["blue"].append((pos, color[2], color[2]))
-    cmap = mpl.colors.LinearSegmentedColormap("my_colormap", cdict, 256)
-    return cmap
