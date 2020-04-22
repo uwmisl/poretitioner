@@ -79,10 +79,11 @@ def find_captures(signal_pA, signal_threshold_frac, alt_open_channel_pA,
 
     Parameters
     ----------
-    signal_pA : [type]
-        [description]
-    signal_threshold : [type]
-        [description]
+    signal_pA : np.array
+        Time series of nanopore current values (in units of pA).
+    signal_threshold_frac : float
+        Threshold for the first pass of finding captures (in ). (Captures are <= the
+        threshold.)
     alt_open_channel_pA : [type]
         [description]
     last_capture_only : bool, optional

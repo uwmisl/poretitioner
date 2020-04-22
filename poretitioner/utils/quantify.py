@@ -12,7 +12,7 @@ import re
 import h5py
 import numpy as np
 import pandas as pd
-from .segment import find_peptide_voltage_changes
+from .segment import find_segments_below_threshold
 from .yaml_assistant import YAMLAssistant
 
 # # Retrieving Related Data Files from Filtered File or Capture File
@@ -61,9 +61,7 @@ def get_related_files(input_file, raw_file_dir="", capture_file_dir=""):
     if input_file.endswith(".csv"):
         # Given file is the filtered file and we're looking for the capture file
         filtered_file = input_file
-        capture_file = [x for x in os.listdir(capture_file_dir) if x.endswith(run_name + ".pkl")][
-            0
-        ]
+        capture_file = [x for x in os.listdir(capture_file_dir) if x.endswith(run_name + ".pkl")][0]
     elif input_file.endswith(".pkl"):
         # Given file is the capture file and filtered file is unspecified
         capture_file = input_file
@@ -117,8 +115,8 @@ def get_overlapping_regions(window, regions):
             # Overlapping
             overlapping_regions.append(region)
         else:
-            raise Exception(f"Shouldn't have gotten here! "
-                            f"Region: {region}, Window: {window}.")
+            e = f"Shouldn't have gotten here! Region: {region}, Window: {window}."
+            raise Exception(e)
     return overlapping_regions
 
 
@@ -245,7 +243,7 @@ def get_time_between_captures(
     f5 = h5py.File(raw_file)
     # Find regions where voltage is normal
     voltage = f5.get("/Device/MetaData").value["bias_voltage"] * 5.0
-    voltage_changes = find_peptide_voltage_changes(voltage)
+    voltage_changes = find_segments_below_threshold(voltage, -180)
     f5.close()
 
     # Process unfiltered captures file
@@ -416,7 +414,7 @@ def get_capture_freq(
     f5 = h5py.File(raw_file)
     # Find regions where voltage is normal
     voltage = f5.get("/Device/MetaData").value["bias_voltage"] * 5.0
-    voltage_changes = find_peptide_voltage_changes(voltage)
+    voltage_changes = find_segments_below_threshold(voltage, -180)
     f5.close()
 
     # Process config file
