@@ -10,18 +10,126 @@ from dask.diagnostics import ProgressBar
 
 ProgressBar().register()
 
-__version__ = "0.1"
+__version__ = "0.0.1"  # TODO : Only declare version in one place. Can I get
+                       # this from default.nix or somewhere else?
 __name__ = "poretitioner"
 
 
-def compute_fractional_blockage(scaled_raw, open_channel):
-    scaled_raw = np.array(scaled_raw, dtype=float)
-    scaled_raw /= open_channel
-    scaled_raw = np.clip(scaled_raw, a_max=1.0, a_min=0.0)
-    return scaled_raw
+def apply_capture_filters(capture, filters):
+    # TODO : Write fn to apply all filters to single capture.
+    # If no filters, it should pass
+    # Only allow supported filters
+    # Filters are inclusive of low & high values
+    logger = logging.getLogger("apply_capture_filters")
+    # TODO: Implement logger best practices : https://github.com/uwmisl/poretitioner/issues/12
+    if logger.handlers:
+        logger.handlers = []
+    logger.setLevel(logging.INFO)
+    logger.addHandler(logging.StreamHandler())
+    supported_filters = {"mean": np.mean,
+                         "stdv": np.std,
+                         "median": np.median,
+                         "min": np.min,
+                         "max": np.max,
+                         "length": len}
+    pass_filters = True
+    for filt, (low, high) in filters.items():
+        if filt in supported_filters:
+            val = supported_filters[filt](capture)
+            if low > val or val > high:
+                pass_filters = False
+                return pass_filters
+        else:
+            # Warn filter not supported
+            logger.warning(f"Filter {filt} not supported; ignoring.")
+    return pass_filters
+
+
+def find_segments_below_threshold(time_series, threshold):
+    """find_segments_below_threshold
+
+    Find regions where the time series data points drop at or below the
+    specified threshold.
+
+    Parameters
+    ----------
+    time_series : np.array
+        Array containing time series data points.
+    threshold : numeric
+        Find regions where the time series drops at or below this value
+
+    Returns
+    -------
+    zip iterator
+        Each item in the iterator represents the (start, end) points of regions
+        where the input array drops at or below the threshold.
+    """
+    diff_points = np.where(np.abs(np.diff(
+        np.where(time_series <= threshold, 1, 0))) == 1)[0]
+    if time_series[0] <= threshold:
+        diff_points = np.hstack([[0], diff_points])
+    if time_series[-1] <= threshold:
+        diff_points = np.hstack([diff_points, [len(time_series)]])
+    return zip(diff_points[::2], diff_points[1::2])
+
+
+def find_captures(signal_pA, signal_threshold_frac, alt_open_channel_pA,
+                  last_capture_only=False, filters={}, delay=50):
+    """[summary]
+
+    Parameters
+    ----------
+    signal_pA : [type]
+        [description]
+    signal_threshold : [type]
+        [description]
+    alt_open_channel_pA : [type]
+        [description]
+    last_capture_only : bool, optional
+        [description], by default False
+    filters : dict, optional
+        [description], by default {}
+    delay : int, optional
+        Translocation delay. At high sampling rates, there may be some data
+        points at the beginning of the capture that represent the initial
+        translocation of the molecule. The beginning of the capture will be
+        trimmed by _delay_ points, by default 50.
+
+    Returns
+    -------
+    List of tuples
+        List of captures in the given window of signal.
+    """
+    # For a single capture window (given as signal_pA):
+    # Attempt to find open channel current (if not poss., use alt)
+    open_channel_pA = raw_signal_utils.find_open_channel_current(
+        signal_pA, alt_open_channel_pA)
+    if open_channel_pA is None:
+        open_channel_pA = alt_open_channel_pA
+    # Convert to frac current
+    frac_current = raw_signal_utils.compute_fractional_blockage(
+        signal_pA, open_channel_pA)
+    # Apply signal threshold & get list of captures
+    captures = find_segments_below_threshold(frac_current,
+                                             signal_threshold_frac)
+    # If last_capture_only, reduce list of captures to only last
+    if last_capture_only and len(captures) > 1:
+        captures = captures[-1]
+    # Apply filters to remaining capture(s)
+    filtered_captures = []
+    for capture in captures:
+        if len(capture) > delay:
+            capture = capture[delay:]
+        else:
+            continue
+        if apply_capture_filters(capture, filters):
+            filtered_captures.append(capture)
+    # Return list of captures
+    return filtered_captures
 
 
 def find_peptides(signal, voltage, signal_threshold=0.7, voltage_threshold=-180):
+    # TODO deprecate
     diff_points = np.where(
         np.abs(
             np.diff(
@@ -35,34 +143,6 @@ def find_peptides(signal, voltage, signal_threshold=0.7, voltage_threshold=-180)
     if voltage[0] <= voltage_threshold and signal[0] <= signal_threshold:
         diff_points = np.hstack([[0], diff_points])
     if voltage[-1] <= voltage_threshold and signal[-1] <= signal_threshold:
-        diff_points = np.hstack([diff_points, [len(voltage)]])
-
-    return zip(diff_points[::2], diff_points[1::2])
-
-
-def find_peptide_voltage_changes(voltage, voltage_threshold=-180):
-    """find_peptide_voltage_changes
-
-    Find regions where voltage drops at or below the specified threshold.
-
-    Parameters
-    ----------
-    voltage : np.array
-        Contains voltage values recorded by a nanopore device.
-    voltage_threshold : int, optional
-        Find regions where the voltage drops at or below this value, by default -180
-
-    Returns
-    -------
-    zip iterator
-        Each item in the iterator represents the (start, end) points of regions
-        where the voltage drops at or below the threshold in the input array.
-    """
-    diff_points = np.where(np.abs(np.diff(
-        np.where(voltage <= voltage_threshold, 1, 0))) == 1)[0]
-    if voltage[0] <= voltage_threshold:
-        diff_points = np.hstack([[0], diff_points])
-    if voltage[-1] <= voltage_threshold:
         diff_points = np.hstack([diff_points, [len(voltage)]])
 
     return zip(diff_points[::2], diff_points[1::2])
@@ -96,8 +176,10 @@ def _find_peptides_helper(raw_signal_meta, voltage=None,
 
     Returns
     -------
-    [type]
-        [description]
+    list of tuples
+        Metadata about captures found within the raw signal. Includes the run
+        name, channel number, start & end, duration, mean/stdv/median/min/max
+        of the fractional signal and the open channel current (in pA).
     """
     run, channel, raw_signal = raw_signal_meta
     peptide_metadata = []
@@ -106,7 +188,7 @@ def _find_peptides_helper(raw_signal_meta, voltage=None,
     )
     if open_channel is None:
         open_channel = open_channel_prior
-    frac_signal = compute_fractional_blockage(raw_signal, open_channel)
+    frac_signal = raw_signal_utils.compute_fractional_blockage(raw_signal, open_channel)
     peptide_segments = find_peptides(frac_signal, voltage,
                                      signal_threshold=signal_threshold,
                                      voltage_threshold=voltage_threshold)
@@ -344,7 +426,7 @@ def extract_raw_data(
                 open_channel = np.floor(open_channel)
 
                 logger.debug("Computing fractional current.")
-                frac_signal = compute_fractional_blockage(raw_signal, open_channel)
+                frac_signal = raw_signal_utils.compute_fractional_blockage(raw_signal, open_channel)
 
             peptide_signal = frac_signal[row["start_obs"]: row["end_obs"]]
             logger.debug(
