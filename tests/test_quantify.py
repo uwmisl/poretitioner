@@ -9,11 +9,6 @@ This module contains tests for quantify.py functionality.
 import poretitioner.utils.quantify as quantify
 
 
-def test_truth_test():
-    """Asserts true"""
-    assert True is True
-
-
 def calc_time_until_capture_test():
     # I know this hardcoding isn't ideal
     capture_windows = [(93670, 273393), (329867, 422733), (479354, 572158),
