@@ -2,6 +2,7 @@
 import os
 import h5py
 import pytest
+import numpy as np
 import poretitioner.utils.segment as segment
 
 
@@ -145,6 +146,11 @@ def apply_capture_filters_length_test():
     pass_filters = segment.apply_capture_filters(capture, filters)
     assert not pass_filters
 
+    # Only length filter -- pass (no filter actually given)
+    filters = {"length": (None, None)}
+    pass_filters = segment.apply_capture_filters(capture, filters)
+    assert pass_filters
+
 
 def apply_capture_filters_mean_test():
     """Test mean filter function. stdv, median, min, and max apply similarly."""
@@ -166,7 +172,272 @@ def apply_capture_filters_mean_test():
     assert not pass_filters
 
 
-def find_captures_test():
-    # TODO: Generate test data : https://github.com/uwmisl/poretitioner/issues/32
-    # See issue for proposed test cases as well
-    assert False
+def find_captures_0_single_capture_test():
+    data_file = "tests/data/capture_windows/test_data_capture_window_0.txt.gz"
+    data = np.loadtxt(data_file, delimiter="\t", comments="#")
+    actual_captures = [(33822, 92691)]
+    signal_threshold_frac = 0.7
+    alt_open_channel_pA = 230
+    terminal_capture_only = False
+    filters = {"length": (100, None)}
+    delay = 0
+    end_tol = 0
+    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
+                                                      terminal_capture_only=terminal_capture_only,
+                                                      filters=filters,
+                                                      delay=delay,
+                                                      end_tol=end_tol)
+    assert len(captures) == len(actual_captures)
+    for test_capture in captures:
+        assert test_capture in actual_captures
+
+
+def find_captures_0_single_capture_terminal_test():
+    data_file = "tests/data/capture_windows/test_data_capture_window_0.txt.gz"
+    data = np.loadtxt(data_file, delimiter="\t", comments="#")
+    actual_captures = [(33822, 92691)]
+    signal_threshold_frac = 0.7
+    alt_open_channel_pA = 230
+    terminal_capture_only = True
+    filters = {"length": (100, None)}
+    delay = 0
+    end_tol = 0
+    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
+                                                      terminal_capture_only=terminal_capture_only,
+                                                      filters=filters,
+                                                      delay=delay,
+                                                      end_tol=end_tol)
+    assert len(captures) == len(actual_captures)
+    for test_capture in captures:
+        assert test_capture in actual_captures
+
+
+def find_captures_1_double_capture_noterminal_test():
+    """Example capture window contains 2 long captures, neither terminal.
+    Also contains a few short blips.
+
+    Test: terminal_capture_only = True returns no captures"""
+    data_file = "tests/data/capture_windows/test_data_capture_window_1.txt.gz"
+    data = np.loadtxt(data_file, delimiter="\t", comments="#")
+    signal_threshold_frac = 0.7
+    alt_open_channel_pA = 230
+    terminal_capture_only = True
+    filters = {"length": (100, None)}
+    delay = 0
+    end_tol = 0
+    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
+                                                      terminal_capture_only=terminal_capture_only,
+                                                      filters=filters,
+                                                      delay=delay,
+                                                      end_tol=end_tol)
+    assert len(captures) == 0
+
+
+def find_captures_1_double_capture_noterminal_2_test():
+    """Example capture window contains 2 long captures, neither terminal.
+    Also contains a few short blips.
+
+    Test: terminal_capture_only = False returns 2 captures"""
+    data_file = "tests/data/capture_windows/test_data_capture_window_1.txt.gz"
+    data = np.loadtxt(data_file, delimiter="\t", comments="#")
+    signal_threshold_frac = 0.7
+    alt_open_channel_pA = 230
+    terminal_capture_only = False
+    filters = {"length": (100, None)}
+    delay = 0
+    end_tol = 0
+    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
+                                                      terminal_capture_only=terminal_capture_only,
+                                                      filters=filters,
+                                                      delay=delay,
+                                                      end_tol=end_tol)
+    assert len(captures) == 2
+
+
+def find_captures_2_nocaptures_test():
+    """Example capture window contains no captures.
+
+    Test: find_captures returns no captures"""
+    data_file = "tests/data/capture_windows/test_data_capture_window_2.txt.gz"
+    data = np.loadtxt(data_file, delimiter="\t", comments="#")
+    signal_threshold_frac = 0.7
+    alt_open_channel_pA = 230
+    terminal_capture_only = False
+    filters = {"length": (100, None)}
+    delay = 10
+    end_tol = 0
+    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
+                                                      terminal_capture_only=terminal_capture_only,
+                                                      filters=filters,
+                                                      delay=delay,
+                                                      end_tol=end_tol)
+    assert len(captures) == 0
+
+
+def find_captures_3_multicapture_terminal_test():
+    """Example capture window contains 1 long terminal capture & 2 medium/short captures.
+
+    Tests: find_captures returns...
+    1 capture when terminal_capture_only = True
+    """
+    data_file = "tests/data/capture_windows/test_data_capture_window_3.txt.gz"
+    data = np.loadtxt(data_file, delimiter="\t", comments="#")
+    signal_threshold_frac = 0.7
+    alt_open_channel_pA = 230
+    terminal_capture_only = True
+    filters = {"length": (100, None)}
+    delay = 0
+    end_tol = 0
+    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
+                                                      terminal_capture_only=terminal_capture_only,
+                                                      filters=filters,
+                                                      delay=delay,
+                                                      end_tol=end_tol)
+    assert len(captures) == 1
+
+
+def find_captures_3_multicapture_nonterminal_test():
+    """Example capture window contains 1 long terminal capture & 1 medium capture.
+
+    Tests: find_captures returns...
+    3 captures when terminal_capture_only = False
+    """
+    data_file = "tests/data/capture_windows/test_data_capture_window_3.txt.gz"
+    data = np.loadtxt(data_file, delimiter="\t", comments="#")
+    signal_threshold_frac = 0.7
+    alt_open_channel_pA = 230
+    terminal_capture_only = False
+    filters = {"length": (100, None)}
+    delay = 0
+    end_tol = 0
+    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
+                                                      terminal_capture_only=terminal_capture_only,
+                                                      filters=filters,
+                                                      delay=delay,
+                                                      end_tol=end_tol)
+    assert len(captures) == 2
+
+
+def find_captures_4_unfolded_terminal_test():
+    """Example capture window contains 1 long terminal capturethat has unfolded.
+
+    Tests: find_captures returns 1 capture
+    """
+    data_file = "tests/data/capture_windows/test_data_capture_window_4.txt.gz"
+    data = np.loadtxt(data_file, delimiter="\t", comments="#")
+    signal_threshold_frac = 0.7
+    alt_open_channel_pA = 230
+    terminal_capture_only = True
+    filters = {"length": (100, None)}
+    delay = 0
+    end_tol = 0
+    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
+                                                      terminal_capture_only=terminal_capture_only,
+                                                      filters=filters,
+                                                      delay=delay,
+                                                      end_tol=end_tol)
+    assert len(captures) == 1
+
+
+def find_captures_5_unfolded_terminal_test():
+    """Example capture window contains 1 long terminal capture. It was captured
+    almost immediately, causing a very short open pore region.
+
+    Tests: find_captures returns 1 capture
+    """
+    data_file = "tests/data/capture_windows/test_data_capture_window_5.txt.gz"
+    data = np.loadtxt(data_file, delimiter="\t", comments="#")
+    signal_threshold_frac = 0.7
+    alt_open_channel_pA = 230
+    terminal_capture_only = True
+    filters = {"length": (100, None)}
+    delay = 0
+    end_tol = 0
+    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
+                                                      terminal_capture_only=terminal_capture_only,
+                                                      filters=filters,
+                                                      delay=delay,
+                                                      end_tol=end_tol)
+    assert len(captures) == 1
+    # Rough check; should be ~229.05 & anything close is okay.
+    # The function is nondeterministic & should return this exact value, but if
+    # future changes are made, some tolerance can be allowed.
+    assert open_channel_pA > 228.5 and open_channel_pA < 230
+
+
+def find_captures_6_clog_no_open_channel_test():
+    """Example capture window contains 1 long terminal capture. Open pore region
+    is extremely, extremely short. Test by cutting off the open pore region.
+
+    Tests: find_captures returns 1 capture; open pore returns alt value.
+    """
+    data_file = "tests/data/capture_windows/test_data_capture_window_6.txt.gz"
+    data = np.loadtxt(data_file, delimiter="\t", comments="#")[100:]
+    signal_threshold_frac = 0.7
+    alt_open_channel_pA = 230
+    terminal_capture_only = False
+    filters = {"length": (100, None)}
+    delay = 0
+    end_tol = 0
+    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
+                                                      terminal_capture_only=terminal_capture_only,
+                                                      filters=filters,
+                                                      delay=delay,
+                                                      end_tol=end_tol)
+    assert len(captures) == 1
+    # Rough check; should be ~229.05 & anything close is okay.
+    # The function is nondeterministic & should return this exact value, but if
+    # future changes are made, some tolerance can be allowed.
+    assert open_channel_pA == 230
+
+
+def find_captures_7_capture_no_open_channel_test():
+    """Example capture window contains 1 long terminal capture. Open pore region
+    is extremely, extremely short. Test by cutting off the open pore region.
+
+    Tests: find_captures returns 1 capture; open pore returns alt value.
+    """
+    data_file = "tests/data/capture_windows/test_data_capture_window_7.txt.gz"
+    data = np.loadtxt(data_file, delimiter="\t", comments="#")[100:]
+    signal_threshold_frac = 0.7
+    alt_open_channel_pA = 230
+    terminal_capture_only = False
+    filters = {"length": (100, None)}
+    delay = 0
+    end_tol = 0
+    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
+                                                      terminal_capture_only=terminal_capture_only,
+                                                      filters=filters,
+                                                      delay=delay,
+                                                      end_tol=end_tol)
+    assert len(captures) == 1
+    # Rough check; should be ~229.05 & anything close is okay.
+    # The function is nondeterministic & should return this exact value, but if
+    # future changes are made, some tolerance can be allowed.
+    assert open_channel_pA == 230
+
+
+def find_captures_8_capture_no_open_channel_test():
+    """Example capture window contains 2 captures: both long, 1 terminal.
+    Test non-terminal long capture.
+
+    Tests: find_captures returns 2 captures.
+           Checks exact capture boundaries with delay = 3
+    """
+    data_file = "tests/data/capture_windows/test_data_capture_window_8.txt.gz"
+    data = np.loadtxt(data_file, delimiter="\t", comments="#")
+    signal_threshold_frac = 0.7
+    alt_open_channel_pA = 230
+    terminal_capture_only = False
+    filters = {"length": (100, None)}
+    delay = 3
+    end_tol = 0
+    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
+                                                      terminal_capture_only=terminal_capture_only,
+                                                      filters=filters,
+                                                      delay=delay,
+                                                      end_tol=end_tol)
+    assert len(captures) == 2
+    actual_captures = [(11310, 22098), (26617, 94048)]
+    for test_capture in captures:
+        assert test_capture in actual_captures
