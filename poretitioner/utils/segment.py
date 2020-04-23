@@ -36,7 +36,8 @@ def apply_capture_filters(capture, filters):
     for filt, (low, high) in filters.items():
         if filt in supported_filters:
             val = supported_filters[filt](capture)
-            if low > val or val > high:
+            if (low is not None and low > val) or \
+               (high is not None and val > high):
                 pass_filters = False
                 return pass_filters
         else:
@@ -60,8 +61,8 @@ def find_segments_below_threshold(time_series, threshold):
 
     Returns
     -------
-    zip iterator
-        Each item in the iterator represents the (start, end) points of regions
+    list of tuples (start, end)
+        Each item in the list represents the (start, end) points of regions
         where the input array drops at or below the threshold.
     """
     diff_points = np.where(np.abs(np.diff(
@@ -70,11 +71,12 @@ def find_segments_below_threshold(time_series, threshold):
         diff_points = np.hstack([[0], diff_points])
     if time_series[-1] <= threshold:
         diff_points = np.hstack([diff_points, [len(time_series)]])
-    return zip(diff_points[::2], diff_points[1::2])
+    return list(zip(diff_points[::2], diff_points[1::2]))
 
 
 def find_captures(signal_pA, signal_threshold_frac, alt_open_channel_pA,
-                  last_capture_only=False, filters={}, delay=50):
+                  terminal_capture_only=False, filters={}, delay=50,
+                  end_tol=0, start_time_offset=0):
     """[summary]
 
     Parameters
@@ -82,12 +84,14 @@ def find_captures(signal_pA, signal_threshold_frac, alt_open_channel_pA,
     signal_pA : np.array
         Time series of nanopore current values (in units of pA).
     signal_threshold_frac : float
-        Threshold for the first pass of finding captures (in ). (Captures are <= the
-        threshold.)
-    alt_open_channel_pA : [type]
-        [description]
-    last_capture_only : bool, optional
-        [description], by default False
+        Threshold for the first pass of finding captures (in fractional
+        current). (Captures are <= the threshold.)
+    alt_open_channel_pA : float
+        If the open channel current cannot be determined based on the given
+        current window (AKA based on signal_pA), use this value instead.
+    terminal_capture_only : bool, optional
+        Only return the final capture in the window, and only if it remains
+        captured until the end of the window (to be ejected), by default False
     filters : dict, optional
         [description], by default {}
     delay : int, optional
@@ -95,11 +99,18 @@ def find_captures(signal_pA, signal_threshold_frac, alt_open_channel_pA,
         points at the beginning of the capture that represent the initial
         translocation of the molecule. The beginning of the capture will be
         trimmed by _delay_ points, by default 50.
+    end_tol : int, optional
+        If terminal_capture_only is True, specify close to the end of the
+        window the last capture must be in order to count. A value of 0 means
+        the end of the last capture must exactly align with the end of the
+        window.
 
     Returns
     -------
     List of tuples
         List of captures in the given window of signal.
+    Float
+        Open channel current value used to fractionalize raw current.
     """
     # For a single capture window (given as signal_pA):
     # Attempt to find open channel current (if not poss., use alt)
@@ -110,23 +121,32 @@ def find_captures(signal_pA, signal_threshold_frac, alt_open_channel_pA,
     # Convert to frac current
     frac_current = raw_signal_utils.compute_fractional_blockage(
         signal_pA, open_channel_pA)
+    del signal_pA
     # Apply signal threshold & get list of captures
     captures = find_segments_below_threshold(frac_current,
                                              signal_threshold_frac)
     # If last_capture_only, reduce list of captures to only last
-    if last_capture_only and len(captures) > 1:
-        captures = captures[-1]
+    if terminal_capture_only and len(captures) > 1:
+        if np.abs(captures[-1][1] - len(frac_current)) <= end_tol:
+            captures = [captures[-1]]
+        else:
+            captures = []
+
+    if delay > 0:
+        for i, capture in enumerate(captures):
+            capture_start, capture_end = capture
+            if capture_end - capture_start > delay:
+                capture_start += delay
+                captures[i] = (capture_start, capture_end)
+
     # Apply filters to remaining capture(s)
     filtered_captures = []
     for capture in captures:
-        if len(capture) > delay:
-            capture = capture[delay:]
-        else:
-            continue
-        if apply_capture_filters(capture, filters):
+        capture_start, capture_end = capture
+        if apply_capture_filters(frac_current[capture_start: capture_end], filters):
             filtered_captures.append(capture)
     # Return list of captures
-    return filtered_captures
+    return filtered_captures, open_channel_pA
 
 
 def find_peptides(signal, voltage, signal_threshold=0.7, voltage_threshold=-180):
