@@ -6,17 +6,6 @@ import numpy as np
 import poretitioner.utils.segment as segment
 
 
-"""
-    * Bulk fast5 doesn't have the required data sections
-    * Config
-        * throws error if None
-        * throws error if doesn't have the right values
-        * populated in fast5 if given
-    * sub run
-        * is None (no tuple)
-        * adds extra info when given"""
-
-
 def create_capture_fast5_test():
     """Test valid capture fast5 produced. Conditions:
     * Valid bulk fast5 input
@@ -441,3 +430,65 @@ def find_captures_8_capture_no_open_channel_test():
     actual_captures = [(11310, 22098), (26617, 94048)]
     for test_capture in captures:
         assert test_capture in actual_captures
+
+
+def parallel_find_captures_test(tmpdir):
+    bulk_f5_fname = "tests/data/bulk_fast5_dummy.fast5"
+    config = {"compute":  {"n_workers": 4},
+              "segment": {"voltage_threshold": -180,
+                          "signal_threshold": 0.7,
+                          "translocation_delay": 10,
+                          "open_channel_prior_mean": 230,
+                          "open_channel_prior_stdv": 25,
+                          "good_channels": [1, 2, 3],
+                          "end_tol": 0,
+                          "terminal_capture_only": False},
+              "filters": {"length": (100, None)},
+              "output": {"capture_f5_dir": "tests/",
+                         "captures_per_f5": 1000}}
+    segment.parallel_find_captures(bulk_f5_fname, config)
+    run_id = "d0befb838f5a9a966e3c559dc3a75a6612745849"
+    actual_n_captures = 9
+    n_captures = 0
+    capture_f5_fname = f"tests/{run_id}_1.fast5"
+    with h5py.File(capture_f5_fname, "r") as f5:
+        for grp in f5.get("/"):
+            n_captures += 1
+            d = f5[grp]
+            a = d["Signal"].attrs
+            start_time_local = a.get("start_time_local")
+            start_time_bulk = a.get("start_time_bulk")
+            assert start_time_local == start_time_bulk  # No offset here
+
+            duration = a.get("duration")
+            print(d["Signal"])
+            len_signal = len(d["Signal"][()])
+            assert len_signal == duration
+
+            voltage = a.get("voltage")
+            assert voltage == config["segment"]["voltage_threshold"]
+
+    assert n_captures == actual_n_captures
+    os.remove(capture_f5_fname)
+
+
+def write_capture_to_fast5_test(tmpdir):
+    capture_f5_fname = "tests/write_test_dummy.fast5"
+    if os.path.exists(capture_f5_fname):
+        os.remove(capture_f5_fname)
+    read_id = "1405caa5-74fd-4478-8fac-1d0b5d6ead8e"
+    signal_pA = np.random.rand(5000)
+    start_time_bulk = 10000
+    start_time_local = 0
+    duration = 8000
+    voltage = -180
+    open_channel_pA = 229.1
+    channel_no = 3
+    offset, rng, digi = -21.0, 3013.53, 8192.0
+    sampling_rate = 10000
+    segment.write_capture_to_fast5(capture_f5_fname, read_id, signal_pA,
+                                   start_time_bulk, start_time_local, duration, voltage, open_channel_pA,
+                                   channel_no, digi, offset, rng, sampling_rate)
+    assert os.path.exists(capture_f5_fname)
+    # TODO further validation
+    os.remove(capture_f5_fname)

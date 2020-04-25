@@ -71,11 +71,11 @@ def get_fractional_blockage(f5, channel_no, start=None, end=None,
 
 
 def get_local_fractional_blockage(
-    f5, open_channel_guess=220, open_channel_bound=15, channel=None, read=None, local_window_sz=1000
+    f5, open_channel_guess=220, open_channel_bound=15, channel=None, local_window_sz=1000
 ):
     """Retrieve the scaled raw signal for the channel, compute the open pore
     current, and return the fractional blockage for that channel."""
-    signal = get_scaled_raw_for_channel(f5, channel=channel, read=read)
+    signal = get_scaled_raw_for_channel(f5, channel=channel)
     open_channel = find_open_channel_current(signal, open_channel_guess, bound=open_channel_bound)
     if open_channel is None:
         print("open pore is None")
@@ -93,20 +93,22 @@ def get_local_fractional_blockage(
     return frac
 
 
-def get_voltage(f5):
+def get_voltage(f5, start=None, end=None):
     """Retrieve the bias voltage from a bulk fast5 file.
 
     Parameters
     ----------
     f5 : h5py.File
         Fast5 file, open for reading using h5py.File.
+    start : int
+        Start point  # TODO
 
     Returns
     -------
     float
         Voltage (mV).
     """
-    voltage = f5.get("/Device/MetaData").value["bias_voltage"] * 5.0
+    voltage = f5.get("/Device/MetaData")["bias_voltage"][start:end] * 5.0
     return voltage
 
 
@@ -161,12 +163,8 @@ def get_raw_signal(f5, channel_no, start=None, end=None):
     # TODO change uses of this function to not use kwarg channel
     # TODO input is now int NOT str
     signal_path = f"/Raw/Channel_{channel_no}/Signal"
-    if start is not None and end is not None:
+    if start is not None or end is not None:
         raw = f5.get(signal_path)[start:end]
-    elif start is not None:
-        raw = f5.get(signal_path)[start:]
-    elif end is not None:
-        raw = f5.get(signal_path)[:end]
     else:
         raw = f5.get(signal_path)[()]
     return raw
@@ -251,6 +249,30 @@ def scale_raw_current(raw, offset, rng, digitisation):
         Raw current scaled to pA.
     """
     return (raw + offset) * (rng / digitisation)
+
+
+def digitize_raw_current(raw_pA, offset, rng, digitisation):
+    """Reverse the scaling from pA to raw current.
+
+    Note: using UK sp. of digitization for consistency w/ file format
+
+    Parameters
+    ----------
+    raw : Numpy array of numerics
+        Array representing nanopore current in units of pA.
+    offset : numeric
+        Offset value specified in bulk fast5.
+    rng : numeric
+        Range value specified in bulk fast5.
+    digitisation : numeric
+        Digitisation value specified in bulk fast5.
+
+    Returns
+    -------
+    Numpy array of floats
+        Raw current digitized.
+    """
+    return np.array((raw_pA * digitisation / rng) - offset, dtype=np.int16)
 
 
 def find_open_channel_current(raw, open_channel_guess, bound=None):
