@@ -13,6 +13,7 @@ import h5py
 import numpy as np
 
 
+
 def natkey(string_):
     """Natural sorting key -- sort strings containing numerics so numerical
     ordering is honored/preserved.
@@ -373,8 +374,7 @@ def find_signal_off_regions(raw, window_sz=200, slide=100, current_range=50):
 
 
 def find_segments_below_threshold(time_series, threshold):
-    """find_segments_below_threshold
-
+    """
     Find regions where the time series data points drop at or below the
     specified threshold.
 

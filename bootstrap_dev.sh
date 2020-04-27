@@ -11,7 +11,7 @@ set -e
 ##############################################
 #   Script clean up and exception handling.  #
 ##############################################
-cleanup () {
+cleanupOnInterrupt () {
     # Called when this script exits unexpectedly (without explicit failure)
     # Performs clean-up.
     echo "Cleaning up before exit..."
@@ -21,7 +21,7 @@ cleanup () {
     exit
 }
 
-trap cleanup SIGINT SIGQUIT SIGABRT SIGABRT
+trap cleanupOnInterrupt SIGINT SIGQUIT SIGABRT SIGABRT
 
 ##############################################
 #      Color-coordinated status reporting.   #
@@ -40,12 +40,12 @@ green () {
 }
 
 yellow () {
-    local YELLOW=$(tput setaf 3)
+    local YELLOW=$(tput setaf 3; tput bold)
     echo -e "$YELLOW$*$NORMAL"
 }
 
 red () {
-    local RED=$(tput setaf 1)
+    local RED=$(tput setaf 1; tput bold)
     echo -e "$RED$*$NORMAL"
 }
 
@@ -100,32 +100,31 @@ get () {
 #          Installation Methods              #
 ##############################################
 
-
-create_root_nix_if_necessaary () {
-    #
+is_separate_nix_volume_necessary () {
     # As of MacOS X Catalina (10.15.x), the root directory is no longer writeable.
     # However, Nix expects to be installed at this location. To get around this,
     # we borrowed a script from the NixOS repository that creates a separate
     # volume where Nix can be hosted at root (i.e. /nix/).
-    #
-    # Please see './nix/create-darwin-volume.sh' for more details.
-    #
-    if [[ ! -d "/nix" ]]; then
-        if [[ ! -w "/" && "$OSTYPE" == "darwin"* ]]; then
-            yellow "Detected operating system is MacOS X Catalina or higher ( >= 10.15), so we'll have to do a little extra disk set up."
-            yellow "Creating Nix volume..."
-
-            . ./nix/create-darwin-volume.sh
-
-            yellow "Nix volume created!"
-        fi
-        # else: We're on OS X Mojave (10.14) or below, so /nix/ will be created at
-        # the system root (same behavior as Linux) in the install_linux step.
+    if [[ ! -w "/" && "$OSTYPE" == "darwin"*  && ("$(sw_vers -productVersion)" > "10.15" || "$(sw_vers -productVersion)" = "10.15") ]]; then
+        true
+    else false
     fi
 }
 
+create_root_nix_if_necessaary () {
+    if [[ ! -d "/nix" && is_separate_nix_volume_necessary ]]; then
+        yellow "Detected operating system is MacOS X Catalina or higher ( >= 10.15), so we'll have to do a little extra disk set up."
+        yellow "Creating Nix volume..."
+
+        . ./nix/create-darwin-volume.sh
+
+        yellow "Nix volume created!"
+    fi
+    # else: We're either on a non-Darwin machine, or on OS X Mojave (10.14) or below, so /nix/ will be created at
+    # the system root (same behavior as Linux) in the install_linux step.
+}
+
 configure_nix_env_if_necessary () {
-    set -x
     # This exists to patch the fact that as of 31 March 2020, Nix installer doesn't modify
     # the Zshell profile (it only checks bash and sh).
     p=$HOME/.nix-profile/etc/profile.d/nix.sh
@@ -146,7 +145,71 @@ configure_nix_env_if_necessary () {
 
     # Sets up some important Nix environment variables
     . /Users/$USER/.nix-profile/etc/profile.d/nix.sh
-    set +x
+}
+
+uninstall_clean() {
+    # Uninstalls all Nix and dev dependencies.
+    # Doesn't modify the shell .rc or .profile files, which might have lingering Nix references. These can be deleted manually.
+
+    # Uninstall pre-commit and clean its dependencies, since it touches the user's home directory.
+    if [ -x "$(command -v pre-commit)" ];
+    then
+        yellow "Uninstalling pre-commit..."
+        pre-commit clean;
+        pre-commit uninstall;
+        green "Pre-commit uninstalled."
+    fi
+
+    # Uninstall all Nix dependencies, including Nix itself.
+    if [ -x "$(command -v nix-env)" ];
+    then
+        yellow "Uninstalling Nix..."
+        nix-env -e "*"
+        rm -rf $HOME/.nix-*
+        rm -rf $HOME/.config/nixpkgs
+        rm -rf $HOME/.cache/nix
+        rm -rf $HOME/.nixpkgs
+    fi
+
+    if [[ -d "/nix" && is_separate_nix_volume_necessary ]]; then
+        echo ""
+        red "These next steps need to be done manually, as they involve modifying your disk."
+        echo ""
+        yellow "  1. Remove the Nix entry from fstab using 'sudo vifs'"
+        echo ""
+        echo "       Once in vifs, arrow-key down to the line that says 'LABEL=Nix\040Store /nix apfs', type 'dd' (this deletes the line), then type ':wq'."
+        echo ""
+        yellow "  2. Destroy the Nix data volume using 'diskutil apfs deleteVolume' (for example, 'diskutil apfs deleteVolume disk1s6_foo')"
+
+        if [[ $(diskutil apfs list | grep --extended-regexp "Mount Point:[ ]* /nix" -B 3 -A 3) ]];
+        then
+            echo ""
+            echo "     This is the volume you want to destroy (since its mount point is /nix):"
+            diskutil apfs list | grep --extended-regexp "Mount Point:[ ]* /nix" -B 3 -A 3
+            echo ""
+        fi;
+
+        echo ""
+        yellow "  3. Remove the 'nix' line from /etc/synthetic.conf or the file"
+        echo ""
+        echo "    To do this, consider running: "
+        echo ""
+        echo "    $ sudo grep -vE '^nix$' /etc/synthetic.conf > synthetic-temp.conf; sudo mv synthetic-temp.conf /etc/synthetic.conf "
+        echo ""
+        echo "    Which will rewrite '/etc/synthetic.conf' with every line that does not contain the exact word 'nix'."
+        echo ""
+        echo "After doing all of the above steps"
+        echo ""
+        yellow "  4. Reboot your computer"
+        echo ""
+        echo "Then uninstall will be complete and you'll be starting fresh."
+        echo ""
+    elif [[ -d "/nix" ]]; then
+        echo "Running 'sudo rm -rf /nix'"
+        sudo rm -rf /nix
+        echo "Finished 'sudo rm -rf /nix'"
+        green "Nix uninstalled."
+    fi;
 }
 
 install_nix () {
@@ -170,21 +233,6 @@ install_nix () {
     green "Nix installed."
 }
 
-install_nix_python () {
-    if nix-env --query | grep python3- &> /dev/null
-    then
-        # Python 3 Nix is already installed!
-        bold "Python is already installed through Nix. Skipping."
-        return 0
-    fi
-
-    bold "Installing Python (via Nix)..."
-    # Installs Python 3.7
-    nix-env --file "<nixpkgs>" --install "python3-3.7.6" --show-trace
-
-    green "Python installed."
-}
-
 install_misl_env () {
 
     bold "Installing MISL env..."
@@ -200,17 +248,20 @@ install_misl_env () {
 
 # Bootstraps the developer environment.
 main () {
-    # Make sure to call `create_root_nix_if_necessaary` for Mac OS X users, as it solves a problem
-    # with Mac OS Catalina and above.
-    create_root_nix_if_necessaary
-    install_nix
-    install_nix_python
-    install_misl_env
-    green "All done!"
+    if [[ $1 == "uninstall" ]]; then
+        green "Uninstalling"
+        uninstall_clean
+    else
+        # Make sure to call `create_root_nix_if_necessaary` for Mac OS X users, as it solves a problem
+        # with Mac OS Catalina and above.
+        create_root_nix_if_necessaary
+        install_nix
+        install_misl_env
+        green "All done!"
 
-    # Reload the shell to set environment variables like $NIX_PATH.
-    exec $SHELL
-
+        # Reload the shell to set environment variables like $NIX_PATH.
+        exec $SHELL
+    fi
 }
 
-main
+main $@

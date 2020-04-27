@@ -11,8 +11,8 @@
 ###########################################################################################
 
 { pkgs ? import <nixpkgs> { config = (import ./nix/config.nix); }
-, cudaSupport ? true
-, python ? (pkgs.callPackage ./nix/python.nix) { inherit pkgs cudaSupport; }
+, cudaSupport ? false
+, python ? (pkgs.callPackage ./nix/python.nix) { inherit pkgs; }
 }:
 
 with pkgs;
@@ -25,7 +25,7 @@ let
   #
   ############################################################
   dependencies =
-    (callPackage ./nix/dependencies.nix { inherit python; });
+    (callPackage ./nix/dependencies.nix { inherit python cudaSupport; });
   run_pkgs = dependencies.run;
   test_pkgs = dependencies.test;
 

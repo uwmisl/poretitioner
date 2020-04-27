@@ -3,6 +3,7 @@
 quantify.py
 ===========
 
+
 This module contains functionality for quantifying nanopore captures.
 
 """
@@ -89,7 +90,7 @@ def get_overlapping_regions(window, regions):
     Incomplete overlaps are returned.
 
     # TODO move to raw_signal_utils -- general purpose signal fn not specific to quant
-
+    
     Parameters
     ----------
     window : tuple of numerics (start, end)
@@ -239,6 +240,7 @@ def get_time_between_captures(
     logger.addHandler(logging.StreamHandler())
 
     # TODO : Implement capture fast5 I/O : https://github.com/uwmisl/poretitioner/issues/40
+
     # Retrieve raw file, unfiltered capture file, and config file names
     raw_file, capture_file = get_related_files(
         filtered_file, raw_file_dir=raw_file_dir, capture_file_dir=capture_file_dir
@@ -411,6 +413,7 @@ def get_capture_freq(
     logger.addHandler(logging.StreamHandler())
 
     # TODO : Implement capture fast5 I/O : https://github.com/uwmisl/poretitioner/issues/40
+
     # Retrieve raw file and config file names
     raw_file, capture_file = get_related_files(
         filtered_file, raw_file_dir=raw_file_dir, capture_file_dir=capture_file_dir
@@ -501,6 +504,7 @@ def get_capture_freq(
 
 def NTER_time_fit(time):
     # TODO : Document the hardcoded values : https://github.com/uwmisl/poretitioner/issues/44
+
     if time == -1:
         return 0
     conc = np.power(time / 20384.0, 1 / -0.96)
@@ -511,6 +515,7 @@ def NTER_time_fit(time):
 
 def NTER_freq_fit(freq):
     # TODO : Document the hardcoded values : https://github.com/uwmisl/poretitioner/issues/44
+
     if freq == -1:
         return 0
     conc = np.power(freq / 1.0263, 1 / 0.5239)
