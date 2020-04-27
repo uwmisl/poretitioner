@@ -1,9 +1,7 @@
-#!/usr/bin/env python2.7
 import argparse
 import logging
 import os
 import sys
-# import numpy as np
 from datetime import datetime
 
 import yaml
@@ -88,7 +86,7 @@ class YAMLAssistant:
 
     def check_nonempty_str(self, var_name, err=False):
         var = self.get_variable(var_name)
-        if var is None or not isinstance(var, basestring) or len(var) == 0:
+        if var is None or not isinstance(var, str) or len(var) == 0:
             msg = 'Variable "%s" must be a string that is >=1 char long.' % var_name
             if err:
                 self.logger.error(msg)
@@ -101,7 +99,7 @@ class YAMLAssistant:
 
     def check_file_exists(self, var_name, optional=False, err=False):
         var = self.get_variable(var_name)
-        if var is None or not isinstance(var, basestring) or not os.path.isfile(var):
+        if var is None or not isinstance(var, str) or not os.path.isfile(var):
             if optional:
                 msg = (
                     '    Variable "%s" does not exist yet. May be '
@@ -122,7 +120,7 @@ class YAMLAssistant:
 
     def check_directory(self, var_name, makedirs=False, err=False):
         var = self.get_variable(var_name)
-        if var is None or not isinstance(var, basestring) or not os.path.isdir(var):
+        if var is None or not isinstance(var, str) or not os.path.isdir(var):
             if makedirs:
                 makepath = os.path.abspath(var)
                 os.makedirs(makepath)
