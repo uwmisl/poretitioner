@@ -334,6 +334,34 @@ def find_signal_off_regions(raw, window_sz=200, slide=100, current_range=50):
         return []
 
 
+def find_segments_below_threshold(time_series, threshold):
+    """find_segments_below_threshold
+
+    Find regions where the time series data points drop at or below the
+    specified threshold.
+
+    Parameters
+    ----------
+    time_series : np.array
+        Array containing time series data points.
+    threshold : numeric
+        Find regions where the time series drops at or below this value
+
+    Returns
+    -------
+    list of tuples (start, end)
+        Each item in the list represents the (start, end) points of regions
+        where the input array drops at or below the threshold.
+    """
+    diff_points = np.where(np.abs(np.diff(
+        np.where(time_series <= threshold, 1, 0))) == 1)[0]
+    if time_series[0] <= threshold:
+        diff_points = np.hstack([[0], diff_points])
+    if time_series[-1] <= threshold:
+        diff_points = np.hstack([diff_points, [len(time_series)]])
+    return list(zip(diff_points[::2], diff_points[1::2]))
+
+
 def find_high_regions(raw, window_sz=200, slide=100, open_channel=1400, current_range=300):
     off = []
     for start in range(0, len(raw), slide):

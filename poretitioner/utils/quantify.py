@@ -12,7 +12,7 @@ import re
 import h5py
 import numpy as np
 import pandas as pd
-from .segment import find_segments_below_threshold
+from .raw_signal_utils import find_segments_below_threshold
 from .yaml_assistant import YAMLAssistant
 
 # # Retrieving Related Data Files from Filtered File or Capture File

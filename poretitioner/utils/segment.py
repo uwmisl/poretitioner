@@ -4,7 +4,6 @@ import os
 import dask.bag as db
 import h5py
 import numpy as np
-import pandas as pd
 import uuid
 from . import raw_signal_utils
 from dask.diagnostics import ProgressBar
@@ -17,23 +16,30 @@ __name__ = "poretitioner"
 
 
 def apply_capture_filters(capture, filters):
-    """TODO
+    """
+    Check whether a single nanopore capture passes a set of filters. Filters
+    are based on summary statistics (e.g., mean) and a range of allowed values.
+
+    Notes on filter behavior: If the filters dict is empty, there are no filters
+    and the capture passes. Filters are inclusive of high and low values. Only
+    supported filters are allowed. (mean, stdv, median, min, max, length)
+
+    More complex filtering should be done with a custom function.
 
     Parameters
     ----------
-    capture : [type]
-        [description]
-    filters : [type]
-        [description]
+    capture : array or list
+        Time series of nanopore current values for a single capture.
+    filters : dict
+        Keys are strings matching the supported filters, values are a tuple
+        giving the endpoints of the valid range. E.g. {"mean": (0.1, 0.5)}
+        defines a filter such that 0.1 <= mean(capture) <= 0.5.
 
     Returns
     -------
-    [type]
-        [description]
+    boolean
+        True if capture passes all filters; False otherwise.
     """
-    # If no filters, it should pass
-    # Only allow supported filters
-    # Filters are inclusive of low & high values
     logger = logging.getLogger("apply_capture_filters")
     # TODO: Implement logger best practices : https://github.com/uwmisl/poretitioner/issues/12
     if logger.handlers:
@@ -60,40 +66,16 @@ def apply_capture_filters(capture, filters):
     return pass_filters
 
 
-def find_segments_below_threshold(time_series, threshold):
-    """find_segments_below_threshold
-
-    Find regions where the time series data points drop at or below the
-    specified threshold.
-
-    # TODO maybe move to more general purpose module
-
-    Parameters
-    ----------
-    time_series : np.array
-        Array containing time series data points.
-    threshold : numeric
-        Find regions where the time series drops at or below this value
-
-    Returns
-    -------
-    list of tuples (start, end)
-        Each item in the list represents the (start, end) points of regions
-        where the input array drops at or below the threshold.
-    """
-    diff_points = np.where(np.abs(np.diff(
-        np.where(time_series <= threshold, 1, 0))) == 1)[0]
-    if time_series[0] <= threshold:
-        diff_points = np.hstack([[0], diff_points])
-    if time_series[-1] <= threshold:
-        diff_points = np.hstack([diff_points, [len(time_series)]])
-    return list(zip(diff_points[::2], diff_points[1::2]))
-
-
 def find_captures(signal_pA, signal_threshold_frac, alt_open_channel_pA,
                   terminal_capture_only=False, filters={}, delay=50,
                   end_tol=0):
-    """[summary] # TODO
+    """For a single section of current (capture window, in units of pA), identify
+    any captures within the window.
+
+    Current is first converted from pA to a fractionalized (0, 1) range based on
+    open channel current, and then any spans of current below the threshold
+    are considered possible captures. These are further reduced by filters and
+    whether the capture must be in the pore at the end of the window.
 
     Parameters
     ----------
@@ -109,7 +91,9 @@ def find_captures(signal_pA, signal_threshold_frac, alt_open_channel_pA,
         Only return the final capture in the window, and only if it remains
         captured until the end of the window (to be ejected), by default False
     filters : dict, optional
-        [description], by default {}
+        Keys are strings matching the supported filters, values are a tuple
+        giving the endpoints of the valid range. E.g. {"mean": (0.1, 0.5)}
+        defines a filter such that 0.1 <= mean(capture) <= 0.5., default {}
     delay : int, optional
         Translocation delay. At high sampling rates, there may be some data
         points at the beginning of the capture that represent the initial
@@ -128,7 +112,6 @@ def find_captures(signal_pA, signal_threshold_frac, alt_open_channel_pA,
     Float
         Open channel current value used to fractionalize raw current.
     """
-    # For a single capture window (given as signal_pA):
     # Attempt to find open channel current (if not poss., use alt)
     open_channel_pA = raw_signal_utils.find_open_channel_current(
         signal_pA, alt_open_channel_pA)
@@ -139,8 +122,8 @@ def find_captures(signal_pA, signal_threshold_frac, alt_open_channel_pA,
         signal_pA, open_channel_pA)
     del signal_pA
     # Apply signal threshold & get list of captures
-    captures = find_segments_below_threshold(frac_current,
-                                             signal_threshold_frac)
+    captures = raw_signal_utils.find_segments_below_threshold(
+        frac_current, signal_threshold_frac)
     # If last_capture_only, reduce list of captures to only last
     if terminal_capture_only and len(captures) > 1:
         if np.abs(captures[-1][1] - len(frac_current)) <= end_tol:
@@ -185,7 +168,9 @@ def find_captures_dask_wrapper(data_in, terminal_capture_only=False,
         Only return the final capture in the window, and only if it remains
         captured until the end of the window (to be ejected), by default False
     filters : dict, optional
-        [description], by default {}
+        Keys are strings matching the supported filters, values are a tuple
+        giving the endpoints of the valid range. E.g. {"mean": (0.1, 0.5)}
+        defines a filter such that 0.1 <= mean(capture) <= 0.5., default {}
     delay : int, optional
         Translocation delay. At high sampling rates, there may be some data
         points at the beginning of the capture that represent the initial
@@ -212,21 +197,18 @@ def find_captures_dask_wrapper(data_in, terminal_capture_only=False,
 def create_capture_fast5(bulk_f5_fname, capture_f5_fname, config,
                          overwrite=False, sub_run=(None, None, None)):
     """Prepare a fast5 file to contain the results of segmentation (capture
-    fast5 file).
+    fast5 file). The file does not contain raw data yet, just a skeleton.
 
     Parameters
     ----------
     bulk_f5_fname : str
-        Filename of the bulk fast5 that will eventually be segmented into
-        captures.
-        # TODO not sure if this should be a fname or open h5py obj
-        The implication is for parallelization, competing for the fh.
+        Filename of the bulk fast5, to be segmented into captures.
     capture_f5_fname : str
         Filename of the capture fast5 file to be created/written. Directory
         containing this file must already exist.
     config : dict
         Configuration parameters for the segmenter.
-        # TODO document allowed values
+        # TODO : document allowed values : https://github.com/uwmisl/poretitioner/issues/27
     overwrite : bool, optional
         Flag whether or not to overwrite capture_f5_fname, by default False
     sub_run : tuple, optional
@@ -311,25 +293,28 @@ def _prep_capture_windows(bulk_f5_fname, f5_subsection_start, f5_subsection_end,
 
     Parameters
     ----------
-    bulk_f5_fname : [type] # TODO
-        [description]
-    f5_subsection_start : [type]
-        [description]
-    f5_subsection_end : [type]
-        [description]
-    voltage_t : [type]
-        [description]
-    signal_t : [type]
-        [description]
-    good_channels : [type]
-        [description]
-    open_channel_prior_mean : [type]
-        [description]
+    bulk_f5_fname : str
+        Filename of the bulk fast5, to be segmented into captures.
+    f5_subsection_start : int, optional
+        Time point at which to start segmenting, by default None
+    f5_subsection_end : int, optional
+        Time point at which to stop segmenting, by default None
+    voltage_t : int
+        Voltage must be at or below this value to be considered a capture window.
+    signal_t : float
+        Threshold for the first pass of finding captures (in fractional
+        current). (Captures are <= the threshold.)
+    good_channels : list of ints
+        Specifies the nanopore array channels to be segmented.
+    open_channel_prior_mean : int
+        Approximate estimate of the open channel current value.
 
     Returns
     -------
-    [type]
-        [description]
+    (raw_signals, signal_metadata, run_id, sampling_rate)
+        Segments of the raw signal representing capture windows, and metadata
+        about these segments (channel number, window endpoints, offset, range,
+        digitisation).
     """
     logger = logging.getLogger("_prep_capture_windows")
     if logger.handlers:
@@ -344,12 +329,13 @@ def _prep_capture_windows(bulk_f5_fname, f5_subsection_start, f5_subsection_end,
         sampling_rate = int(bulk_f5["/UniqueGlobalKey/context_tags"].attrs.get("sample_frequency"))
 
         logger.info("Identifying capture windows (via voltage threshold).")
-        capture_windows = find_segments_below_threshold(voltage, voltage_t)
+        capture_windows = raw_signal_utils.find_segments_below_threshold(
+            voltage, voltage_t)
         logger.debug(f"run_id: {run_id}, sampling_rate: {sampling_rate}, "
                      f"#/capture windows: {len(capture_windows)}")
         logger.debug("Prepping raw signals for parallel processing.")
         raw_signals = []  # Input data to find_captures_dask_wrapper
-        context = []  # Metadata -- no need to pass through the segmenter
+        signal_metadata = []  # Metadata -- no need to pass through the segmenter
         for channel_no in good_channels:
             raw = raw_signal_utils.get_scaled_raw_for_channel(
                 bulk_f5, channel_no=channel_no, start=f5_subsection_start,
@@ -358,31 +344,41 @@ def _prep_capture_windows(bulk_f5_fname, f5_subsection_start, f5_subsection_end,
             for capture_window in capture_windows:
                 raw_signals.append((raw[capture_window[0]: capture_window[1]],
                                     signal_t, open_channel_prior_mean))
-                context.append([channel_no, capture_window, offset, rng, digi])
-    return raw_signals, context, run_id, sampling_rate
+                signal_metadata.append([channel_no, capture_window, offset, rng, digi])
+    return raw_signals, signal_metadata, run_id, sampling_rate
 
 
 def parallel_find_captures(bulk_f5_fname, config, f5_subsection_start=None, f5_subsection_end=None):
-    """ # TODO doc
-    Inputs:
-        * Bulk fast5 file
-        * Some indication of which channels to run it on
-        * Configuration
-            * Open channel prior mean & stdv
-            * Voltage threshold
-            * Signal threshold
-            * First-pass filters
-            * Translocation delay
-            * #/workers
-            * Where to save
-        * Sub-run details
-            * List of (start, end) in time series units (already converted)
-            * TODO Maybe instead of sub-runs, just give a time window instead?
+    """Identify captures within the bulk fast5 file in the specified range
+    (from f5_subsection_start to f5_subsection_end.)
 
-    I assume config is validated before calling this function.
+    If f5_subsection_{start|end} are not specified, the default is to use the
+    range of current starting from the beginning and/or end of the bulk fast5.
 
-    Outputs:
-        *
+    Note: config must be validated before this function.
+
+    Parameters
+    ----------
+    bulk_f5_fname : str
+        Filename of the bulk fast5, to be segmented into captures.
+    config : dict
+        Configuration parameters for the segmenter.
+        # TODO : document allowed values : https://github.com/uwmisl/poretitioner/issues/27
+    f5_subsection_start : int, optional
+        Time point at which to start segmenting, by default None
+    f5_subsection_end : int, optional
+        Time point at which to stop segmenting, by default None
+
+    Returns
+    -------
+    list of tuples
+        Metadata about the captures. To be used for diagnostic purposes.
+
+    Raises
+    ------
+    IOError
+        If the desired output location does not exist (i.e., save_location) in
+        the config, raise IOError.
     """
 
     logger = logging.getLogger("parallel_find_captures")
@@ -425,12 +421,12 @@ def parallel_find_captures(bulk_f5_fname, config, f5_subsection_start=None, f5_s
     captures = capture_map.compute(num_workers=n_workers)
     assert len(captures) == len(context)
     logger.debug(f"Captures (1st 10): {captures[:10]}")
- 
+
     # Write captures to fast5
     n_in_file = 0
     file_no = 1
     capture_f5_fname = os.path.join(save_location, f"{run_id}_{file_no}.fast5")
-    results_temp = []  # just for constructing df
+    capture_metadata = []
     for i, ((captures_in_window, open_channel_pA), window_context, (window_raw, _, _)) in \
             enumerate(zip(captures, context, raw_signals)):
         channel_no, capture_window, offset, rng, digi = window_context
@@ -438,7 +434,7 @@ def parallel_find_captures(bulk_f5_fname, config, f5_subsection_start=None, f5_s
         for capture in captures_in_window:
             read_id = str(uuid.uuid4())
             start_time_local = capture[0] + window_start  # Start time relative to the start of the bulk f5 subsection
-            start_time_bulk = start_time_local + f5_subsection_start
+            start_time_bulk = start_time_local + f5_subsection_start  # relative to the start of the entire bulk f5
             capture_duration = capture[1] - capture[0]
             logger.debug(f"Capture duration: {capture_duration}")
             if n_in_file >= n_per_file:
@@ -452,51 +448,49 @@ def parallel_find_captures(bulk_f5_fname, config, f5_subsection_start=None, f5_s
                                    start_time_bulk, start_time_local,
                                    capture_duration, voltage_t, open_channel_pA,
                                    channel_no, digi, offset, rng, sampling_rate)
-            results_temp.append([channel_no, window_start, window_end,
-                                 start_time_bulk, start_time_local,
-                                 capture_duration, open_channel_pA])
-    results_temp = pd.DataFrame(results_temp,
-                                columns=["channel_no", "capture_window_start",
-                                         "capture_window_end", "capture_start_bulk",
-                                         "capture_start_local", "duration",
-                                         "open_channel_pA_window"])
-    results_temp.to_csv("tests/debug.tsv", sep="\t", index=False)
-    return results_temp
+            capture_metadata.append([capture_f5_fname, read_id,
+                                    start_time_bulk, start_time_local,
+                                    capture_duration, voltage_t, open_channel_pA,
+                                    channel_no, sampling_rate])
+    return capture_metadata
 
 
 def write_capture_to_fast5(capture_f5_fname, read_id, signal_pA, start_time_bulk,
                            start_time_local, duration, voltage, open_channel_pA,
                            channel_no, digitisation, offset, rng, sampling_rate):
-    """Write a single capture to the specified capture fast5 file.
+    """Write a single capture to the specified capture fast5 file (which has
+    already been created via create_capture_fast5()).
 
-    Parameters # TODO
+    Parameters
     ----------
-    capture_f5_fname : [type]
-        [description]
-    read_id : [type]
-        [description]
-    signal_pA : [type]
-        [description]
-    start_time_bulk : [type]
-        [description]
-    start_time_local : [type]
-        [description]
-    duration : [type]
-        [description]
-    voltage : [type]
-        [description]
-    open_channel_pA : [type]
-        [description]
-    channel_no : [type]
-        [description]
-    digitisation : [type]
-        [description]
-    offset : [type]
-        [description]
-    rng : [type]
-        [description]
-    sampling_rate : [type]
-        [description]
+    capture_f5_fname : str
+        Filename of the capture fast5 file to be augmented.\
+    read_id : str
+        Identifier for this read (unique within the run, usually uuid.)
+    signal_pA : np.array
+        Time series of nanopore current values (in units of pA).
+    start_time_bulk : int
+        Starting time of the capture relative to the start of the bulk fast5
+        file.
+    start_time_local : int
+        Starting time of the capture relative to the beginning of the segmented
+        region. (Relative to f5_subsection_start in parallel_find_captures().)
+    duration : int
+        Number of data points in the capture.
+    voltage : int
+        Voltage at which the capture occurs (single value for entire window).
+    open_channel_pA : float
+        Median signal value when no capture is in the pore.
+    channel_no : int
+        Nanopore channel number (in MinION, value is between 1-512).
+    digitisation : numeric
+        Digitisation value specified in bulk fast5.
+    offset : numeric
+        Offset value specified in bulk fast5.
+    rng : numeric
+        Range value specified in bulk fast5.
+    sampling_rate : int
+        Nanopore sampling rate (Hz)
     """
     path, fname = os.path.split(capture_f5_fname)
     if not os.path.exists(path):
