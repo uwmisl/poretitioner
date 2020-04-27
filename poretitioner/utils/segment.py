@@ -1,3 +1,12 @@
+"""
+==========
+segment.py
+==========
+
+This module contains functionality for segmenting nanopore captures from
+bulk fast5s.
+
+"""
 import logging
 import os
 
@@ -12,6 +21,7 @@ ProgressBar().register()
 
 __version__ = "0.0.1"  # TODO : Only declare version in one place. Can I get
                        # this from default.nix or somewhere else?
+                       # https://github.com/uwmisl/poretitioner/issues/45
 __name__ = "poretitioner"
 
 
@@ -25,6 +35,8 @@ def apply_capture_filters(capture, filters):
     supported filters are allowed. (mean, stdv, median, min, max, length)
 
     More complex filtering should be done with a custom function.
+
+    TODO : Move filtering to its own module : (somewhat related: https://github.com/uwmisl/poretitioner/issues/43)
 
     Parameters
     ----------

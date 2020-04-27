@@ -1,4 +1,11 @@
-# This module is a placeholder demonstrating that our tests run.
+"""
+================
+test_segment.py
+================
+
+This module contains tests for segment.py functionality.
+
+"""
 import os
 import h5py
 import pytest
@@ -490,5 +497,5 @@ def write_capture_to_fast5_test(tmpdir):
                                    start_time_bulk, start_time_local, duration, voltage, open_channel_pA,
                                    channel_no, digi, offset, rng, sampling_rate)
     assert os.path.exists(capture_f5_fname)
-    # TODO further validation
+    # TODO further validation, incl. contents of file
     os.remove(capture_f5_fname)
