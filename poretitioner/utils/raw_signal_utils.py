@@ -1,12 +1,16 @@
-import logging
+"""
+===================
+raw_signal_utils.py
+===================
+
+This module contains general purpose utility functions for accessing raw
+nanopore current within fast5 files, and for manipulating the raw current.
+
+"""
+
 import re
-import os
-import subprocess
-import time
-from shutil import copyfile
 import h5py
 import numpy as np
-from .yaml_assistant import YAMLAssistant
 
 
 def natkey(string_):
@@ -27,6 +31,23 @@ def natkey(string_):
 
 
 def compute_fractional_blockage(scaled_raw, open_channel):
+    """Converts a raw nanopore signal (in units of pA) to fractionalized current
+    in the range (0, 1).
+
+    A value of 0 means the pore is fully blocked, and 1 is fully open.
+
+    Parameters
+    ----------
+    scaled_raw : array
+        Array of nanopore current values in units of pA.
+    open_channel : float
+        Open channel current value (pA).
+
+    Returns
+    -------
+    array of floats
+        Array of fractionalized nanopore current in the range (0, 1)
+    """
     scaled_raw = np.frombuffer(scaled_raw, dtype=float)
     scaled_raw /= open_channel
     scaled_raw = np.clip(scaled_raw, a_max=1.0, a_min=0.0)
@@ -160,8 +181,6 @@ def get_raw_signal(f5, channel_no, start=None, end=None):
     Numpy array
         Array representing sampled nanopore current.
     """
-    # TODO change uses of this function to not use kwarg channel
-    # TODO input is now int NOT str
     signal_path = f"/Raw/Channel_{channel_no}/Signal"
     if start is not None or end is not None:
         raw = f5.get(signal_path)[start:end]
@@ -309,6 +328,25 @@ def find_open_channel_current(raw, open_channel_guess, bound=None):
 
 
 def find_signal_off_regions(raw, window_sz=200, slide=100, current_range=50):
+    """Helper function for judge_channels(). Finds regions of current where the
+    channel is likely off.
+
+    Parameters
+    ----------
+    raw : array of floats
+        Raw nanopore current (in units of pA).
+    window_sz : int, optional
+        Sliding window width, by default 200
+    slide : int, optional
+        How much to slide the window by, by default 100
+    current_range : int, optional
+        How much the current is allowed to deviate, by default 50
+
+    Returns
+    -------
+    list of tuples (start, end)
+        Start and end points for where the channel is likely off.
+    """
     off = []
     for start in range(0, len(raw), slide):
         window_mean = np.mean(raw[start: start + window_sz])
@@ -362,32 +400,6 @@ def find_segments_below_threshold(time_series, threshold):
     return list(zip(diff_points[::2], diff_points[1::2]))
 
 
-def find_high_regions(raw, window_sz=200, slide=100, open_channel=1400, current_range=300):
-    off = []
-    for start in range(0, len(raw), slide):
-        window_mean = np.mean(raw[start: start + window_sz])
-        if window_mean > (open_channel + np.abs(current_range)):
-            off.append(True)
-        else:
-            off.append(False)
-    off_locs = np.multiply(np.where(off)[0], slide)
-    regions = []
-
-    if len(off_locs) > 0:
-        loc = None
-        last_loc = off_locs[0]
-        start = last_loc
-
-        for loc in off_locs[1:]:
-            if loc - last_loc != slide:
-                regions.append((start, last_loc + window_sz))
-                start = loc
-            last_loc = loc
-        if loc is not None:
-            regions.append((start, loc + window_sz))
-    return regions
-
-
 def sec_to_obs(time_in_sec, sample_rate_hz):
     """Convert time in seconds to number of observations.
 
@@ -406,170 +418,28 @@ def sec_to_obs(time_in_sec, sample_rate_hz):
     return int(time_in_sec * sample_rate_hz)
 
 
-def split_multi_fast5(yml_file, temp_f5_fname=None):
-    # TODO: deprecate once pipeline no longer relies on this
-    logger = logging.getLogger("split_multi_fast5")
-    if logger.handlers:
-        logger.handlers = []
-    logger.setLevel(logging.INFO)
-    logger.addHandler(logging.StreamHandler())
+def judge_channels(bulk_f5_fname, expected_open_channel=235):
+    """Judge channels based on quality of current. If the current is too low,
+    the channel is probably off (bad), etc.
 
-    y = YAMLAssistant(yml_file)
-    f5_dir = y.get_variable("fast5:dir")
-    prefix = y.get_variable("fast5:prefix")
-    names = y.get_variable("fast5:names")
-    run_splits = y.get_variable("fast5:run_splits")
+    Parameters
+    ----------
+    bulk_f5_fname : str
+        Bulk fast5 filename (cannot be capture/read fast5).
+    expected_open_channel : int, optional
+        Approximate estimate of the open channel current value., by default 235
 
-    new_names = {}
-
-    for i, (run, name) in enumerate(names.iteritems()):
-        f5_fname = f5_dir + "/" + prefix + name
-        f5 = h5py.File(f5_fname, "r")
-        sample_freq = get_sampling_rate(f5)
-        splits = run_splits.get(run)
-
-        # Prep file to write to
-        if temp_f5_fname is None:
-            temp_f5_fname = "temp.fast5"
-
-        # Copy the original fast5 file
-        logger.info("Preparing a template fast5 file for %s splits." % run)
-        copyfile(src=f5_fname, dst=temp_f5_fname + ".")
-        temp_f5 = h5py.File(temp_f5_fname + ".")
-
-        # Delete the contents
-        logger.debug("Deleting its contents.")
-        try:
-            del temp_f5["/IntermediateData"]
-        except KeyError:
-            logger.debug("No /IntermediateData in %s" % f5.filename)
-            pass
-        try:
-            del temp_f5["/MultiplexData"]
-        except KeyError:
-            logger.debug("No /MultiplexData in %s" % f5.filename)
-            pass
-        try:
-            del temp_f5["/Device/MetaData"]
-        except KeyError:
-            logger.error("No /Device/MetaData in %s" % f5.filename)
-            pass
-        try:
-            del temp_f5["/StateData"]
-        except KeyError:
-            logger.debug("No /StateData in %s" % f5.filename)
-            pass
-        for channel_no in range(1, 513):
-            channel = "Channel_%d" % channel_no
-            try:
-                del temp_f5["/Raw/%s/Signal" % channel]
-            except KeyError:
-                logger.debug("No /Raw/%s/Signal in %s" % (channel, f5.filename))
-                pass
-        temp_f5.flush()
-        temp_f5.close()
-        subprocess.call(["h5repack", "-f", "GZIP=1", temp_f5_fname + ".", temp_f5_fname])
-        os.remove(temp_f5_fname + ".")
-        open_split_f5 = {}
-
-        logger.info("Copying the template for each split and adding metadata.")
-        for split in splits:
-            run_split = run + "_" + split.get("name")
-            split_f5_fname = f5_dir + "/" + prefix + run_split + ".temp.fast5"
-
-            try:
-                os.remove(split_f5_fname)
-            except OSError:
-                pass
-
-            new_names[run_split] = run_split + ".fast5"
-            logger.info("Split: %s" % run_split)
-            logger.debug(split_f5_fname)
-            copyfile(src=temp_f5_fname, dst=split_f5_fname)
-
-            split_f5 = h5py.File(split_f5_fname)
-
-            # Save the file handle to the dict
-            open_split_f5[run_split] = split_f5
-
-            # Write the metadata to the file
-            split_start_sec = split.get("start")
-            split_end_sec = split.get("end")
-            split_start_obs = sec_to_obs(split_start_sec, sample_freq)
-            split_end_obs = sec_to_obs(split_end_sec, sample_freq)
-
-            metadata = f5.get("/Device/MetaData").value
-            metadata_segment = metadata[split_start_obs:split_end_obs]
-            split_f5.create_dataset(
-                "/Device/MetaData", metadata_segment.shape, dtype=metadata_segment.dtype
-            )
-            split_f5["/Device/MetaData"][()] = metadata_segment
-
-        os.remove(temp_f5_fname)
-
-        logger.info("Splitting fast5, processing one channel at a time.")
-        for channel_no in range(1, 513):
-            channel = "Channel_%d" % channel_no
-            logger.info("    %s" % channel)
-            raw = get_raw_signal(f5, channel_no)
-
-            for split in splits:
-                run_split = run + "_" + split.get("name")
-                logger.debug(run_split)
-                # Get timing info
-                split_start_sec = split.get("start")
-                split_end_sec = split.get("end")
-                split_start_obs = sec_to_obs(split_start_sec, sample_freq)
-                split_end_obs = sec_to_obs(split_end_sec, sample_freq)
-
-                # Extract the current segment
-                segment = raw[split_start_obs:split_end_obs]
-
-                # Save to the fast5 file
-                split_f5 = open_split_f5[run_split]
-                logger.debug(split_f5.filename)
-                split_f5.create_dataset(
-                    "/Raw/Channel_%d/Signal" % (channel_no), (len(segment),), dtype="int16"
-                )
-                split_f5["/Raw/Channel_%d/Signal" % (channel_no)][()] = segment
-                split_f5.flush()
-
-        logger.info("Closing and compressing files.")
-        for run_split, split_f5 in open_split_f5.iteritems():
-            logger.debug(run_split)
-            split_f5_temp_name = split_f5.filename
-            split_f5.close()
-            split_f5_fname = f5_dir + "/" + prefix + run_split + ".fast5"
-            logger.debug("Saving as %s" % split_f5_fname)
-            subprocess.call(["h5repack", "-f", "GZIP=1", split_f5_temp_name, split_f5_fname])
-            os.remove(split_f5_temp_name)
-
-    archive_fname = yml_file.split(".")
-    archive_fname.insert(-1, "backup.%s" % time.strftime("%Y%m%d-%H%M"))
-    archive_fname = os.path.abspath(".".join(archive_fname))
-    logger.info("Backing up the config file to %s" % archive_fname)
-    copyfile(os.path.abspath(yml_file), archive_fname)
-
-    logger.info("Saving new filenames to config file.")
-    y.write_variable("fast5:names", new_names)
-    y.write_variable("fast5:original_names", names)
-    logger.info("Done")
-
-
-def judge_channels(fast5_fname, expected_open_channel=235):
-    # TODO: decouple visualization from judging channels : https://github.com/uwmisl/poretitioner/issues/24
-    """Judge channels based on quality of current. If the current is too
-    low, the channel is probably off (bad), etc."""
-    f5 = h5py.File(name=fast5_fname)
+    Returns
+    -------
+    list of ints
+        List of good channels.
+    """
+    f5 = h5py.File(name=bulk_f5_fname)
     channels = f5.get("Raw").keys()
     channels.sort(key=natkey)
-    nrows, ncols = 16, 32  # = 512 channels
-    channel_grid = np.zeros((nrows, ncols))
+    good_channels = []
     for channel in channels:
         i = int(re.findall(r"Channel_(\d+)", channel)[0])
-        row_i = (i - 1) / ncols
-        col_j = (i - 1) % ncols
-
         raw = get_scaled_raw_for_channel(f5, channel)
 
         # Case 1: Channel might not be totally off, but has little variance
@@ -586,7 +456,6 @@ def judge_channels(fast5_fname, expected_open_channel=235):
             median_outside_rng = np.abs(sorted_raw[q_50] - expected_open_channel) > 25
             upper_outside_rng = np.abs(sorted_raw[q_75] - expected_open_channel) > 25
             if median_outside_rng and upper_outside_rng:
-                channel_grid[row_i, col_j] = 0.5
                 continue
 
         # Case 3: The channel is off
@@ -598,7 +467,5 @@ def judge_channels(fast5_fname, expected_open_channel=235):
             continue
 
         # Case 4: The channel is assumed to be good
-        channel_grid[row_i, col_j] = 1
-
-    good_channels = np.add(np.where(channel_grid.flatten() == 1), 1).flatten()
-    return channel_grid, good_channels
+        good_channels.append(i)
+    return good_channels

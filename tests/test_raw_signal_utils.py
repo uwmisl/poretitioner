@@ -1,3 +1,11 @@
+"""
+========================
+test_raw_signal_utils.py
+========================
+
+This module contains tests for raw_signal_utils.py functionality.
+
+"""
 import poretitioner.utils.raw_signal_utils as raw_signal_utils
 import h5py
 
