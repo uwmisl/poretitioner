@@ -1,22 +1,30 @@
+"""
+===========
+classify.py
+===========
+
+This module contains functionality for classifying nanopore captures.
+
+"""
 import logging
 import os
 import warnings
-
 import h5py
 import joblib
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-from NTERs_trained_cnn_05152019 import *
+from .NTERs_trained_cnn_05152019 import load_cnn
 
-from . import peptide_quantifier_utils as pepquant
+from . import raw_signal_utils
 
-warnings.filterwarnings("ignore")
+warnings.filterwarnings("ignore")  # TODO : Why is this here? : https://github.com/uwmisl/poretitioner/issues/48
 use_cuda = True
 
 
 def check_capture_rejection(end_capture, voltage_ends, tol_obs=20):
+    # TODO : Do we need this? Should be handled by specifying the filter or segmentation result to be used.
     for voltage_end in voltage_ends:
         if np.abs(end_capture - voltage_end) < tol_obs:
             return True
@@ -37,13 +45,14 @@ def get_num_classes(classifier, classifier_name):
 # 0:Y00, 1:Y01, 2:Y02, 3:Y03, 4:Y04, 5:Y05, 6:Y06, 7:Y07, 8:Y08, 9:noise,
 # -1:below conf_thesh
 def init_classifier(classifier_name, classifier_path):
-    if classifier_name is "NTER_cnn":
+    if classifier_name == "NTER_cnn":
         # CNN classifier
         nanoporeTER_cnn = load_cnn(classifier_path)
         nanoporeTER_cnn.eval()
         return nanoporeTER_cnn
-    elif classifier_name is "NTER_rf":
+    elif classifier_name == "NTER_rf":
         # Random Forest classifier
+        # TODO : Improve model maintainability : https://github.com/uwmisl/poretitioner/issues/38
         return joblib.load(open(classifier_path, "rb"))
     else:
         raise Exception("Invalid classifier name")
@@ -51,16 +60,18 @@ def init_classifier(classifier_name, classifier_path):
 
 # Possible filter names: "NTER_general"
 def get_filter_param(filter_name):
+    # TODO deprecate
     # What filter param each value in the output array represents:
     # [mean_low, mean_high, stdv_high, med_low, med_high, min_low, min_high,
     # max_low, max_high, length, fname_ext]
-    if filter_name is "NTER_general":
+    if filter_name == "NTER_general":
         return [0, 0.45, 1, 0.15, 1, 0.005, 1, 0, 0.65, 20100, ""]
     else:
         raise Exception("Invalid filter name")
 
 
 def print_param(filter_param):
+    # TODO deprecate
     s = ""
     s += "Mean: " + str((filter_param[0], filter_param[1])) + "\n"
     s += "Stdv: " + str((0, filter_param[2])) + "\n"
@@ -123,6 +134,7 @@ def filter_and_classify_peptides(
     raw_fname="",
     save_dir=".",
 ):
+    # TODO : implement fast5 I/O https://github.com/uwmisl/poretitioner/issues/39
 
     logger = logging.getLogger("filter_and_classify_peptides")
     if logger.handlers:
@@ -163,7 +175,7 @@ def filter_and_classify_peptides(
 
         # Get the voltage & where it switches
         voltage = f5.get("/Device/MetaData").value["bias_voltage"] * 5.0
-        voltage_changes = pepquant.find_peptide_voltage_changes(voltage)
+        voltage_changes = raw_signal_utils.find_segments_below_threshold(voltage, -180)
         voltage_ends = [x[1] for x in voltage_changes]
 
         # Apply length filter
