@@ -65,7 +65,7 @@ pathToNixEnv () {
     echo "${PORETITIONER_DIR}/nix/env.nix"
 }
 
-if [[ ! -f $(pathToNixEnv) ]]
+if [[ ! -f $(pathToNixEnv) ]];
 then
     yellow "This script requires a PORETITIONER_DIR environment variable, set to the poretitioner repo's path."
     yellow "e.g. PORETITIONER_DIR='$HOME/developer/misl/poretitioner'"
@@ -82,11 +82,11 @@ get () {
     # Finds the *Nix-friendly HTTP GET function. Uses curl if the user has it (MacOS/Linux)
     # or wget if they don't (Linux)
     # Exits if the user has neither (unlikely).
-    if [ -x "$(command -v curl)" ]
+    if [ -x "$(command -v curl)" ];
     then
       echo "curl"
       return
-    elif [ -x "$(command -v wget)" ]
+    elif [ -x "$(command -v wget)" ];
     then
         echo "wget"
         return
@@ -213,7 +213,7 @@ uninstall_clean() {
 }
 
 install_nix () {
-    if [ -x "$(command -v nix)" ];
+    if [ -x "$(command -v nix)" ]
     then
         # Nix is already installed!
         bold "Nix is already installed. Skipping."
