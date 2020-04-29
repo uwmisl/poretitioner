@@ -9,23 +9,22 @@ bulk fast5s.
 """
 import logging
 import os
+import uuid
 
 import dask.bag as db
 import h5py
 import numpy as np
-import uuid
-from . import raw_signal_utils
 from dask.diagnostics import ProgressBar
+from poretitioner.application_info import get_application_info
+
+from . import raw_signal_utils
 
 ProgressBar().register()
 
-from poretitioner.projectinfo import get_project_info
+app_info = get_application_info()
 
-
-projectinfo = get_project_info()
-
-__version__ = projectinfo.version
-__name__ = projectinfo.name
+__version__ = app_info.version
+__name__ = app_info.name
 
 
 def apply_capture_filters(capture, filters):
