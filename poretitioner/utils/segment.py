@@ -19,10 +19,13 @@ from dask.diagnostics import ProgressBar
 
 ProgressBar().register()
 
-__version__ = "0.0.1"  # TODO : Only declare version in one place. Can I get
-                       # this from default.nix or somewhere else?
-                       # https://github.com/uwmisl/poretitioner/issues/45
-__name__ = "poretitioner"
+from poretitioner.projectinfo import get_project_info
+
+
+projectinfo = get_project_info()
+
+__version__ = projectinfo.version
+__name__ = projectinfo.name
 
 
 def apply_capture_filters(capture, filters):

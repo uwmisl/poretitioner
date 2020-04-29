@@ -39,6 +39,7 @@ in with python.pkgs; rec {
     dask
     # Charts and plotting library
     matplotlib
+    tkinter
     # Data visualization
     seaborn
     # Interactive computing
