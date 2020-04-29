@@ -14,7 +14,6 @@ APPLICATION_INFO_MOCK_JSON = json.dumps({"version": MOCK_VERSION, "name": MOCK_A
 
 
 def setup_function(function):
-    print("Setting up!")
     with suppress(AttributeError):
         # If using `get_application_info` is implemented with the lru_cache decorator, clear it before running each unit test.
         get_application_info.cache_clear()
@@ -32,11 +31,6 @@ def get_application_info_data_test():
 @patch("builtins.open", mock_open(read_data=APPLICATION_INFO_MOCK_JSON))
 def get_application_info_cache_test():
     """Test that the metadata file isn't opened more than once, even if the data is requested multiple times.
-
-    Parameters
-    ----------
-    mocked_open : MagicMock
-        Mock "open()" function. This is provided automatically by using the `patch` decorator.
     """
     get_application_info()
     get_application_info()
