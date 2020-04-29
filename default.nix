@@ -6,6 +6,8 @@
 #
 # This expression builds the Poretitioner application.
 #   - To see how this application is built, see the `App` section.
+#       Build with "nix-build -A app"
+#       To build without testing (only recommended for local builds and rapid-prototyping)
 #   - To see how this application is packaged for Docker, see the `Docker` section.
 #
 ###########################################################################################
@@ -17,27 +19,28 @@
 
 with pkgs;
 let
-  name = "poretitioner";
+  appInfo = builtins.fromJSON (builtins.readFile ./poretitioner/APPLICATION_INFO.json);
+  name = appInfo.name;
 
   ############################################################
   #
   # App - Builds the actual poretitioner application.
   #
   ############################################################
-  dependencies =
-    (callPackage ./nix/dependencies.nix { inherit python cudaSupport; });
+  dependencies = callPackage ./nix/dependencies.nix { inherit python cudaSupport; };
   run_pkgs = dependencies.run;
   test_pkgs = dependencies.test;
 
+  # doCheck - Whether to run the test suite as part of the build, defaults to true.
   # To understand how `buildPythonApplication` works, check out https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/interpreters/python/mk-python-derivation.nix
-  poretitioner = python.pkgs.buildPythonApplication {
+  poretitioner = {doCheck ? true } : python.pkgs.buildPythonApplication {
     pname = name;
-    version = "0.0.1";
+    version = appInfo.version;
 
     src = ./.;
 
     checkInputs = test_pkgs;
-    doCheck = true;
+    inherit doCheck;
     checkPhase = "pytest tests";
 
     # Run-time dependencies
@@ -70,6 +73,7 @@ let
   };
 
 in {
+  app-no-test = poretitioner { doCheck = false; };
   app = poretitioner;
   docker = dockerImage;
 }

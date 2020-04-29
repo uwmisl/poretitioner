@@ -9,20 +9,22 @@ bulk fast5s.
 """
 import logging
 import os
+import uuid
 
 import dask.bag as db
 import h5py
 import numpy as np
-import uuid
-from . import raw_signal_utils
 from dask.diagnostics import ProgressBar
+from poretitioner.application_info import get_application_info
+
+from . import raw_signal_utils
 
 ProgressBar().register()
 
-__version__ = "0.0.1"  # TODO : Only declare version in one place. Can I get
-                       # this from default.nix or somewhere else?
-                       # https://github.com/uwmisl/poretitioner/issues/45
-__name__ = "poretitioner"
+app_info = get_application_info()
+
+__version__ = app_info.version
+__name__ = app_info.name
 
 
 def apply_capture_filters(capture, filters):

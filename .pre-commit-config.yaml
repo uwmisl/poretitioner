@@ -6,7 +6,7 @@ repos:
     rev: 18.9b0
     hooks:
     -   id: black
-        args: [--fast, --line-length=99]
+        args: [--safe, --line-length=99]
         name: Prettify code
         always_run: true
 
