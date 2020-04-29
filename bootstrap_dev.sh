@@ -213,7 +213,7 @@ uninstall_clean() {
 }
 
 install_nix () {
-    if [ -x "$(command -v nix)" ]
+    if [ -x "$(command -v nix)" ];
     then
         # Nix is already installed!
         bold "Nix is already installed. Skipping."
@@ -238,6 +238,11 @@ install_misl_env () {
     bold "Installing MISL env..."
     # Installs poretitioner developer dependencies
     nix-env --install --file $(pathToNixEnv) --show-trace
+
+    # Configures pre-commit, if it's installed via Nix.
+    if [[ $(nix-env -q | grep pre-commit) ]]; then
+        pre-commit install
+    fi
 
     green "MISL env installed."
 }
