@@ -19,11 +19,7 @@
 
 with pkgs;
 let
-<<<<<<< HEAD
-  appInfo = builtins.fromJSON (builtins.readFile ./poretitioner/PROJECT_INFO.json);
-=======
   appInfo = builtins.fromJSON (builtins.readFile ./poretitioner/APPLICATION_INFO.json);
->>>>>>> Rename projectinfo -> applicationinfp
   name = appInfo.name;
 
   ############################################################
