@@ -65,7 +65,7 @@ pathToNixEnv () {
     echo "${PORETITIONER_DIR}/nix/env.nix"
 }
 
-if [[ ! -f $(pathToNixEnv) ]]
+if [[ ! -f $(pathToNixEnv) ]];
 then
     yellow "This script requires a PORETITIONER_DIR environment variable, set to the poretitioner repo's path."
     yellow "e.g. PORETITIONER_DIR='$HOME/developer/misl/poretitioner'"
@@ -82,11 +82,11 @@ get () {
     # Finds the *Nix-friendly HTTP GET function. Uses curl if the user has it (MacOS/Linux)
     # or wget if they don't (Linux)
     # Exits if the user has neither (unlikely).
-    if [ -x "$(command -v curl)" ]
+    if [ -x "$(command -v curl)" ];
     then
       echo "curl"
       return
-    elif [ -x "$(command -v wget)" ]
+    elif [ -x "$(command -v wget)" ];
     then
         echo "wget"
         return
@@ -238,6 +238,11 @@ install_misl_env () {
     bold "Installing MISL env..."
     # Installs poretitioner developer dependencies
     nix-env --install --file $(pathToNixEnv) --show-trace
+
+    # Configures pre-commit, if it's installed via Nix.
+    if [[ $(nix-env -q | grep pre-commit) ]]; then
+        pre-commit install
+    fi
 
     green "MISL env installed."
 }
