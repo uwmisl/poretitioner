@@ -1,3 +1,12 @@
+"""
+========================
+test_application_info.py
+========================
+
+This module tests application metadata reading,
+namely getting the application name and version.
+
+"""
 import json
 from contextlib import suppress
 from unittest.mock import mock_open, patch
