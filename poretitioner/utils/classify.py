@@ -9,17 +9,20 @@ This module contains functionality for classifying nanopore captures.
 import logging
 import os
 import warnings
+
 import h5py
 import joblib
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-from .NTERs_trained_cnn_05152019 import load_cnn
 
 from . import raw_signal_utils
+from .NTERs_trained_cnn_05152019 import load_cnn
 
-warnings.filterwarnings("ignore")  # TODO : Why is this here? : https://github.com/uwmisl/poretitioner/issues/48
+warnings.filterwarnings(
+    "ignore"
+)  # TODO : Why is this here? : https://github.com/uwmisl/poretitioner/issues/48
 use_cuda = True
 
 

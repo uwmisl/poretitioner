@@ -25,7 +25,7 @@ jobs:
     - name: Install Nix
       uses: cachix/install-nix-action@v8
     # Runs a set of commands using the runners shell
-    - name: Build application 
+    - name: Build application
       shell: bash
-      run: | 
+      run: |
            nix-build -A app

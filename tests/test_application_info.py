@@ -9,7 +9,8 @@ namely getting the application name and version.
 """
 import json
 from contextlib import suppress
-from unittest.mock import mock_open, patch
+from unittest.mock import mock_open
+from unittest.mock import patch
 
 from poretitioner.application_info import get_application_info
 
@@ -24,7 +25,8 @@ APPLICATION_INFO_MOCK_JSON = json.dumps({"version": MOCK_VERSION, "name": MOCK_A
 
 def setup_function(function):
     with suppress(AttributeError):
-        # If using `get_application_info` is implemented with the lru_cache decorator, clear it before running each unit test.
+        # If using `get_application_info` is implemented with the lru_cache decorator,
+        #  clear it before running each unit test.
         get_application_info.cache_clear()
 
 

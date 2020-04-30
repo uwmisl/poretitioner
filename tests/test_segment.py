@@ -7,9 +7,11 @@ This module contains tests for segment.py functionality.
 
 """
 import os
+
 import h5py
-import pytest
 import numpy as np
+import pytest
+
 import poretitioner.utils.segment as segment
 
 
@@ -23,8 +25,9 @@ def create_capture_fast5_test():
     bulk_f5_fname = "tests/data/bulk_fast5_dummy.fast5"
     capture_f5_fname = "tests/data/capture_fast5_dummy.fast5"
     config = {}
-    segment.create_capture_fast5(bulk_f5_fname, capture_f5_fname, config,
-                                 overwrite=True, sub_run=None)
+    segment.create_capture_fast5(
+        bulk_f5_fname, capture_f5_fname, config, overwrite=True, sub_run=None
+    )
     assert os.path.exists(capture_f5_fname)
     with h5py.File(capture_f5_fname, "r") as f5:
         assert f5["Meta/context_tags"] is not None
@@ -50,11 +53,13 @@ def create_capture_fast5_overwrite_test():
         f.write("\n")
     config = {}
     with pytest.raises(FileExistsError):
-        segment.create_capture_fast5(bulk_f5_fname, capture_f5_fname, config,
-                                     overwrite=False, sub_run=None)
+        segment.create_capture_fast5(
+            bulk_f5_fname, capture_f5_fname, config, overwrite=False, sub_run=None
+        )
     assert os.path.exists(capture_f5_fname)
-    segment.create_capture_fast5(bulk_f5_fname, capture_f5_fname, config,
-                                 overwrite=True, sub_run=None)
+    segment.create_capture_fast5(
+        bulk_f5_fname, capture_f5_fname, config, overwrite=True, sub_run=None
+    )
     assert os.path.exists(capture_f5_fname)
     os.remove(capture_f5_fname)
 
@@ -66,8 +71,9 @@ def create_capture_fast5_bulk_exists_test():
     capture_f5_fname = "tests/data/capture_fast5_dummy_bulkdemo.fast5"
     config = {}
     with pytest.raises(OSError):
-        segment.create_capture_fast5(bulk_f5_fname, capture_f5_fname, config,
-                                     overwrite=False, sub_run=None)
+        segment.create_capture_fast5(
+            bulk_f5_fname, capture_f5_fname, config, overwrite=False, sub_run=None
+        )
 
 
 def create_capture_fast5_capture_path_missing_test():
@@ -77,8 +83,9 @@ def create_capture_fast5_capture_path_missing_test():
     capture_f5_fname = "tests/DNE/capture_fast5_dummy_bulkdemo.fast5"
     config = {}
     with pytest.raises(OSError):
-        segment.create_capture_fast5(bulk_f5_fname, capture_f5_fname, config,
-                                     overwrite=False, sub_run=None)
+        segment.create_capture_fast5(
+            bulk_f5_fname, capture_f5_fname, config, overwrite=False, sub_run=None
+        )
 
 
 def create_capture_fast5_subrun_test():
@@ -91,16 +98,20 @@ def create_capture_fast5_subrun_test():
     bulk_f5_fname = "tests/data/bulk_fast5_dummy.fast5"
     capture_f5_fname = "tests/data/capture_fast5_dummy_sub.fast5"
     config = {}
-    segment.create_capture_fast5(bulk_f5_fname, capture_f5_fname, config,
-                                 overwrite=True, sub_run=("S8w9g33", 9999999,
-                                                          1000000))
+    segment.create_capture_fast5(
+        bulk_f5_fname,
+        capture_f5_fname,
+        config,
+        overwrite=True,
+        sub_run=("S8w9g33", 9_999_999, 1_000_000),
+    )
     with h5py.File(capture_f5_fname, "r") as f5:
         assert "sub_run_id" in list(f5["Meta/tracking_id"].attrs)
         assert "S8w9g33" in str(f5["Meta/tracking_id"].attrs["sub_run_id"])
         assert "sub_run_offset" in list(f5["Meta/tracking_id"].attrs)
-        assert f5["Meta/tracking_id"].attrs["sub_run_offset"] == 9999999
+        assert f5["Meta/tracking_id"].attrs["sub_run_offset"] == 9_999_999
         assert "sub_run_duration" in list(f5["Meta/tracking_id"].attrs)
-        assert f5["Meta/tracking_id"].attrs["sub_run_duration"] == 1000000
+        assert f5["Meta/tracking_id"].attrs["sub_run_duration"] == 1_000_000
     os.remove(capture_f5_fname)
 
 
@@ -178,11 +189,15 @@ def find_captures_0_single_capture_test():
     filters = {"length": (100, None)}
     delay = 0
     end_tol = 0
-    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
-                                                      terminal_capture_only=terminal_capture_only,
-                                                      filters=filters,
-                                                      delay=delay,
-                                                      end_tol=end_tol)
+    captures, open_channel_pA = segment.find_captures(
+        data,
+        signal_threshold_frac,
+        alt_open_channel_pA,
+        terminal_capture_only=terminal_capture_only,
+        filters=filters,
+        delay=delay,
+        end_tol=end_tol,
+    )
     assert len(captures) == len(actual_captures)
     for test_capture in captures:
         assert test_capture in actual_captures
@@ -198,11 +213,15 @@ def find_captures_0_single_capture_terminal_test():
     filters = {"length": (100, None)}
     delay = 0
     end_tol = 0
-    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
-                                                      terminal_capture_only=terminal_capture_only,
-                                                      filters=filters,
-                                                      delay=delay,
-                                                      end_tol=end_tol)
+    captures, open_channel_pA = segment.find_captures(
+        data,
+        signal_threshold_frac,
+        alt_open_channel_pA,
+        terminal_capture_only=terminal_capture_only,
+        filters=filters,
+        delay=delay,
+        end_tol=end_tol,
+    )
     assert len(captures) == len(actual_captures)
     for test_capture in captures:
         assert test_capture in actual_captures
@@ -221,11 +240,15 @@ def find_captures_1_double_capture_noterminal_test():
     filters = {"length": (100, None)}
     delay = 0
     end_tol = 0
-    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
-                                                      terminal_capture_only=terminal_capture_only,
-                                                      filters=filters,
-                                                      delay=delay,
-                                                      end_tol=end_tol)
+    captures, open_channel_pA = segment.find_captures(
+        data,
+        signal_threshold_frac,
+        alt_open_channel_pA,
+        terminal_capture_only=terminal_capture_only,
+        filters=filters,
+        delay=delay,
+        end_tol=end_tol,
+    )
     assert len(captures) == 0
 
 
@@ -242,11 +265,15 @@ def find_captures_1_double_capture_noterminal_2_test():
     filters = {"length": (100, None)}
     delay = 0
     end_tol = 0
-    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
-                                                      terminal_capture_only=terminal_capture_only,
-                                                      filters=filters,
-                                                      delay=delay,
-                                                      end_tol=end_tol)
+    captures, open_channel_pA = segment.find_captures(
+        data,
+        signal_threshold_frac,
+        alt_open_channel_pA,
+        terminal_capture_only=terminal_capture_only,
+        filters=filters,
+        delay=delay,
+        end_tol=end_tol,
+    )
     assert len(captures) == 2
 
 
@@ -262,11 +289,15 @@ def find_captures_2_nocaptures_test():
     filters = {"length": (100, None)}
     delay = 10
     end_tol = 0
-    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
-                                                      terminal_capture_only=terminal_capture_only,
-                                                      filters=filters,
-                                                      delay=delay,
-                                                      end_tol=end_tol)
+    captures, open_channel_pA = segment.find_captures(
+        data,
+        signal_threshold_frac,
+        alt_open_channel_pA,
+        terminal_capture_only=terminal_capture_only,
+        filters=filters,
+        delay=delay,
+        end_tol=end_tol,
+    )
     assert len(captures) == 0
 
 
@@ -284,11 +315,15 @@ def find_captures_3_multicapture_terminal_test():
     filters = {"length": (100, None)}
     delay = 0
     end_tol = 0
-    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
-                                                      terminal_capture_only=terminal_capture_only,
-                                                      filters=filters,
-                                                      delay=delay,
-                                                      end_tol=end_tol)
+    captures, open_channel_pA = segment.find_captures(
+        data,
+        signal_threshold_frac,
+        alt_open_channel_pA,
+        terminal_capture_only=terminal_capture_only,
+        filters=filters,
+        delay=delay,
+        end_tol=end_tol,
+    )
     assert len(captures) == 1
 
 
@@ -306,11 +341,15 @@ def find_captures_3_multicapture_nonterminal_test():
     filters = {"length": (100, None)}
     delay = 0
     end_tol = 0
-    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
-                                                      terminal_capture_only=terminal_capture_only,
-                                                      filters=filters,
-                                                      delay=delay,
-                                                      end_tol=end_tol)
+    captures, open_channel_pA = segment.find_captures(
+        data,
+        signal_threshold_frac,
+        alt_open_channel_pA,
+        terminal_capture_only=terminal_capture_only,
+        filters=filters,
+        delay=delay,
+        end_tol=end_tol,
+    )
     assert len(captures) == 2
 
 
@@ -327,11 +366,15 @@ def find_captures_4_unfolded_terminal_test():
     filters = {"length": (100, None)}
     delay = 0
     end_tol = 0
-    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
-                                                      terminal_capture_only=terminal_capture_only,
-                                                      filters=filters,
-                                                      delay=delay,
-                                                      end_tol=end_tol)
+    captures, open_channel_pA = segment.find_captures(
+        data,
+        signal_threshold_frac,
+        alt_open_channel_pA,
+        terminal_capture_only=terminal_capture_only,
+        filters=filters,
+        delay=delay,
+        end_tol=end_tol,
+    )
     assert len(captures) == 1
 
 
@@ -349,11 +392,15 @@ def find_captures_5_unfolded_terminal_test():
     filters = {"length": (100, None)}
     delay = 0
     end_tol = 0
-    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
-                                                      terminal_capture_only=terminal_capture_only,
-                                                      filters=filters,
-                                                      delay=delay,
-                                                      end_tol=end_tol)
+    captures, open_channel_pA = segment.find_captures(
+        data,
+        signal_threshold_frac,
+        alt_open_channel_pA,
+        terminal_capture_only=terminal_capture_only,
+        filters=filters,
+        delay=delay,
+        end_tol=end_tol,
+    )
     assert len(captures) == 1
     # Rough check; should be ~229.05 & anything close is okay.
     # The function is nondeterministic & should return this exact value, but if
@@ -375,11 +422,15 @@ def find_captures_6_clog_no_open_channel_test():
     filters = {"length": (100, None)}
     delay = 0
     end_tol = 0
-    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
-                                                      terminal_capture_only=terminal_capture_only,
-                                                      filters=filters,
-                                                      delay=delay,
-                                                      end_tol=end_tol)
+    captures, open_channel_pA = segment.find_captures(
+        data,
+        signal_threshold_frac,
+        alt_open_channel_pA,
+        terminal_capture_only=terminal_capture_only,
+        filters=filters,
+        delay=delay,
+        end_tol=end_tol,
+    )
     assert len(captures) == 1
     # Rough check; should be ~229.05 & anything close is okay.
     # The function is nondeterministic & should return this exact value, but if
@@ -401,11 +452,15 @@ def find_captures_7_capture_no_open_channel_test():
     filters = {"length": (100, None)}
     delay = 0
     end_tol = 0
-    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
-                                                      terminal_capture_only=terminal_capture_only,
-                                                      filters=filters,
-                                                      delay=delay,
-                                                      end_tol=end_tol)
+    captures, open_channel_pA = segment.find_captures(
+        data,
+        signal_threshold_frac,
+        alt_open_channel_pA,
+        terminal_capture_only=terminal_capture_only,
+        filters=filters,
+        delay=delay,
+        end_tol=end_tol,
+    )
     assert len(captures) == 1
     # Rough check; should be ~229.05 & anything close is okay.
     # The function is nondeterministic & should return this exact value, but if
@@ -428,11 +483,15 @@ def find_captures_8_capture_no_open_channel_test():
     filters = {"length": (100, None)}
     delay = 3
     end_tol = 0
-    captures, open_channel_pA = segment.find_captures(data, signal_threshold_frac, alt_open_channel_pA,
-                                                      terminal_capture_only=terminal_capture_only,
-                                                      filters=filters,
-                                                      delay=delay,
-                                                      end_tol=end_tol)
+    captures, open_channel_pA = segment.find_captures(
+        data,
+        signal_threshold_frac,
+        alt_open_channel_pA,
+        terminal_capture_only=terminal_capture_only,
+        filters=filters,
+        delay=delay,
+        end_tol=end_tol,
+    )
     assert len(captures) == 2
     actual_captures = [(11310, 22098), (26617, 94048)]
     for test_capture in captures:
@@ -441,18 +500,21 @@ def find_captures_8_capture_no_open_channel_test():
 
 def parallel_find_captures_test(tmpdir):
     bulk_f5_fname = "tests/data/bulk_fast5_dummy.fast5"
-    config = {"compute":  {"n_workers": 4},
-              "segment": {"voltage_threshold": -180,
-                          "signal_threshold": 0.7,
-                          "translocation_delay": 10,
-                          "open_channel_prior_mean": 230,
-                          "open_channel_prior_stdv": 25,
-                          "good_channels": [1, 2, 3],
-                          "end_tol": 0,
-                          "terminal_capture_only": False},
-              "filters": {"length": (100, None)},
-              "output": {"capture_f5_dir": "tests/",
-                         "captures_per_f5": 1000}}
+    config = {
+        "compute": {"n_workers": 4},
+        "segment": {
+            "voltage_threshold": -180,
+            "signal_threshold": 0.7,
+            "translocation_delay": 10,
+            "open_channel_prior_mean": 230,
+            "open_channel_prior_stdv": 25,
+            "good_channels": [1, 2, 3],
+            "end_tol": 0,
+            "terminal_capture_only": False,
+        },
+        "filters": {"length": (100, None)},
+        "output": {"capture_f5_dir": "tests/", "captures_per_f5": 1000},
+    }
     segment.parallel_find_captures(bulk_f5_fname, config)
     run_id = "d0befb838f5a9a966e3c559dc3a75a6612745849"
     actual_n_captures = 9
@@ -493,9 +555,21 @@ def write_capture_to_fast5_test(tmpdir):
     channel_no = 3
     offset, rng, digi = -21.0, 3013.53, 8192.0
     sampling_rate = 10000
-    segment.write_capture_to_fast5(capture_f5_fname, read_id, signal_pA,
-                                   start_time_bulk, start_time_local, duration, voltage, open_channel_pA,
-                                   channel_no, digi, offset, rng, sampling_rate)
+    segment.write_capture_to_fast5(
+        capture_f5_fname,
+        read_id,
+        signal_pA,
+        start_time_bulk,
+        start_time_local,
+        duration,
+        voltage,
+        open_channel_pA,
+        channel_no,
+        digi,
+        offset,
+        rng,
+        sampling_rate,
+    )
     assert os.path.exists(capture_f5_fname)
     # TODO further validation, incl. contents of file
     os.remove(capture_f5_fname)
