@@ -24,7 +24,8 @@ APPLICATION_INFO_MOCK_JSON = json.dumps({"version": MOCK_VERSION, "name": MOCK_A
 
 def setup_function(function):
     with suppress(AttributeError):
-        # If using `get_application_info` is implemented with the lru_cache decorator, clear it before running each unit test.
+        # If using `get_application_info` is implemented with the lru_cache decorator,
+        #  clear it before running each unit test.
         get_application_info.cache_clear()
 
 
