@@ -12,7 +12,7 @@ import logging
 from logging import Logger
 
 
-def verbosity_to_log_level(verbosity=0, debug=False) -> int:
+def verbosity_to_log_level(verbosity=0) -> int:
     """Converts a verbosity to a logging level from the standard library logging module.
 
     0 - Log errors only.
@@ -27,9 +27,6 @@ def verbosity_to_log_level(verbosity=0, debug=False) -> int:
     ----------
     verbosity : int, optional
         The verbosity level, by default 0
-    debug : bool, optional
-        Whether to use debug logging, by default False
-        If this is enabled, verbosity is automatically set to the highest level.
     Returns
     -------
     int
@@ -38,9 +35,7 @@ def verbosity_to_log_level(verbosity=0, debug=False) -> int:
 
     verbosity = max(0, verbosity)
     log_level = logging.WARNING
-    if debug:
-        log_level = logging.DEBUG
-    elif verbosity == 0:
+    if verbosity == 0:
         log_level = logging.ERROR
     elif verbosity == 1:
         log_level = logging.WARNING
@@ -51,7 +46,7 @@ def verbosity_to_log_level(verbosity=0, debug=False) -> int:
     return log_level
 
 
-def configure_root_logger(verbosity=0, debug=False, handler=None):
+def configure_root_logger(verbosity=0, debug=False):
     """Configures a logger for usage throughout the application.
 
     This should be called once during the initialization process, configured
@@ -63,15 +58,11 @@ def configure_root_logger(verbosity=0, debug=False, handler=None):
         How verbose the logging should be on a scale of 0 to 3. Anything higher is treated as a 3.
     debug : bool, optional
         Whether to append filename and line number to the log, by default False
-    handler: Handler, optional
-        Logging handler to use during logging. If one is not provided, a StreamHandler will be used.
     """
-    if handler is None:
-        handler = logging.StreamHandler()
-
-    log_level = verbosity_to_log_level(verbosity=verbosity, debug=debug)
+    log_level = verbosity_to_log_level(verbosity=verbosity)
 
     root_logger = logging.getLogger(__name__)
+    handler = logging.StreamHandler()
 
     # Adds filename and line number to debug output
     FORMAT_LINE_NUMBER = "(%(filename)s:%(lineno)s)" if debug else ""

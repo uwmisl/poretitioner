@@ -8,13 +8,8 @@ namely getting the application name and version.
 
 """
 import logging
-import os
 
 from poretitioner.logger import configure_root_logger, getLogger, verbosity_to_log_level
-
-# Empty log handler.
-NULL_LOG_HANDLER = logging.FileHandler(os.devnull)
-
 
 #################################
 #
@@ -29,27 +24,17 @@ def logger_large_verbosity_goes_to_debug_test():
     assert verbosity_to_log_level(10000) == logging.DEBUG
 
 
+def logger_zero_verbosity_goes_to_error_test():
+    """Test that large verbosity cap to DEBUG.
+    """
+    assert verbosity_to_log_level(0) == logging.ERROR
+
+
 #################################
 #
 # Test configure_root_logger
 #
 #################################
-
-
-def logger_debug_enables_full_verbosity_test(caplog):
-    """Test that verbose=True captures all logs, regardless of verbosity level.
-
-    Parameters
-    ----------
-    caplog : CapLog
-        Pytest capture log. Provided automatically by PyTest.
-    """
-    configure_root_logger(verbosity=0, debug=True, handler=NULL_LOG_HANDLER)
-    log = getLogger()
-    log.debug("Testing debug message")
-    log.info("Testing info message")
-
-    assert len(caplog.records) == 2
 
 
 def logger_zero_verbosity_logs_error_test(caplog):
@@ -60,7 +45,7 @@ def logger_zero_verbosity_logs_error_test(caplog):
     caplog : CapLog
         Pytest capture log. Provided automatically by PyTest.
     """
-    configure_root_logger(verbosity=0, debug=False, handler=NULL_LOG_HANDLER)
+    configure_root_logger(verbosity=0, debug=False)
     log = getLogger()
     log.error("Testing error message")
 
@@ -75,7 +60,7 @@ def logger_zero_verbosity_logs_fatals_test(caplog):
     caplog : CapLog
         Pytest capture log. Provided automatically by PyTest.
     """
-    configure_root_logger(verbosity=0, debug=False, handler=NULL_LOG_HANDLER)
+    configure_root_logger(verbosity=0, debug=False)
     log = getLogger()
 
     log.fatal("Testing fatal message")
@@ -91,7 +76,7 @@ def logger_zero_verbosity_does_not_log_warnings_test(caplog):
     caplog : CapLog
         Pytest capture log. Provided automatically by PyTest.
     """
-    configure_root_logger(verbosity=0, debug=False, handler=NULL_LOG_HANDLER)
+    configure_root_logger(verbosity=0, debug=False)
     log = getLogger()
 
     log.warning("Test warning message")
@@ -107,7 +92,7 @@ def logger_zero_verbosity_does_not_log_debug_test(caplog):
     caplog : CapLog
         Pytest capture log. Provided automatically by PyTest.
     """
-    configure_root_logger(verbosity=0, debug=False, handler=NULL_LOG_HANDLER)
+    configure_root_logger(verbosity=0, debug=False)
     log = getLogger()
 
     log.debug("Test debug message")
@@ -123,7 +108,7 @@ def logger_one_verbosity_logs_warnings_test(caplog):
     caplog : CapLog
         Pytest capture log. Provided automatically by PyTest.
     """
-    configure_root_logger(verbosity=1, debug=False, handler=NULL_LOG_HANDLER)
+    configure_root_logger(verbosity=1, debug=False)
     log = getLogger()
 
     log.warning("Test warning message")
@@ -138,7 +123,7 @@ def logger_one_verbosity_still_logs_errors_test(caplog):
     caplog : CapLog
         Pytest capture log. Provided automatically by PyTest.
     """
-    configure_root_logger(verbosity=1, debug=False, handler=NULL_LOG_HANDLER)
+    configure_root_logger(verbosity=1, debug=False)
     log = getLogger()
 
     log.error("Error")
@@ -153,7 +138,7 @@ def logger_two_verbosity_logs_info_test(caplog):
     caplog : CapLog
         Pytest capture log. Provided automatically by PyTest.
     """
-    configure_root_logger(verbosity=2, debug=False, handler=NULL_LOG_HANDLER)
+    configure_root_logger(verbosity=2, debug=False)
     log = getLogger()
 
     log.info("Info")
@@ -168,7 +153,7 @@ def logger_two_verbosity_still_logs_warnings_test(caplog):
     caplog : CapLog
         Pytest capture log. Provided automatically by PyTest.
     """
-    configure_root_logger(verbosity=2, debug=False, handler=NULL_LOG_HANDLER)
+    configure_root_logger(verbosity=2, debug=False)
     log = getLogger()
 
     log.warning("Warning")
@@ -183,7 +168,7 @@ def logger_three_verbosity_logs_debug_test(caplog):
     caplog : CapLog
         Pytest capture log. Provided automatically by PyTest.
     """
-    configure_root_logger(verbosity=3, debug=False, handler=NULL_LOG_HANDLER)
+    configure_root_logger(verbosity=3, debug=False)
     log = getLogger()
 
     log.debug("Debug")
@@ -198,7 +183,7 @@ def logger_three_verbosity_still_logs_warnings_test(caplog):
     caplog : CapLog
         Pytest capture log. Provided automatically by PyTest.
     """
-    configure_root_logger(verbosity=3, debug=False, handler=NULL_LOG_HANDLER)
+    configure_root_logger(verbosity=3, debug=False)
     log = getLogger()
 
     log.warning("Warning")
