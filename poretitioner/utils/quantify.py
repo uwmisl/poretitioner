@@ -10,9 +10,11 @@ This module contains functionality for quantifying nanopore captures.
 import logging
 import os
 import re
+
 import h5py
 import numpy as np
 import pandas as pd
+
 from .raw_signal_utils import find_segments_below_threshold
 from .yaml_assistant import YAMLAssistant
 
@@ -64,7 +66,9 @@ def get_related_files(input_file, raw_file_dir="", capture_file_dir=""):
     if input_file.endswith(".csv"):
         # Given file is the filtered file and we're looking for the capture file
         filtered_file = input_file
-        capture_file = [x for x in os.listdir(capture_file_dir) if x.endswith(run_name + ".pkl")][0]
+        capture_file = [x for x in os.listdir(capture_file_dir) if x.endswith(run_name + ".pkl")][
+            0
+        ]
     elif input_file.endswith(".pkl"):
         # Given file is the capture file and filtered file is unspecified
         capture_file = input_file
@@ -90,7 +94,7 @@ def get_overlapping_regions(window, regions):
     Incomplete overlaps are returned.
 
     # TODO move to raw_signal_utils -- general purpose signal fn not specific to quant
-    
+
     Parameters
     ----------
     window : tuple of numerics (start, end)
@@ -170,8 +174,7 @@ def calc_time_until_capture(capture_windows, captures, blockages=None):
         # Get all the captures & blockages within that window
         captures_in_window = get_overlapping_regions(capture_window, captures)
         if blockages is not None:
-            blockages_in_window = get_overlapping_regions(capture_window,
-                                                          blockages)
+            blockages_in_window = get_overlapping_regions(capture_window, blockages)
         else:
             blockages_in_window = []
         # If there are no captures in the window, add the window to the elapsed
@@ -179,20 +182,19 @@ def calc_time_until_capture(capture_windows, captures, blockages=None):
         if len(captures_in_window) == 0:
             elapsed_time_until_capture += capture_window[1] - capture_window[0]
             for blockage in blockages_in_window:
-                elapsed_time_until_capture -= (blockage[1] - blockage[0])
+                elapsed_time_until_capture -= blockage[1] - blockage[0]
             continue
         # If there's a capture in the window, add the partial window to the
         # elapsed time. Subtract blockages that came before the capture.
         else:
             last_capture_end = capture_window[0]
             for capture_i, capture in enumerate(captures_in_window):
-                elapsed_time_until_capture += (capture[0] - last_capture_end)
+                elapsed_time_until_capture += capture[0] - last_capture_end
                 for blockage in blockages_in_window:
                     # Blockage must start after the last capture ended and
                     # finish before the next capture starts; otherwise skip
-                    if blockage[0] >= last_capture_end \
-                            and blockage[1] < capture[0]:
-                        elapsed_time_until_capture -= (blockage[1] - blockage[0])
+                    if blockage[0] >= last_capture_end and blockage[1] < capture[0]:
+                        elapsed_time_until_capture -= blockage[1] - blockage[0]
                         blockages.pop(0)
                 all_capture_times.append(elapsed_time_until_capture)
                 # Reset elapsed time.
@@ -331,9 +333,8 @@ def get_time_between_captures(
                 if not channel_captures.empty and not captures_segment.empty:
 
                     time_until_capture = calc_time_until_capture(
-                        voltage_changes_segment,
-                        captures_segment,
-                        blockages=blockages)
+                        voltage_changes_segment, captures_segment, blockages=blockages
+                    )
                     # Add time since channel's last capture from previous
                     # tsegs to time until first capture in current tseg
                     time_until_capture[0] += time_elapsed[i]
@@ -346,8 +347,7 @@ def get_time_between_captures(
                         if voltage_changes_segment[voltage_ix][0] > captures_segment[-1].end_obs:
                             time_elapsed[i] += np.sum(
                                 calc_time_until_capture(
-                                    voltage_changes_segment[voltage_ix:],
-                                    blockages
+                                    voltage_changes_segment[voltage_ix:], blockages
                                 )
                             )
                             break
@@ -483,7 +483,7 @@ def get_capture_freq(
                     )
                 else:
                     capture_counts.append(0)
-            all_capture_freq.append(np.mean(capture_counts) / (time_segments[0] / 600000.0))
+            all_capture_freq.append(np.mean(capture_counts) / (time_segments[0] / 600_000.0))
             checkpoint = end_voltage_seg
         else:
             logger.warn(
