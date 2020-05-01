@@ -1,8 +1,4 @@
-import argparse
-from typing import Dict
-
-import numpy as np
-from poretitioner.utils.raw_signal_utils import compute_fractional_blockage
+from argparse import ArgumentParser, Namespace
 
 from . import logger
 
@@ -11,26 +7,17 @@ def main():
     args = get_args()
 
     # Configures the root application logger.
-    logger.configure_root_logger(verbosity=args.verbose, include_debug_info=args.debug)
-
-    log = logger.getLogger()
-    log.debug("A debug message, mostly useful for developers")
-    log.info("A general info message.")
-    log.warning("a warning message, less verbose than just logging info")
-    log.error("An error, this is always logged.")
-    log.fatal("A fatal error - no recovery here. This is always logged.")
-    x = np.array([1.0, 2.3, 4.0, 6.0, 10.0])
-    frac = compute_fractional_blockage(x, 4)
-    print(frac)
+    # After this line, it's safe to log using poretitioner.logger.getLogger() throughout the application.
+    logger.configure_root_logger(verbosity=args.verbose, debug=args.debug)
 
 
-def get_args() -> Dict:
+def get_args() -> Namespace:
     """Gets the command line arguments passed to the application.
 
     Returns
     -------
-    Dict
-        Dictionary of command line arguments.
+    Namespace
+        Namespace containing the command line arguments.
     """
 
     # TODO: Add a description string: https://github.com/uwmisl/poretitioner/issues/27
@@ -39,7 +26,7 @@ def get_args() -> Dict:
     USAGE = ""
 
     # TODO: Add the rest of the commandline arguments and configuration: https://github.com/uwmisl/poretitioner/issues/27
-    parser = argparse.ArgumentParser(description=DESCRIPTION, usage=USAGE)
+    parser = ArgumentParser(description=DESCRIPTION, usage=USAGE)
 
     parser.add_argument(
         "-v",
