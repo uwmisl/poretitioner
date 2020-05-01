@@ -9,9 +9,9 @@ nanopore current within fast5 files, and for manipulating the raw current.
 """
 
 import re
+
 import h5py
 import numpy as np
-
 
 
 def natkey(string_):
@@ -55,8 +55,9 @@ def compute_fractional_blockage(scaled_raw, open_channel):
     return scaled_raw
 
 
-def get_fractional_blockage(f5, channel_no, start=None, end=None,
-                            open_channel_guess=220, open_channel_bound=15):
+def get_fractional_blockage(
+    f5, channel_no, start=None, end=None, open_channel_guess=220, open_channel_bound=15
+):
     """Retrieve the scaled raw signal for the channel, compute the open pore
     current, and return the fractional blockage for that channel.
 
@@ -108,7 +109,9 @@ def get_local_fractional_blockage(
     for start in range(0, len(signal), local_window_sz):
         end = start + local_window_sz
         local_chunk = signal[start:end]
-        local_open_channel = find_open_channel_current(local_chunk, open_channel, bound=open_channel_bound)
+        local_open_channel = find_open_channel_current(
+            local_chunk, open_channel, bound=open_channel_bound
+        )
         if local_open_channel is None:
             local_open_channel = open_channel
         frac[start:end] = compute_fractional_blockage(local_chunk, local_open_channel)
@@ -350,7 +353,7 @@ def find_signal_off_regions(raw, window_sz=200, slide=100, current_range=50):
     """
     off = []
     for start in range(0, len(raw), slide):
-        window_mean = np.mean(raw[start: start + window_sz])
+        window_mean = np.mean(raw[start : start + window_sz])
         if window_mean < np.abs(current_range) and window_mean > -np.abs(current_range):
             off.append(True)
         else:
@@ -391,8 +394,7 @@ def find_segments_below_threshold(time_series, threshold):
         Each item in the list represents the (start, end) points of regions
         where the input array drops at or below the threshold.
     """
-    diff_points = np.where(np.abs(np.diff(
-        np.where(time_series <= threshold, 1, 0))) == 1)[0]
+    diff_points = np.where(np.abs(np.diff(np.where(time_series <= threshold, 1, 0))) == 1)[0]
     if time_series[0] <= threshold:
         diff_points = np.hstack([[0], diff_points])
     if time_series[-1] <= threshold:
