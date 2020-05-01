@@ -1,19 +1,51 @@
-import torch  # noqa: F401
-import torchvision  # noqa: F401
-from matplotlib import pyplot as plt
+from argparse import ArgumentParser, Namespace
+
+from . import logger
 
 
 def main():
-    # The following imports are simply a code-review proof-of-concept to illustrate that
-    # dependency management works.
-    print(
-        "As proof that these libraries are properly packaged and callable, drawing a basic plot..."
-    )
-    plt.plot([0, 1], [1, 0])
-    plt.title("matplotlib is properly packaged and importable.")
-    plt.show()
+    args = get_args()
 
-    print("Plotted!")
+    # Configures the root application logger.
+    # After this line, it's safe to log using poretitioner.logger.getLogger() throughout the application.
+    logger.configure_root_logger(verbosity=args.verbose, debug=args.debug)
+
+
+def get_args() -> Namespace:
+    """Gets the command line arguments passed to the application.
+
+    Returns
+    -------
+    Namespace
+        Namespace containing the command line arguments.
+    """
+
+    # TODO: Add a description string: https://github.com/uwmisl/poretitioner/issues/27
+    DESCRIPTION = ""
+    # TODO: Add a usage string: https://github.com/uwmisl/poretitioner/issues/27
+    USAGE = ""
+
+    # TODO: Add the rest of the commandline arguments and configuration: https://github.com/uwmisl/poretitioner/issues/27
+    parser = ArgumentParser(description=DESCRIPTION, usage=USAGE)
+
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="Increase the program's verbosity. Can be used multiple times to increase the logging level (e.g. -vvv for very verbose logging)",
+    )
+    parser.add_argument(
+        "-d",
+        "--debug",
+        action="store_true",
+        default=False,
+        help="Whether to run in debug mode. Turned off by default.",
+    )
+
+    # TODO: Add the rest of the commandline arguments and configuration: https://github.com/uwmisl/poretitioner/issues/27
+    args = parser.parse_args()
+    return args
 
 
 if __name__ == "__main__":

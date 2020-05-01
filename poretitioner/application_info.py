@@ -6,7 +6,6 @@ application_info.py
 This module contains methods for accessing metadata about the project itself, such as the project name and build version.
 
 """
-
 import json
 from dataclasses import dataclass
 from functools import lru_cache
