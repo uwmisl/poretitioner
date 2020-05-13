@@ -70,6 +70,11 @@ in with python.pkgs; rec {
     flake8
     # Docstring static analyzer
     pydocstyle
+    # Serialization protocol (used for interfacing with MinKNOW/MinION)
+    pkgs.protobuf
+    protobuf
+    grpcio
+    grpcio-tools
   ];
 
   ###########################################################################################
