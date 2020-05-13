@@ -19,6 +19,7 @@
 
 { pkgs, python, lib ? pkgs.lib, stdenv ? pkgs.stdenv, cudaSupport ? false }:
 let precommit = (import ./pkgs/pre-commit/pre-commit.nix) { inherit python; };
+    minknow = (pkgs.callPackage ./pkgs/minknow/minknow.nix) { inherit python; };
 in with python.pkgs; rec {
 
   ###########################################################################################
@@ -48,6 +49,10 @@ in with python.pkgs; rec {
     jupyter
     # Neural networks
     torchvision
+
+    # MinKnow
+    minknow
+
   ] ++ lib.optional (cudaSupport) pytorchWithCuda
     ++ lib.optional (!cudaSupport) pytorchWithoutCuda;
 

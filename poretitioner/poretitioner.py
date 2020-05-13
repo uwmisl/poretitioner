@@ -1,5 +1,7 @@
 from argparse import ArgumentParser, Namespace
 
+from poretitioner.utils import streaming
+
 from . import logger
 
 
