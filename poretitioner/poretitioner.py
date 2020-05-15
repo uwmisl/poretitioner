@@ -25,7 +25,7 @@ def main():
         # TODO: Perform quantification step.
         pass
     else:
-        # TODO: Perform all steos.
+        # TODO: Perform all steps.
         pass
 
 
