@@ -1,6 +1,6 @@
-from argparse import ArgumentParser, Namespace
-
 from . import logger
+from .getargs import COMMAND, get_args
+from .utils import raw_signal_utils
 
 
 def main():
@@ -9,43 +9,24 @@ def main():
     # Configures the root application logger.
     # After this line, it's safe to log using poretitioner.logger.getLogger() throughout the application.
     logger.configure_root_logger(verbosity=args.verbose, debug=args.debug)
+    log = logger.getLogger()
+    log.debug(f"Starting poretitioner with arguments: {args!s}")
 
-
-def get_args() -> Namespace:
-    """Gets the command line arguments passed to the application.
-
-    Returns
-    -------
-    Namespace
-        Namespace containing the command line arguments.
-    """
-
-    # TODO: Add a description string: https://github.com/uwmisl/poretitioner/issues/27
-    DESCRIPTION = ""
-    # TODO: Add a usage string: https://github.com/uwmisl/poretitioner/issues/27
-    USAGE = ""
-
-    # TODO: Add the rest of the commandline arguments and configuration: https://github.com/uwmisl/poretitioner/issues/27
-    parser = ArgumentParser(description=DESCRIPTION, usage=USAGE)
-
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        action="count",
-        default=0,
-        help="Increase the program's verbosity. Can be used multiple times to increase the logging level (e.g. -vvv for very verbose logging)",
-    )
-    parser.add_argument(
-        "-d",
-        "--debug",
-        action="store_true",
-        default=False,
-        help="Whether to run in debug mode. Turned off by default.",
-    )
-
-    # TODO: Add the rest of the commandline arguments and configuration: https://github.com/uwmisl/poretitioner/issues/27
-    args = parser.parse_args()
-    return args
+    if args.command == COMMAND.SEGMENT:
+        # TODO: Perform segmentation step.
+        pass
+    elif args.command == COMMAND.FILTER:
+        # TODO: Perform filter step.
+        pass
+    elif args.command == COMMAND.CLASSIFY:
+        # TODO: Perform classification step.
+        pass
+    elif args.command == COMMAND.QUANTIFY:
+        # TODO: Perform quantification step.
+        pass
+    else:
+        # TODO: Perform all steps.
+        pass
 
 
 if __name__ == "__main__":
