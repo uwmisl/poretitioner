@@ -157,6 +157,100 @@ def get_sampling_rate(f5):
     return sample_rate
 
 
+def get_fractional_blockage_for_read(f5, read_id, start=None, end=None):
+    """Retrieve the scaled raw signal for the specified read.
+
+    Parameters
+    ----------
+    f5 : h5py.File
+        Fast5 file, open for reading using h5py.File.
+    read_id : str
+        read_id to retrieve fractionalized current.
+
+    Returns
+    -------
+    Numpy array (float)
+        Fractionalized current from the specified read_id.
+    """
+    signal = get_scaled_raw_for_read(f5, read_id, start=start, end=end)
+    open_channel = f5.get(f"read_{read_id}/channel_id").attrs["open_channel_pA"]
+    frac = compute_fractional_blockage(signal, open_channel)
+    return frac
+
+
+def get_raw_signal_for_read(f5, read_id, start=None, end=None):
+    """Retrieve raw signal from open fast5 file for the specified read_id.
+
+    Parameters
+    ----------
+    f5 : h5py.File
+        Fast5 file, open for reading using h5py.File.
+    read_id : str
+        Read id to retrieve raw signal. Can be formatted as a path ("read_xxx...")
+        or just the read id ("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx").
+
+    Returns
+    -------
+    Numpy array
+        Array representing sampled nanopore current.
+    """
+    if "read" in read_id:
+        signal_path = f"/{read_id}/Signal"
+    else:
+        signal_path = f"/read_{read_id}/Signal"
+    raw = f5.get(signal_path)[start:end]
+    return raw
+
+
+def get_scaled_raw_for_read(f5, read_id, start=None, end=None):
+    """Retrieve raw signal from open fast5 file, scaled to pA units.
+
+    Note: using UK sp. of digitization for consistency w/ file format
+
+    Parameters
+    ----------
+    f5 : h5py.File
+        Fast5 file, open for reading using h5py.File.
+    read_id : str
+        Read id to retrieve raw signal. Can be formatted as a path ("read_xxx...")
+        or just the read id ("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx").
+
+    Returns
+    -------
+    Numpy array
+        Array representing sampled nanopore current, scaled to pA.
+    """
+    raw = get_raw_signal_for_read(f5, read_id, start=start, end=end)
+    offset, rng, digi = get_scale_metadata_for_read(f5, read_id)
+    return scale_raw_current(raw, offset, rng, digi)
+
+
+def get_scale_metadata_for_read(f5, read_id):
+    """Retrieve scaling values for a specific read in a segmented fast5 file.
+
+    Note: using UK sp. of digitization for consistency w/ file format
+
+    Parameters
+    ----------
+    f5 : h5py.File
+        Fast5 file, open for reading using h5py.File.
+    read_id : str
+        Read id to retrieve raw signal. Can be formatted as a path ("read_xxx...")
+        or just the read id ("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx").
+
+    Returns
+    -------
+    Tuple
+        Offset, range, and digitisation values.
+    """
+    channel_path = f"read_{read_id}/channel_id"
+    attrs = f5.get(channel_path).attrs
+    offset = attrs.get("offset")
+    rng = attrs.get("range")
+    digi = attrs.get("digitisation")
+    return offset, rng, digi
+
+
 def get_raw_signal(f5, channel_no, start=None, end=None):
     """Retrieve raw signal from open fast5 file.
 
