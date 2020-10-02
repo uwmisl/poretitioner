@@ -28,6 +28,7 @@ use_cuda = True
 
 def check_capture_rejection(end_capture, voltage_ends, tol_obs=20):
     # TODO : Do we need this? Should be handled by specifying the filter or segmentation result to be used.
+    # Add random comment
     for voltage_end in voltage_ends:
         if np.abs(end_capture - voltage_end) < tol_obs:
             return True
