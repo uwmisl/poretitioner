@@ -8,15 +8,13 @@ This module contains functionality for classifying nanopore captures.
 """
 import logging
 import os
-import warnings
 
 import h5py
-import joblib
 import numpy as np
 import torch
 import torch.nn as nn
 
-from . import raw_signal_utils
+from . import filter, raw_signal_utils
 from .NTERs_trained_cnn_05152019 import load_cnn
 
 use_cuda = True
@@ -31,8 +29,8 @@ def classify(config):
     logger.addHandler(logging.StreamHandler())
 
     classifier_name = config["classify"]["classifier"]
-    filter_name = config["filter"]["???"]  # TODO
-    only_use_ejected_captures = config["???"]["???"]  # TODO
+    filter_name = config["filter"]["filter_name"]  # TODO
+    filter_path = f"/Filter/{filter_name}"
     classifier_conf = config["classify"]["min_confidence"]
     classifier_path = config["classify"]["classifier_path"]
     fast5_location = config["output"]["capture_f5_dir"]
@@ -48,13 +46,16 @@ def classify(config):
     classifier = init_classifier(classifier_name, classifier_path)
 
     # Find files to classify
+    # TODO this should be handled elsewhere. OK for this to be default behavior
+    # for the pipeline overall, but just pass in a list.
     fast5_fnames = [x for x in os.listdir(fast5_location) if x.endswith("fast5")]
 
     # Classify
     for fast5_fname in fast5_fnames:
         with h5py.File(fast5_fname, "r") as f5:
             if filter:
-                read_h5group_names = None  # TODO
+                read_h5group_names = f5.get(filter_path)
+                # use filter_name (maybe filter_path instead?)
             else:
                 read_h5group_names = f5.get("/")
             for grp in read_h5group_names:
@@ -63,7 +64,8 @@ def classify(config):
                 )
                 y, p = predict_class(classifier, signal, classifier_conf, classifier_name)
                 passed_classification = False if p <= classifier_conf else True
-                write_result(f5, config, grp, y, p, passed_classification)
+                # This will currently write to within the filtered reads file, is that what we want?
+                write_classifier_result(f5, config, grp, y, p, passed_classification)
 
 
 def init_classifier(classifier_name, classifier_path):
@@ -98,12 +100,13 @@ def init_classifier(classifier_name, classifier_path):
         return nanoporeTER_cnn
     elif classifier_name == "NTER_rf":  # Random forest classifier
         # TODO : Improve model maintainability : https://github.com/uwmisl/poretitioner/issues/38
-        return joblib.load(open(classifier_path, "rb"))
+        # return joblib.load(open(classifier_path, "rb"))
+        pass
     else:
         raise Exception("Invalid classifier name")
 
 
-def predict_class(classifier_name, classifier, raw):
+def predict_class(classifier_name, classifier, raw, class_labels=None):
     """Runs the classifier using the given raw data as input. Does not apply
     any kind of confidence threshold.
 
@@ -117,13 +120,15 @@ def predict_class(classifier_name, classifier, raw):
         Time series of nanopore current values (in units of fractionalized current).
     Returns
     -------
-    [type]
-        [description]
+    int or string
+        Class label
+    float
+        Model score (for NTER_cnn and NTER_rf, it's a probability)
 
     Raises
     ------
     NotImplementedError
-        [description]
+        Raised if the input classifier_name is not supported.
     """
     if classifier_name == "NTER_cnn":
         X_test = np.array([raw])
@@ -138,23 +143,24 @@ def predict_class(classifier_name, classifier, raw):
         outputs = classifier(X_test)
         out = nn.functional.softmax(outputs)
         prob, lab = torch.topk(out, 1)
-        # if prob < conf_thresh:
-        #     return -1
-        lab = lab.cpu().numpy()
-        return lab[0][0], prob
+        lab = lab.cpu().numpy()[0][0]
+        if class_labels is not None:
+            lab = class_labels[lab]
+        return lab, prob
     elif classifier_name == "NTER_rf":
         class_proba = classifier.predict_proba(
             [[np.mean(raw), np.std(raw), np.min(raw), np.max(raw), np.median(raw)]]
         )[0]
         max_proba = np.amax(class_proba)
-        if max_proba >= conf_thresh:
-            return np.where(class_proba == max_proba)[0][0]
-        return -1, max_proba
+        lab = np.where(class_proba == max_proba)[0][0]
+        if class_labels is not None:
+            lab = class_labels[lab]
+        return lab, class_proba
     else:
         raise NotImplementedError(f"Classifier {classifier_name} not implemented.")
 
 
-def write_result(f5, config, read_path, pred_class, prob, passed_classification):
+def write_classifier_result(f5, config, read_path, pred_class, prob, passed_classification):
     classifier_run_name = config["classify"]["name for this classification result"]
     results_path = f"{read_path}/Classification/{classifier_run_name}"
     if results_path not in f5:

@@ -10,5 +10,9 @@ import h5py
 
 import poretitioner.utils.classify as classify
 
-# def dummy_test():
+
+def dummy_test():
+    assert True is False
+
+
 #     classify.init_classifier("1", "2")
