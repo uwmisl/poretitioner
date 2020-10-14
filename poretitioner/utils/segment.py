@@ -324,12 +324,19 @@ def _prep_capture_windows(
         signal_metadata = []  # Metadata -- no need to pass through the segmenter
         for channel_no in good_channels:
             raw = raw_signal_utils.get_scaled_raw_for_channel(
-                bulk_f5, channel_no=channel_no, start=f5_subsection_start, end=f5_subsection_end
+                bulk_f5,
+                channel_no=channel_no,
+                start=f5_subsection_start,
+                end=f5_subsection_end,
             )
             offset, rng, digi = raw_signal_utils.get_scale_metadata(bulk_f5, channel_no)
             for capture_window in capture_windows:
                 raw_signals.append(
-                    (raw[capture_window[0] : capture_window[1]], signal_t, open_channel_prior_mean)
+                    (
+                        raw[capture_window[0] : capture_window[1]],
+                        signal_t,
+                        open_channel_prior_mean,
+                    )
                 )
                 signal_metadata.append([channel_no, capture_window, offset, rng, digi])
     return raw_signals, signal_metadata, run_id, sampling_rate

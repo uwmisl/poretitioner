@@ -37,9 +37,6 @@ def classify(config):
     classify_start = config["classify"]["start_obs"]  # 100 in NTER paper
     classify_end = config["classify"]["end_obs"]  # 2100 in NTER paper
 
-    # Filter
-    # TODO : implement
-
     # Load classifier
     assert classifier_name in ["NTER_cnn", "NTER_rf"]
     assert classifier_path is not None and len(classifier_path) > 0
@@ -49,6 +46,10 @@ def classify(config):
     # TODO this should be handled elsewhere. OK for this to be default behavior
     # for the pipeline overall, but just pass in a list.
     fast5_fnames = [x for x in os.listdir(fast5_location) if x.endswith("fast5")]
+
+    # Filter
+    # TODO : implement
+    filter.filter_and_store_result(config, fast5_fnames, overwrite=False)
 
     # Classify
     for fast5_fname in fast5_fnames:
@@ -91,19 +92,23 @@ def init_classifier(classifier_name, classifier_path):
 
     Raises
     ------
-    Exception
+    ValueError
         Raised if the classifier name is not supported.
     """
     if classifier_name == "NTER_cnn":  # CNN classifier
+        if not os.path.exists(classifier_path):
+            raise OSError(f"Classifier path doesn't exist: {classifier_path}")
         nanoporeTER_cnn = load_cnn(classifier_path)
         nanoporeTER_cnn.eval()
         return nanoporeTER_cnn
     elif classifier_name == "NTER_rf":  # Random forest classifier
+        if not os.path.exists(classifier_path):
+            raise OSError(f"Classifier path doesn't exist: {classifier_path}")
         # TODO : Improve model maintainability : https://github.com/uwmisl/poretitioner/issues/38
         # return joblib.load(open(classifier_path, "rb"))
         pass
     else:
-        raise Exception("Invalid classifier name")
+        raise ValueError(f"Invalid classifier name: {classifier_name}")
 
 
 def predict_class(classifier_name, classifier, raw, class_labels=None):
@@ -132,11 +137,10 @@ def predict_class(classifier_name, classifier, raw, class_labels=None):
     """
     if classifier_name == "NTER_cnn":
         X_test = np.array([raw])
-        # go from 2D to 3D array (each obs in a capture becomes its own array)
+        # 2D --> 3D array (each obs in a capture becomes its own array)
         X_test = X_test.reshape(len(X_test), X_test.shape[1], 1)
-        X_test = X_test[:, :19881]  # take only first 19881 obs of each capture
-        # break all obs in a captures into 141 groups of 141 (19881 total); each
-        # capture becomes its own array
+        X_test = X_test[:, :19881]  # First 19881 obs as per NTER paper
+        # Break capture into 141x141 (19881 total data points)
         X_test = X_test.reshape(len(X_test), 1, 141, 141)
         X_test = torch.from_numpy(X_test)
         X_test = X_test.cuda()
