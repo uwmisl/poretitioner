@@ -25,7 +25,7 @@ from .yaml_assistant import YAMLAssistant
 
 
 def get_related_files(input_file, raw_file_dir="", capture_file_dir=""):
-    """ TODO : Deprecate! : https://github.com/uwmisl/poretitioner/issues/40
+    """TODO : Deprecate! : https://github.com/uwmisl/poretitioner/issues/40
 
     Find files matching the input file in the data directory tree.
 
@@ -66,9 +66,9 @@ def get_related_files(input_file, raw_file_dir="", capture_file_dir=""):
     if input_file.endswith(".csv"):
         # Given file is the filtered file and we're looking for the capture file
         filtered_file = input_file
-        capture_file = [x for x in os.listdir(capture_file_dir) if x.endswith(run_name + ".pkl")][
-            0
-        ]
+        capture_file = [
+            x for x in os.listdir(capture_file_dir) if x.endswith(run_name + ".pkl")
+        ][0]
     elif input_file.endswith(".pkl"):
         # Given file is the capture file and filtered file is unspecified
         capture_file = input_file
@@ -132,31 +132,31 @@ def get_overlapping_regions(window, regions):
 def calc_time_until_capture(capture_windows, captures, blockages=None):
     """calc_time_until_capture
 
-        Finds all times between captures from a single channel. This is defined
-        as the open pore time from the end of the previous capture to the
-        current capture. Includes subtracting other non-capture blockages since
-        those blockages reduce the amount of overall open pore time.
+    Finds all times between captures from a single channel. This is defined
+    as the open pore time from the end of the previous capture to the
+    current capture. Includes subtracting other non-capture blockages since
+    those blockages reduce the amount of overall open pore time.
 
-        Note: called by "get_capture_time" and "get_capture_time_tseg"
+    Note: called by "get_capture_time" and "get_capture_time_tseg"
 
-        Parameters
-        ----------
-        capture_windows : list of tuples of ints [(start, end), ...]
-            Regions of current where the nanopore is available to accept a
-            capture. (I.e., is in a "normal" voltage state.) [(start, end), ...]
-        captures : list of tuples of ints [(start, end), ...]
-            Regions of current where a capture is residing in the pore. The
-            function is calculating time between these values (minus blockages).
-        blockages : list of tuples of ints [(start, end), ...]
-            Regions of current where the pore is blocked by any capture or non-
-            capture. These are removed from the time between captures, if
-            specified.
+    Parameters
+    ----------
+    capture_windows : list of tuples of ints [(start, end), ...]
+        Regions of current where the nanopore is available to accept a
+        capture. (I.e., is in a "normal" voltage state.) [(start, end), ...]
+    captures : list of tuples of ints [(start, end), ...]
+        Regions of current where a capture is residing in the pore. The
+        function is calculating time between these values (minus blockages).
+    blockages : list of tuples of ints [(start, end), ...]
+        Regions of current where the pore is blocked by any capture or non-
+        capture. These are removed from the time between captures, if
+        specified.
 
-        Returns
-        -------
-        list of floats
-            List of all capture times from a single channel.
-        """
+    Returns
+    -------
+    list of floats
+        List of all capture times from a single channel.
+    """
     # TODO: Implement logger best practices : https://github.com/uwmisl/poretitioner/issues/12
     logger = logging.getLogger("calc_time_until_capture")
     if logger.handlers:
@@ -210,7 +210,11 @@ def calc_time_until_capture(capture_windows, captures, blockages=None):
 
 
 def get_time_between_captures(
-    filtered_file, time_interval=None, raw_file_dir="", capture_file_dir="", config_file=""
+    filtered_file,
+    time_interval=None,
+    raw_file_dir="",
+    capture_file_dir="",
+    config_file="",
 ):
     """Get the average time between captures across all channels. Can be
     computed for the specified time interval, or across the entire run if not
@@ -301,7 +305,9 @@ def get_time_between_captures(
         # If this time segment contains open voltage regions...
         if voltage_changes_segment:
             # End of last voltage region in tseg
-            end_voltage_seg = voltage_changes_segment[len(voltage_changes_segment) - 1][1]
+            end_voltage_seg = voltage_changes_segment[len(voltage_changes_segment) - 1][
+                1
+            ]
             capture_times = []  # Master list of all capture times from this seg
             # Loop through all good channels and get captures times from each
             for i, channel in enumerate(good_channels):
@@ -344,7 +350,10 @@ def get_time_between_captures(
                     time_elapsed[i] = 0
                     voltage_ix = 0
                     while voltage_ix < len(voltage_changes_segment):
-                        if voltage_changes_segment[voltage_ix][0] > captures_segment[-1].end_obs:
+                        if (
+                            voltage_changes_segment[voltage_ix][0]
+                            > captures_segment[-1].end_obs
+                        ):
                             time_elapsed[i] += np.sum(
                                 calc_time_until_capture(
                                     voltage_changes_segment[voltage_ix:], blockages
@@ -403,7 +412,11 @@ def get_time_between_captures(
 
 
 def get_capture_freq(
-    filtered_file, time_interval=None, raw_file_dir="", capture_file_dir="", config_file=""
+    filtered_file,
+    time_interval=None,
+    raw_file_dir="",
+    capture_file_dir="",
+    config_file="",
 ):
     # TODO: Implement logger best practices : https://github.com/uwmisl/poretitioner/issues/12
     logger = logging.getLogger("get_capture_freq")
@@ -461,7 +474,9 @@ def get_capture_freq(
         # If this time segment contains open voltage regions...
         if voltage_changes_segment:
             # End of last voltage region in tseg
-            end_voltage_seg = voltage_changes_segment[len(voltage_changes_segment) - 1][1]
+            end_voltage_seg = voltage_changes_segment[len(voltage_changes_segment) - 1][
+                1
+            ]
             # List of capture counts for each channel from this tseg (length of
             # list = # of channels)
             capture_counts = []
@@ -483,7 +498,9 @@ def get_capture_freq(
                     )
                 else:
                     capture_counts.append(0)
-            all_capture_freq.append(np.mean(capture_counts) / (time_segments[0] / 600_000.0))
+            all_capture_freq.append(
+                np.mean(capture_counts) / (time_segments[0] / 600_000.0)
+            )
             checkpoint = end_voltage_seg
         else:
             logger.warn(

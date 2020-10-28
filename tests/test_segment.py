@@ -446,7 +446,7 @@ def parallel_find_captures_test(tmpdir):
             "end_tol": 0,
             "terminal_capture_only": False,
         },
-        "filters": {"length": (100, None)},
+        "filters": {"base filter": {"length": (100, None)}},
         "output": {"capture_f5_dir": "tests/", "captures_per_f5": 1000},
     }
     segment.parallel_find_captures(bulk_f5_fname, config)

@@ -81,14 +81,20 @@ def find_captures(
         Open channel current value used to fractionalize raw current.
     """
     # Attempt to find open channel current (if not poss., use alt)
-    open_channel_pA = raw_signal_utils.find_open_channel_current(signal_pA, alt_open_channel_pA)
+    open_channel_pA = raw_signal_utils.find_open_channel_current(
+        signal_pA, alt_open_channel_pA
+    )
     if open_channel_pA is None:
         open_channel_pA = alt_open_channel_pA
     # Convert to frac current
-    frac_current = raw_signal_utils.compute_fractional_blockage(signal_pA, open_channel_pA)
+    frac_current = raw_signal_utils.compute_fractional_blockage(
+        signal_pA, open_channel_pA
+    )
     del signal_pA
     # Apply signal threshold & get list of captures
-    captures = raw_signal_utils.find_segments_below_threshold(frac_current, signal_threshold_frac)
+    captures = raw_signal_utils.find_segments_below_threshold(
+        frac_current, signal_threshold_frac
+    )
     annotated_captures = []
     for capture in captures:
         ejected = np.abs(capture[1] - len(frac_current)) <= end_tol
@@ -113,7 +119,9 @@ def find_captures(
     filtered_captures = []
     for capture in captures:
         capture_start, capture_end, ejected = capture
-        if filter.apply_feature_filters(frac_current[capture_start:capture_end], filters):
+        if filter.apply_feature_filters(
+            frac_current[capture_start:capture_end], filters
+        ):
             filtered_captures.append(capture)
     # Return list of captures
     return filtered_captures, open_channel_pA
@@ -226,7 +234,9 @@ def create_capture_fast5(
             g = capture_f5.create_group("/Meta/context_tags")
             for k, v in attrs.items():
                 g.attrs.create(k, v)
-            g.attrs.create("bulk_filename", bulk_f5_fname, dtype=f"S{len(bulk_f5_fname)}")
+            g.attrs.create(
+                "bulk_filename", bulk_f5_fname, dtype=f"S{len(bulk_f5_fname)}"
+            )
 
             # /Meta/tracking_id
             attrs = ugk["tracking_id"].attrs
@@ -237,7 +247,9 @@ def create_capture_fast5(
             if sub_run is not None:
                 sub_run_id, sub_run_offset, sub_run_duration = sub_run
                 if sub_run_id is not None:
-                    g.attrs.create("sub_run_id", sub_run_id, dtype=f"S{len(sub_run_id)}")
+                    g.attrs.create(
+                        "sub_run_id", sub_run_id, dtype=f"S{len(sub_run_id)}"
+                    )
                 if sub_run_offset is not None:
                     g.attrs.create("sub_run_offset", sub_run_offset)
                 if sub_run_duration is not None:
@@ -250,13 +262,17 @@ def create_capture_fast5(
             g = capture_f5.create_group("/Meta/Segmentation")
             print(__name__)
             g.attrs.create("segmenter", __name__, dtype=f"S{len(__name__)}")
-            g.attrs.create("segmenter_version", __version__, dtype=f"S{len(__version__)}")
+            g.attrs.create(
+                "segmenter_version", __version__, dtype=f"S{len(__version__)}"
+            )
             g_filt = capture_f5.create_group("/Meta/Segmentation/filters")
             for k, v in config.items():
-                if k == "filters":
+                if k == "base filter":
                     for filt, (min_filt, max_filt) in v.items():
                         # Create compound dset for filters
-                        dtypes = np.dtype([("min", type(min_filt), ("max", type(max_filt)))])
+                        dtypes = np.dtype(
+                            [("min", type(min_filt), ("max", type(max_filt)))]
+                        )
                         d = g_filt.create_dataset(k, (2,), dtype=dtypes)
                         d[filt] = (min_filt, max_filt)
                 else:
@@ -311,10 +327,14 @@ def _prep_capture_windows(
         )
         logger.debug(f"voltage: {voltage}")
         run_id = str(bulk_f5["/UniqueGlobalKey/tracking_id"].attrs.get("run_id"))[2:-1]
-        sampling_rate = int(bulk_f5["/UniqueGlobalKey/context_tags"].attrs.get("sample_frequency"))
+        sampling_rate = int(
+            bulk_f5["/UniqueGlobalKey/context_tags"].attrs.get("sample_frequency")
+        )
 
         logger.info("Identifying capture windows (via voltage threshold).")
-        capture_windows = raw_signal_utils.find_segments_below_threshold(voltage, voltage_t)
+        capture_windows = raw_signal_utils.find_segments_below_threshold(
+            voltage, voltage_t
+        )
         logger.debug(
             f"run_id: {run_id}, sampling_rate: {sampling_rate}, "
             f"#/capture windows: {len(capture_windows)}"
@@ -392,7 +412,7 @@ def parallel_find_captures(
     good_channels = config["segment"]["good_channels"]
     end_tol = config["segment"]["end_tol"]
     terminal_capture_only = config["segment"]["terminal_capture_only"]
-    filters = config["filters"]
+    filters = config["filters"]["base filter"]
     save_location = config["output"][
         "capture_f5_dir"
     ]  # TODO: Verify exists; don't create (handle earlier)
@@ -452,7 +472,9 @@ def parallel_find_captures(
             if n_in_file >= n_per_file:
                 n_in_file = 0
                 file_no += 1
-                capture_f5_fname = os.path.join(save_location, f"{run_id}_{file_no}.fast5")
+                capture_f5_fname = os.path.join(
+                    save_location, f"{run_id}_{file_no}.fast5"
+                )
             n_in_file += 1
             raw_pA = window_raw[capture[0] : capture[1]]
             logger.debug(f"Length of raw signal : {len(raw_pA)}")
@@ -544,7 +566,9 @@ def write_capture_to_fast5(
     path, fname = os.path.split(capture_f5_fname)
     if not os.path.exists(path):
         raise IOError(f"Path to capture file location does not exist: {path}")
-    signal_digi = raw_signal_utils.digitize_raw_current(signal_pA, offset, rng, digitisation)
+    signal_digi = raw_signal_utils.digitize_raw_current(
+        signal_pA, offset, rng, digitisation
+    )
     with h5py.File(capture_f5_fname, "a") as f5:
         signal_path = f"read_{read_id}/Signal"
         f5[signal_path] = signal_digi

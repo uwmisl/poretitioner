@@ -60,13 +60,27 @@ def apply_feature_filters(signal, filters):
         "max": np.max,
         "length": len,
     }
+    other_filters = ["ejected"]
     pass_filters = True
-    for filt, (low, high) in filters.items():
+    # for filt, filt_vals in v.items():
+    # if len(filt_vals) == 2:
+    #     (min_filt, max_filt) = filt_vals
+    #     # Create compound dset for filters
+    #     print("filt types", type(min_filt), type(max_filt))
+    #     dtypes = np.dtype([("min", type(min_filt), ("max", type(max_filt)))])
+    #     d = filt_grp.create_dataset(k, (2,), dtype=dtypes)
+    #     d[filt] = (min_filt, max_filt)
+    # else:
+    #     d[filt] = filt_vals
+    for filt, filt_vals in filters.items():
         if filt in supported_filters:
+            low, high = filt_vals
             val = supported_filters[filt](signal)
             if (low is not None and low > val) or (high is not None and val > high):
                 pass_filters = False
                 return pass_filters
+        elif filt in other_filters:
+            continue
         else:
             # Warn filter not supported
             logger.warning(f"Filter {filt} not supported; ignoring.")
@@ -87,13 +101,19 @@ def check_capture_ejection_by_read(f5, read_id):
     boolean
         True if the end of the capture coincides with the end of a voltage window.
     """
-    ejected = f5.get(f"/read_{read_id}").attrs["ejected"]
+    try:
+        ejected = f5.get(f"/read_{read_id}/Signal").attrs["ejected"]
+    except AttributeError:
+        raise ValueError(f"path /read_{read_id} does not exist in the fast5 file.")
     return ejected
 
 
 def check_capture_ejection(end_capture, voltage_ends, tol_obs=20):
     """Checks whether the current capture was in the pore until the voltage
     was reversed.
+
+    Essentially checks whether a value (end_capture) is close enough (within
+    a margin of tol_obs) to any value in voltage_ends.
 
     Parameters
     ----------
@@ -115,43 +135,55 @@ def check_capture_ejection(end_capture, voltage_ends, tol_obs=20):
     return False
 
 
-def filter_and_store_result(config, fast5_files, overwrite=False):
+def apply_filters_to_read(config, f5, read_id, filter_name):
+    passed_filters = True
+
+    # Check whether the capture was ejected
+    if "ejected" in config["filters"][filter_name]:
+        only_use_ejected_captures = config["filters"][filter_name]["ejected"]  # TODO
+        if only_use_ejected_captures:
+            capture_ejected = check_capture_ejection_by_read(f5, read_id)
+            if not capture_ejected:
+                passed_filters = False
+                return passed_filters
+    else:
+        only_use_ejected_captures = False  # could skip this, leaving to help read logic
+
+    # Apply all the filters
+    signal = raw_signal_utils.get_fractional_blockage_for_read(f5, read_id)
+    print(config["filters"][filter_name])
+    print(f"min = {np.min(signal)}")
+    passed_filters = apply_feature_filters(signal, config["filters"][filter_name])
+    return passed_filters
+
+
+def filter_and_store_result(config, fast5_files, filter_name, overwrite=False):
     # Apply a new set of filters
     # Write filter results to fast5 file (using format)
     # if only_use_ejected_captures = config["???"]["???"], then check_capture_ejection
     # if there's a min length specified in the config, use that
     # if feature filters are specified, apply those
     # save all filter parameters in the filter_name path
-    filter_name = config["filter"]["filter_name"]
     filter_path = f"/Filter/{filter_name}"
-    only_use_ejected_captures = config["???"]["???"]
 
     # TODO: parallelize this (embarassingly parallel structure)
     for fast5_file in fast5_files:
-        with h5py.File(fast5_file, "w") as f5:
+        with h5py.File(fast5_file, "a") as f5:
             if overwrite is False and filter_path in f5:
                 continue
             passed_read_ids = []
             for read_h5group_name in f5.get("/"):
+                if "read" not in read_h5group_name:
+                    continue
                 read_id = re.findall(r"read_(.*)", read_h5group_name)[0]
 
-                # Check whether the capture was ejected
-                if only_use_ejected_captures:
-                    capture_ejected = check_capture_ejection_by_read(f5, read_id)
-                    if not capture_ejected:
-                        continue
-
-                # Apply all the filters
-                passed_filters = True
-                signal = raw_signal_utils.get_raw_signal_for_read(f5, read_id)
-                passed_filters = apply_feature_filters(signal, config["filters"])
+                passed_filters = apply_filters_to_read(config, f5, read_id, filter_name)
                 if passed_filters:
                     passed_read_ids.append(read_id)
-            write_filter_results(f5, config, passed_read_ids)
+            write_filter_results(f5, config, passed_read_ids, filter_name)
 
 
-def write_filter_results(f5, config, read_ids):
-    filter_name = config["filter"]["filter_name"]
+def write_filter_results(f5, config, read_ids, filter_name):
     filter_path = f"/Filter/{filter_name}"
     if filter_path not in f5:
         f5.create_group(f"{filter_path}/pass")
@@ -159,12 +191,21 @@ def write_filter_results(f5, config, read_ids):
 
     # Save filter configuration to the fast5 file at filter_path
     for k, v in config.items():
-        if k == "filters":
-            for filt, (min_filt, max_filt) in v.items():
-                # Create compound dset for filters
-                dtypes = np.dtype([("min", type(min_filt), ("max", type(max_filt)))])
-                d = filt_grp.create_dataset(k, (2,), dtype=dtypes)
-                d[filt] = (min_filt, max_filt)
+        if k == filter_name:
+            print("keys and vals:", k, v)
+            for filt, filt_vals in v.items():
+                if len(filt_vals) == 2:
+                    (min_filt, max_filt) = filt_vals
+                    # Create compound dset for filters
+                    print("filt types", type(min_filt), type(max_filt))
+                    dtypes = np.dtype(
+                        [("min", type(min_filt), ("max", type(max_filt)))]
+                    )
+                    d = filt_grp.create_dataset(k, (2,), dtype=dtypes)
+                    d[filt] = (min_filt, max_filt)
+                else:
+                    d = filt_grp.create_dataset(k)
+                    d[filt] = filt_vals
 
     # For all read_ids that passed the filter (AKA reads that were passed in),
     # create a hard link in the filter_path to the actual read's location in
@@ -172,12 +213,15 @@ def write_filter_results(f5, config, read_ids):
     for read_id in read_ids:
         read_path = f"/read_{read_id}"
         read_grp = f5.get(read_path)
+        print(read_grp)
         filter_read_path = f"{filter_path}/pass/read_{read_id}"
         # Create a hard link from the filter read path to the actual read path
         f5[filter_read_path] = read_grp
 
 
-def filter_like_existing(config, example_fast5, example_filter_path, fast5_files, new_filter_path):
+def filter_like_existing(
+    config, example_fast5, example_filter_path, fast5_files, new_filter_path
+):
     # Filters a set of fast5 files exactly the same as an existing filter
     # TODO : #68 : implement
-    pass
+    raise NotImplementedError()

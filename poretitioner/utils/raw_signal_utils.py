@@ -85,7 +85,9 @@ def get_fractional_blockage(
         Fractionalized current from the specified input channel.
     """
     signal = get_scaled_raw_for_channel(f5, channel_no, start=start, end=end)
-    open_channel = find_open_channel_current(signal, open_channel_guess, bound=open_channel_bound)
+    open_channel = find_open_channel_current(
+        signal, open_channel_guess, bound=open_channel_bound
+    )
     if open_channel is None:
         # TODO add logging here to give the reason for returning None
         return None
@@ -94,12 +96,18 @@ def get_fractional_blockage(
 
 
 def get_local_fractional_blockage(
-    f5, open_channel_guess=220, open_channel_bound=15, channel=None, local_window_sz=1000
+    f5,
+    open_channel_guess=220,
+    open_channel_bound=15,
+    channel=None,
+    local_window_sz=1000,
 ):
     """Retrieve the scaled raw signal for the channel, compute the open pore
     current, and return the fractional blockage for that channel."""
     signal = get_scaled_raw_for_channel(f5, channel=channel)
-    open_channel = find_open_channel_current(signal, open_channel_guess, bound=open_channel_bound)
+    open_channel = find_open_channel_current(
+        signal, open_channel_guess, bound=open_channel_bound
+    )
     if open_channel is None:
         print("open pore is None")
 
@@ -173,7 +181,11 @@ def get_fractional_blockage_for_read(f5, read_id, start=None, end=None):
         Fractionalized current from the specified read_id.
     """
     signal = get_scaled_raw_for_read(f5, read_id, start=start, end=end)
-    open_channel = f5.get(f"read_{read_id}/channel_id").attrs["open_channel_pA"]
+    if "read" in read_id:
+        channel_path = f"{read_id}/channel_id"
+    else:
+        channel_path = f"read_{read_id}/channel_id"
+    open_channel = f5.get(channel_path).attrs["open_channel_pA"]
     frac = compute_fractional_blockage(signal, open_channel)
     return frac
 
@@ -198,8 +210,11 @@ def get_raw_signal_for_read(f5, read_id, start=None, end=None):
         signal_path = f"/{read_id}/Signal"
     else:
         signal_path = f"/read_{read_id}/Signal"
-    raw = f5.get(signal_path)[start:end]
-    return raw
+    if signal_path in f5:
+        raw = f5.get(signal_path)[start:end]
+        return raw
+    else:
+        raise ValueError(f"Path {signal_path} not in fast5 file.")
 
 
 def get_scaled_raw_for_read(f5, read_id, start=None, end=None):
@@ -243,7 +258,11 @@ def get_scale_metadata_for_read(f5, read_id):
     Tuple
         Offset, range, and digitisation values.
     """
-    channel_path = f"read_{read_id}/channel_id"
+    if "read" in read_id:
+        channel_path = f"{read_id}/channel_id"
+    else:
+        channel_path = f"read_{read_id}/channel_id"
+    print("channel_path", channel_path)
     attrs = f5.get(channel_path).attrs
     offset = attrs.get("offset")
     rng = attrs.get("range")
@@ -488,7 +507,9 @@ def find_segments_below_threshold(time_series, threshold):
         Each item in the list represents the (start, end) points of regions
         where the input array drops at or below the threshold.
     """
-    diff_points = np.where(np.abs(np.diff(np.where(time_series <= threshold, 1, 0))) == 1)[0]
+    diff_points = np.where(
+        np.abs(np.diff(np.where(time_series <= threshold, 1, 0))) == 1
+    )[0]
     if time_series[0] <= threshold:
         diff_points = np.hstack([[0], diff_points])
     if time_series[-1] <= threshold:
