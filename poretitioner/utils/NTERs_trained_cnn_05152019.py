@@ -30,10 +30,7 @@ class CNN(nn.Module):
                     (
                         m.floor(
                             (
-                                m.floor(
-                                    (m.floor((reshape - K_1 + 1) / KP_1) - K_2 + 1)
-                                    / KP_2
-                                )
+                                m.floor((m.floor((reshape - K_1 + 1) / KP_1) - K_2 + 1) / KP_2)
                                 - K_3
                                 + 1
                             )

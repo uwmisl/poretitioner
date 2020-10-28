@@ -198,9 +198,7 @@ def write_filter_results(f5, config, read_ids, filter_name):
                     (min_filt, max_filt) = filt_vals
                     # Create compound dset for filters
                     print("filt types", type(min_filt), type(max_filt))
-                    dtypes = np.dtype(
-                        [("min", type(min_filt), ("max", type(max_filt)))]
-                    )
+                    dtypes = np.dtype([("min", type(min_filt), ("max", type(max_filt)))])
                     d = filt_grp.create_dataset(k, (2,), dtype=dtypes)
                     d[filt] = (min_filt, max_filt)
                 else:
@@ -219,9 +217,7 @@ def write_filter_results(f5, config, read_ids, filter_name):
         f5[filter_read_path] = read_grp
 
 
-def filter_like_existing(
-    config, example_fast5, example_filter_path, fast5_files, new_filter_path
-):
+def filter_like_existing(config, example_fast5, example_filter_path, fast5_files, new_filter_path):
     # Filters a set of fast5 files exactly the same as an existing filter
     # TODO : #68 : implement
     raise NotImplementedError()

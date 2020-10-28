@@ -66,9 +66,9 @@ def get_related_files(input_file, raw_file_dir="", capture_file_dir=""):
     if input_file.endswith(".csv"):
         # Given file is the filtered file and we're looking for the capture file
         filtered_file = input_file
-        capture_file = [
-            x for x in os.listdir(capture_file_dir) if x.endswith(run_name + ".pkl")
-        ][0]
+        capture_file = [x for x in os.listdir(capture_file_dir) if x.endswith(run_name + ".pkl")][
+            0
+        ]
     elif input_file.endswith(".pkl"):
         # Given file is the capture file and filtered file is unspecified
         capture_file = input_file
@@ -305,9 +305,7 @@ def get_time_between_captures(
         # If this time segment contains open voltage regions...
         if voltage_changes_segment:
             # End of last voltage region in tseg
-            end_voltage_seg = voltage_changes_segment[len(voltage_changes_segment) - 1][
-                1
-            ]
+            end_voltage_seg = voltage_changes_segment[len(voltage_changes_segment) - 1][1]
             capture_times = []  # Master list of all capture times from this seg
             # Loop through all good channels and get captures times from each
             for i, channel in enumerate(good_channels):
@@ -350,10 +348,7 @@ def get_time_between_captures(
                     time_elapsed[i] = 0
                     voltage_ix = 0
                     while voltage_ix < len(voltage_changes_segment):
-                        if (
-                            voltage_changes_segment[voltage_ix][0]
-                            > captures_segment[-1].end_obs
-                        ):
+                        if voltage_changes_segment[voltage_ix][0] > captures_segment[-1].end_obs:
                             time_elapsed[i] += np.sum(
                                 calc_time_until_capture(
                                     voltage_changes_segment[voltage_ix:], blockages
@@ -474,9 +469,7 @@ def get_capture_freq(
         # If this time segment contains open voltage regions...
         if voltage_changes_segment:
             # End of last voltage region in tseg
-            end_voltage_seg = voltage_changes_segment[len(voltage_changes_segment) - 1][
-                1
-            ]
+            end_voltage_seg = voltage_changes_segment[len(voltage_changes_segment) - 1][1]
             # List of capture counts for each channel from this tseg (length of
             # list = # of channels)
             capture_counts = []
@@ -498,9 +491,7 @@ def get_capture_freq(
                     )
                 else:
                     capture_counts.append(0)
-            all_capture_freq.append(
-                np.mean(capture_counts) / (time_segments[0] / 600_000.0)
-            )
+            all_capture_freq.append(np.mean(capture_counts) / (time_segments[0] / 600_000.0))
             checkpoint = end_voltage_seg
         else:
             logger.warn(

@@ -63,9 +63,7 @@ def classify(config):
                 signal = raw_signal_utils.get_fractional_blockage_for_read(
                     f5, grp, start=classify_start, end=classify_end
                 )
-                y, p = predict_class(
-                    classifier, signal, classifier_conf, classifier_name
-                )
+                y, p = predict_class(classifier, signal, classifier_conf, classifier_name)
                 passed_classification = False if p <= classifier_conf else True
                 # This will currently write to within the filtered reads file, is that what we want?
                 write_classifier_result(f5, config, grp, y, p, passed_classification)
@@ -166,9 +164,7 @@ def predict_class(classifier_name, classifier, raw, class_labels=None):
         raise NotImplementedError(f"Classifier {classifier_name} not implemented.")
 
 
-def write_classifier_result(
-    f5, config, read_path, pred_class, prob, passed_classification
-):
+def write_classifier_result(f5, config, read_path, pred_class, prob, passed_classification):
     classifier_run_name = config["classify"]["name for this classification result"]
     results_path = f"{read_path}/Classification/{classifier_run_name}"
     if results_path not in f5:
@@ -176,9 +172,7 @@ def write_classifier_result(
     f5[results_path].attrs["model"] = config["classify"]["classifier"]
     f5[results_path].attrs["model_version"] = config["classify"]["classifier version"]
     f5[results_path].attrs["model_file"] = config["classify"]["classifier_path"]
-    f5[results_path].attrs["classification_threshold"] = config["classify"][
-        "min_confidence"
-    ]
+    f5[results_path].attrs["classification_threshold"] = config["classify"]["min_confidence"]
     f5[results_path].attrs["best_class"] = pred_class
     f5[results_path].attrs["best_score"] = prob
     f5[results_path].attrs["assigned_class"] = prob if passed_classification else -1
