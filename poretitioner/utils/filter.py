@@ -6,16 +6,14 @@ filter.py
 # TODO : Write functionality for filtering nanopore captures : https://github.com/uwmisl/poretitioner/issues/43
 
 """
-import logging
 import re
 
 import h5py
 import numpy as np
 
-from . import raw_signal_utils
+from poretitioner import logging
 
-# def apply_length_filter(signal_len, length=20000):
-#     return True if signal_len < length else False
+from . import raw_signal_utils
 
 
 def apply_feature_filters(signal, filters):
@@ -48,10 +46,6 @@ def apply_feature_filters(signal, filters):
     """
     logger = logging.getLogger("apply_feature_filters")
     # TODO: Implement logger best practices : https://github.com/uwmisl/poretitioner/issues/12
-    if logger.handlers:
-        logger.handlers = []
-    logger.setLevel(logging.INFO)
-    logger.addHandler(logging.StreamHandler())
     supported_filters = {
         "mean": np.mean,
         "stdv": np.std,
@@ -62,16 +56,6 @@ def apply_feature_filters(signal, filters):
     }
     other_filters = ["ejected"]
     pass_filters = True
-    # for filt, filt_vals in v.items():
-    # if len(filt_vals) == 2:
-    #     (min_filt, max_filt) = filt_vals
-    #     # Create compound dset for filters
-    #     print("filt types", type(min_filt), type(max_filt))
-    #     dtypes = np.dtype([("min", type(min_filt), ("max", type(max_filt)))])
-    #     d = filt_grp.create_dataset(k, (2,), dtype=dtypes)
-    #     d[filt] = (min_filt, max_filt)
-    # else:
-    #     d[filt] = filt_vals
     for filt, filt_vals in filters.items():
         if filt in supported_filters:
             low, high = filt_vals
@@ -82,7 +66,6 @@ def apply_feature_filters(signal, filters):
         elif filt in other_filters:
             continue
         else:
-            # Warn filter not supported
             logger.warning(f"Filter {filt} not supported; ignoring.")
     return pass_filters
 

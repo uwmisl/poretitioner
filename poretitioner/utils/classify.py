@@ -6,13 +6,15 @@ classify.py
 This module contains functionality for classifying nanopore captures.
 
 """
-import logging
 import os
+import re
 
 import h5py
 import numpy as np
 import torch
 import torch.nn as nn
+
+from poretitioner import logging
 
 from . import filter, raw_signal_utils
 from .NTERs_trained_cnn_05152019 import load_cnn
@@ -21,52 +23,72 @@ use_cuda = True
 # TODO : Don't hardcode use of CUDA : https://github.com/uwmisl/poretitioner/issues/41
 
 
-def classify(config):
-    logger = logging.getLogger("classify")
-    if logger.handlers:
-        logger.handlers = []
-    logger.setLevel(logging.DEBUG)
-    logger.addHandler(logging.StreamHandler())
-
-    classifier_name = config["classify"]["classifier"]
-    filter_name = config["filter"]["filter_name"]  # TODO
-    filter_path = f"/Filter/{filter_name}"
-    classifier_conf = config["classify"]["min_confidence"]
-    classifier_path = config["classify"]["classifier_path"]
-    fast5_location = config["output"]["capture_f5_dir"]
-    classify_start = config["classify"]["start_obs"]  # 100 in NTER paper
-    classify_end = config["classify"]["end_obs"]  # 2100 in NTER paper
+def classify_and_store_result(config, fast5_fnames, overwrite=False, filter_name=None):
+    logger = logging.getLogger("classify_and_store_result")
+    clf_config = config["classify"]
+    classifier_name = clf_config["classifier"]
+    classifier_path = clf_config["classifier_path"]
 
     # Load classifier
+    logger.info(f"Loading classifier {classifier_name}.")
     assert classifier_name in ["NTER_cnn", "NTER_rf"]
     assert classifier_path is not None and len(classifier_path) > 0
     classifier = init_classifier(classifier_name, classifier_path)
 
-    # Find files to classify
-    # TODO this should be handled elsewhere. OK for this to be default behavior
-    # for the pipeline overall, but just pass in a list.
-    fast5_fnames = [x for x in os.listdir(fast5_location) if x.endswith("fast5")]
-
-    # Filter
-    # TODO : implement
-    filter.filter_and_store_result(config, fast5_fnames, overwrite=False)
+    # Filter (optional)
+    if filter_name is not None:
+        logger.info("Beginning filtering.")
+        filter.filter_and_store_result(
+            config, fast5_fnames, filter_name, overwrite=overwrite
+        )
+        read_path = f"/Filter/{filter_name}/pass"
+    else:
+        read_path = "/"
 
     # Classify
     for fast5_fname in fast5_fnames:
         with h5py.File(fast5_fname, "r") as f5:
-            if filter:
-                read_h5group_names = f5.get(filter_path)
-                # use filter_name (maybe filter_path instead?)
-            else:
-                read_h5group_names = f5.get("/")
-            for grp in read_h5group_names:
-                signal = raw_signal_utils.get_fractional_blockage_for_read(
-                    f5, grp, start=classify_start, end=classify_end
-                )
-                y, p = predict_class(classifier, signal, classifier_conf, classifier_name)
-                passed_classification = False if p <= classifier_conf else True
-                # This will currently write to within the filtered reads file, is that what we want?
-                write_classifier_result(f5, config, grp, y, p, passed_classification)
+            classify_fast5_file(f5, clf_config, classifier, read_path)
+
+
+def classify_fast5_file(
+    f5, clf_config, classifier, classifier_run_name, read_path, class_labels=None
+):
+    logger = logging.getLogger("classify_fast5_file")
+    logger.debug(f"Beginning classification for file {f5.filename}.")
+    classifier_name = clf_config["classifier"]
+    classify_start = clf_config["start_obs"]  # 100 in NTER paper
+    classify_end = clf_config["end_obs"]  # 2100 in NTER paper
+    classifier_conf = clf_config["min_confidence"]
+
+    assert classify_start >= 0 and classify_end >= 0
+    assert classifier_conf is None or (0 <= classifier_conf and classifier_conf <= 1)
+
+    logger.debug(
+        f"Classification parameters: name: {classifier_name}, "
+        f"range of data points: ({classify_start}, {classify_end})"
+        f"confidence required to pass: {classifier_conf}"
+    )
+
+    results_path = f"/Classification/{classifier_run_name}"
+    write_classifier_details(f5, clf_config, results_path)
+
+    read_h5group_names = f5.get(read_path)
+    for grp in read_h5group_names:
+        if "read" not in grp:
+            continue
+        read_id = re.findall(r"read_(.*)", str(grp))[0]
+        signal = raw_signal_utils.get_fractional_blockage_for_read(
+            f5, grp, start=classify_start, end=classify_end
+        )
+        y, p = predict_class(
+            classifier_name, classifier, signal, class_labels=class_labels
+        )
+        if classifier_conf is not None:
+            passed_classification = False if p <= classifier_conf else True
+        else:
+            passed_classification = None
+        write_classifier_result(f5, results_path, read_id, y, p, passed_classification)
 
 
 def init_classifier(classifier_name, classifier_path):
@@ -164,15 +186,35 @@ def predict_class(classifier_name, classifier, raw, class_labels=None):
         raise NotImplementedError(f"Classifier {classifier_name} not implemented.")
 
 
-def write_classifier_result(f5, config, read_path, pred_class, prob, passed_classification):
-    classifier_run_name = config["classify"]["name for this classification result"]
-    results_path = f"{read_path}/Classification/{classifier_run_name}"
+def write_classifier_details(f5, classifier_config, results_path, classifier_run_name):
+    """Write metadata about the classifier that doesn't need to be repeated for
+    each read.
+
+    Parameters
+    ----------
+    f5 : h5py.File
+        Opened fast5 file.
+    classifier_config : dict
+        Subset of the configuration parameters that belong to the classifier.
+    results_path : [type]
+        Where the classification results will be stored in the f5 file.
+    """
     if results_path not in f5:
         f5.create_group(results_path)
-    f5[results_path].attrs["model"] = config["classify"]["classifier"]
-    f5[results_path].attrs["model_version"] = config["classify"]["classifier version"]
-    f5[results_path].attrs["model_file"] = config["classify"]["classifier_path"]
-    f5[results_path].attrs["classification_threshold"] = config["classify"]["min_confidence"]
+    f5[results_path].attrs["model"] = classifier_config["classifier"]
+    f5[results_path].attrs["model_version"] = classifier_config["classifier version"]
+    f5[results_path].attrs["model_file"] = classifier_config["classifier_path"]
+    f5[results_path].attrs["classification_threshold"] = classifier_config[
+        "min_confidence"
+    ]
+
+
+def write_classifier_result(
+    f5, results_path, read_id, pred_class, prob, passed_classification
+):
+    results_path = f"{results_path}/{read_id}"
+    if results_path not in f5:
+        f5.create_group(results_path)
     f5[results_path].attrs["best_class"] = pred_class
     f5[results_path].attrs["best_score"] = prob
     f5[results_path].attrs["assigned_class"] = prob if passed_classification else -1
