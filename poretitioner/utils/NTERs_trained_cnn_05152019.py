@@ -6,50 +6,57 @@ import torch.nn.functional as F
 
 
 class CNN(nn.Module):
-
-    O_1 = 17
-    O_2 = 18
-    O_3 = 32
-    O_4 = 37
-
-    K_1 = 3
-    K_2 = 1
-    K_3 = 4
-    K_4 = 2
-
-    KP_1 = 4
-    KP_2 = 4
-    KP_3 = 1
-    KP_4 = 1
-
-    reshape = 141
-    conv_linear_out = int(
-        m.floor(
-            (
-                m.floor(
-                    (
-                        m.floor(
-                            (
-                                m.floor((m.floor((reshape - K_1 + 1) / KP_1) - K_2 + 1) / KP_2)
-                                - K_3
-                                + 1
-                            )
-                            / KP_3
-                        )
-                        - K_4
-                        + 1
-                    )
-                    / KP_4
-                )
-                ** 2
-            )
-            * O_4
-        )
-    )
-
-    FN_1 = 148
-
     def __init__(self):
+        self.O_1 = 17
+        self.O_2 = 18
+        self.O_3 = 32
+        self.O_4 = 37
+
+        self.K_1 = 3
+        self.K_2 = 1
+        self.K_3 = 4
+        self.K_4 = 2
+
+        self.KP_1 = 4
+        self.KP_2 = 4
+        self.KP_3 = 1
+        self.KP_4 = 1
+
+        reshape = 141
+
+        self.conv_linear_out = int(
+            m.floor(
+                (
+                    m.floor(
+                        (
+                            m.floor(
+                                (
+                                    m.floor(
+                                        (
+                                            m.floor((reshape - self.K_1 + 1) / self.KP_1)
+                                            - self.K_2
+                                            + 1
+                                        )
+                                        / self.KP_2
+                                    )
+                                    - self.K_3
+                                    + 1
+                                )
+                                / self.KP_3
+                            )
+                            - self.K_4
+                            + 1
+                        )
+                        / self.KP_4
+                    )
+                    ** 2
+                )
+                * self.O_4
+            )
+        )
+
+        self.FN_1 = 148
+
         super(CNN, self).__init__()
 
         self.conv1 = nn.Sequential(
@@ -79,7 +86,9 @@ class CNN(nn.Module):
         return x
 
 
-def load_cnn(path):
+def load_cnn(state_dict_path, device="cpu"):
     cnn = CNN()
-    cnn = torch.load(path)
+    state_dict = torch.load(state_dict_path, map_location=torch.device(device))
+    cnn.load_state_dict(state_dict, strict=True)
+    cnn.eval()
     return cnn

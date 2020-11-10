@@ -14,33 +14,30 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from poretitioner import logging
+import poretitioner.utils.NTERs_trained_cnn_05152019 as pretrained_model
+from poretitioner import logger
+from poretitioner.utils import filter, raw_signal_utils
 
-from . import filter, raw_signal_utils
-from .NTERs_trained_cnn_05152019 import load_cnn
-
-use_cuda = True
+use_cuda = False  # True
 # TODO : Don't hardcode use of CUDA : https://github.com/uwmisl/poretitioner/issues/41
 
 
 def classify_and_store_result(config, fast5_fnames, overwrite=False, filter_name=None):
-    logger = logging.getLogger("classify_and_store_result")
+    local_logger = logger.getLogger()
     clf_config = config["classify"]
     classifier_name = clf_config["classifier"]
     classifier_path = clf_config["classifier_path"]
 
     # Load classifier
-    logger.info(f"Loading classifier {classifier_name}.")
+    local_logger.info(f"Loading classifier {classifier_name}.")
     assert classifier_name in ["NTER_cnn", "NTER_rf"]
     assert classifier_path is not None and len(classifier_path) > 0
     classifier = init_classifier(classifier_name, classifier_path)
 
     # Filter (optional)
     if filter_name is not None:
-        logger.info("Beginning filtering.")
-        filter.filter_and_store_result(
-            config, fast5_fnames, filter_name, overwrite=overwrite
-        )
+        local_logger.info("Beginning filtering.")
+        filter.filter_and_store_result(config, fast5_fnames, filter_name, overwrite=overwrite)
         read_path = f"/Filter/{filter_name}/pass"
     else:
         read_path = "/"
@@ -54,8 +51,8 @@ def classify_and_store_result(config, fast5_fnames, overwrite=False, filter_name
 def classify_fast5_file(
     f5, clf_config, classifier, classifier_run_name, read_path, class_labels=None
 ):
-    logger = logging.getLogger("classify_fast5_file")
-    logger.debug(f"Beginning classification for file {f5.filename}.")
+    local_logger = logger.getLogger()
+    local_logger.debug(f"Beginning classification for file {f5.filename}.")
     classifier_name = clf_config["classifier"]
     classify_start = clf_config["start_obs"]  # 100 in NTER paper
     classify_end = clf_config["end_obs"]  # 2100 in NTER paper
@@ -64,7 +61,7 @@ def classify_fast5_file(
     assert classify_start >= 0 and classify_end >= 0
     assert classifier_conf is None or (0 <= classifier_conf and classifier_conf <= 1)
 
-    logger.debug(
+    local_logger.debug(
         f"Classification parameters: name: {classifier_name}, "
         f"range of data points: ({classify_start}, {classify_end})"
         f"confidence required to pass: {classifier_conf}"
@@ -81,9 +78,7 @@ def classify_fast5_file(
         signal = raw_signal_utils.get_fractional_blockage_for_read(
             f5, grp, start=classify_start, end=classify_end
         )
-        y, p = predict_class(
-            classifier_name, classifier, signal, class_labels=class_labels
-        )
+        y, p = predict_class(classifier_name, classifier, signal, class_labels=class_labels)
         if classifier_conf is not None:
             passed_classification = False if p <= classifier_conf else True
         else:
@@ -120,8 +115,7 @@ def init_classifier(classifier_name, classifier_path):
     if classifier_name == "NTER_cnn":  # CNN classifier
         if not os.path.exists(classifier_path):
             raise OSError(f"Classifier path doesn't exist: {classifier_path}")
-        nanoporeTER_cnn = load_cnn(classifier_path)
-        nanoporeTER_cnn.eval()
+        nanoporeTER_cnn = pretrained_model.load_cnn(classifier_path)
         return nanoporeTER_cnn
     elif classifier_name == "NTER_rf":  # Random forest classifier
         if not os.path.exists(classifier_path):
@@ -161,17 +155,26 @@ def predict_class(classifier_name, classifier, raw, class_labels=None):
         X_test = np.array([raw])
         # 2D --> 3D array (each obs in a capture becomes its own array)
         X_test = X_test.reshape(len(X_test), X_test.shape[1], 1)
+        if X_test.shape[1] < 19881:
+            temp = np.zeros((X_test.shape[0], 19881, 1))
+            temp[:, : X_test.shape[1], :] = X_test
+            X_test = temp
         X_test = X_test[:, :19881]  # First 19881 obs as per NTER paper
         # Break capture into 141x141 (19881 total data points)
         X_test = X_test.reshape(len(X_test), 1, 141, 141)
         X_test = torch.from_numpy(X_test)
-        X_test = X_test.cuda()
+        if use_cuda:
+            X_test = X_test.cuda()
         outputs = classifier(X_test)
         out = nn.functional.softmax(outputs)
         prob, lab = torch.topk(out, 1)
-        lab = lab.cpu().numpy()[0][0]
+        if use_cuda:
+            lab = lab.cpu().numpy()[0][0]
+        else:
+            lab = lab.numpy()[0][0]
         if class_labels is not None:
             lab = class_labels[lab]
+        prob = prob[0][0]
         return lab, prob
     elif classifier_name == "NTER_rf":
         class_proba = classifier.predict_proba(
@@ -204,14 +207,10 @@ def write_classifier_details(f5, classifier_config, results_path, classifier_run
     f5[results_path].attrs["model"] = classifier_config["classifier"]
     f5[results_path].attrs["model_version"] = classifier_config["classifier version"]
     f5[results_path].attrs["model_file"] = classifier_config["classifier_path"]
-    f5[results_path].attrs["classification_threshold"] = classifier_config[
-        "min_confidence"
-    ]
+    f5[results_path].attrs["classification_threshold"] = classifier_config["min_confidence"]
 
 
-def write_classifier_result(
-    f5, results_path, read_id, pred_class, prob, passed_classification
-):
+def write_classifier_result(f5, results_path, read_id, pred_class, prob, passed_classification):
     results_path = f"{results_path}/{read_id}"
     if results_path not in f5:
         f5.create_group(results_path)

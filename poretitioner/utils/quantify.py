@@ -7,13 +7,14 @@ quantify.py
 This module contains functionality for quantifying nanopore captures.
 
 """
-import logging
 import os
 import re
 
 import h5py
 import numpy as np
 import pandas as pd
+
+from poretitioner import logger
 
 from .raw_signal_utils import find_segments_below_threshold
 from .yaml_assistant import YAMLAssistant
@@ -46,18 +47,10 @@ def get_related_files(input_file, raw_file_dir="", capture_file_dir=""):
     Iterable of filenames (strings)
         The raw file (fast5) and capture file (unfiltered).
     """
-    logger = logging.getLogger("get_related_files")
-    if logger.handlers:
-        logger.handlers = []
-    logger.setLevel(logging.INFO)
-    logger.addHandler(logging.StreamHandler())
-
-    logger.debug(input_file)
-    logger.debug(raw_file_dir)
-    logger.debug(capture_file_dir)
+    local_logger = logger.getLogger()
 
     run_name = re.findall(r"(run\d\d_.*)\..*", input_file)[0]  # e.g. "run01_a"
-    logger.debug(run_name)
+    local_logger.debug(run_name)
 
     assert len(raw_file_dir) > 0
     raw_file = [x for x in os.listdir(raw_file_dir) if run_name in x][0]
@@ -74,14 +67,14 @@ def get_related_files(input_file, raw_file_dir="", capture_file_dir=""):
         capture_file = input_file
         filtered_file = "Unspecified"
     else:
-        logger.error("Invalid file name")
+        local_logger.error("Invalid file name")
         return
 
-    logger.info("Filter File: " + filtered_file)
+    local_logger.info("Filter File: " + filtered_file)
     raw_file = os.path.join(raw_file_dir, raw_file)
-    logger.info("Raw File: " + raw_file)
+    local_logger.info("Raw File: " + raw_file)
     capture_file = os.path.join(capture_file_dir, capture_file)
-    logger.info("Capture File: " + capture_file)
+    local_logger.info("Capture File: " + capture_file)
 
     return raw_file, capture_file
 
@@ -158,11 +151,7 @@ def calc_time_until_capture(capture_windows, captures, blockages=None):
         List of all capture times from a single channel.
     """
     # TODO: Implement logger best practices : https://github.com/uwmisl/poretitioner/issues/12
-    logger = logging.getLogger("calc_time_until_capture")
-    if logger.handlers:
-        logger.handlers = []
-    logger.setLevel(logging.INFO)
-    logger.addHandler(logging.StreamHandler())
+    # local_logger = logger.getLogger()
 
     all_capture_times = []
 
@@ -210,11 +199,7 @@ def calc_time_until_capture(capture_windows, captures, blockages=None):
 
 
 def get_time_between_captures(
-    filtered_file,
-    time_interval=None,
-    raw_file_dir="",
-    capture_file_dir="",
-    config_file="",
+    filtered_file, time_interval=None, raw_file_dir="", capture_file_dir="", config_file=""
 ):
     """Get the average time between captures across all channels. Can be
     computed for the specified time interval, or across the entire run if not
@@ -239,11 +224,7 @@ def get_time_between_captures(
         [description]
     """
     # TODO: Implement logger best practices : https://github.com/uwmisl/poretitioner/issues/12
-    logger = logging.getLogger("get_time_between_captures")
-    if logger.handlers:
-        logger.handlers = []
-    logger.setLevel(logging.INFO)
-    logger.addHandler(logging.StreamHandler())
+    local_logger = logger.getLogger("get_time_between_captures")
 
     # TODO : Implement capture fast5 I/O : https://github.com/uwmisl/poretitioner/issues/40
 
@@ -386,7 +367,7 @@ def get_time_between_captures(
             captures_count.append(len(capture_times))
             checkpoint = end_voltage_seg
         else:
-            logger.warn(
+            local_logger.warn(
                 "No open voltage region in time segment ["
                 + str(checkpoint)
                 + ", "
@@ -396,7 +377,7 @@ def get_time_between_captures(
             timepoint_captures.append(-1)
             checkpoint = timepoint
 
-    logger.info("Number of Captures: " + str(captures_count))
+    local_logger.info("Number of Captures: " + str(captures_count))
     return timepoint_captures
 
 
@@ -407,19 +388,10 @@ def get_time_between_captures(
 
 
 def get_capture_freq(
-    filtered_file,
-    time_interval=None,
-    raw_file_dir="",
-    capture_file_dir="",
-    config_file="",
+    filtered_file, time_interval=None, raw_file_dir="", capture_file_dir="", config_file=""
 ):
     # TODO: Implement logger best practices : https://github.com/uwmisl/poretitioner/issues/12
-    logger = logging.getLogger("get_capture_freq")
-    if logger.handlers:
-        logger.handlers = []
-    logger.setLevel(logging.INFO)
-    logger.addHandler(logging.StreamHandler())
-
+    local_logger = logger.getLogger()
     # TODO : Implement capture fast5 I/O : https://github.com/uwmisl/poretitioner/issues/40
 
     # Retrieve raw file and config file names
@@ -440,7 +412,7 @@ def get_capture_freq(
     good_channels = y.get_variable("fast5:good_channels:" + filtered_file[-11:-4])
     for i in range(0, len(good_channels)):
         good_channels[i] = "Channel_" + str(good_channels[i])
-    logger.info("Number of Channels: " + str(len(good_channels)))
+    local_logger.info("Number of Channels: " + str(len(good_channels)))
 
     # Process filtered captures file
     captures = pd.read_csv(filtered_file, index_col=0, header=0, sep="\t")
@@ -494,7 +466,7 @@ def get_capture_freq(
             all_capture_freq.append(np.mean(capture_counts) / (time_segments[0] / 600_000.0))
             checkpoint = end_voltage_seg
         else:
-            logger.warn(
+            local_logger.warn(
                 "No open voltage region in time segment ["
                 + str(checkpoint)
                 + ", "

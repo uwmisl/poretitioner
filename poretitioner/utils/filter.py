@@ -11,7 +11,7 @@ import re
 import h5py
 import numpy as np
 
-from poretitioner import logging
+from poretitioner import logger
 
 from . import raw_signal_utils
 
@@ -44,7 +44,7 @@ def apply_feature_filters(signal, filters):
     boolean
         True if capture passes all filters; False otherwise.
     """
-    logger = logging.getLogger("apply_feature_filters")
+    local_logger = logger.getLogger()
     # TODO: Implement logger best practices : https://github.com/uwmisl/poretitioner/issues/12
     supported_filters = {
         "mean": np.mean,
@@ -66,7 +66,7 @@ def apply_feature_filters(signal, filters):
         elif filt in other_filters:
             continue
         else:
-            logger.warning(f"Filter {filt} not supported; ignoring.")
+            local_logger.warning(f"Filter {filt} not supported; ignoring.")
     return pass_filters
 
 
@@ -167,6 +167,7 @@ def filter_and_store_result(config, fast5_files, filter_name, overwrite=False):
 
 
 def write_filter_results(f5, config, read_ids, filter_name):
+    local_logger = logger.getLogger()
     filter_path = f"/Filter/{filter_name}"
     if filter_path not in f5:
         f5.create_group(f"{filter_path}/pass")
@@ -175,12 +176,12 @@ def write_filter_results(f5, config, read_ids, filter_name):
     # Save filter configuration to the fast5 file at filter_path
     for k, v in config.items():
         if k == filter_name:
-            print("keys and vals:", k, v)
+            local_logger.debug("keys and vals:", k, v)
             for filt, filt_vals in v.items():
                 if len(filt_vals) == 2:
                     (min_filt, max_filt) = filt_vals
                     # Create compound dset for filters
-                    print("filt types", type(min_filt), type(max_filt))
+                    local_logger.debug("filt types", type(min_filt), type(max_filt))
                     dtypes = np.dtype([("min", type(min_filt), ("max", type(max_filt)))])
                     d = filt_grp.create_dataset(k, (2,), dtype=dtypes)
                     d[filt] = (min_filt, max_filt)
@@ -194,7 +195,7 @@ def write_filter_results(f5, config, read_ids, filter_name):
     for read_id in read_ids:
         read_path = f"/read_{read_id}"
         read_grp = f5.get(read_path)
-        print(read_grp)
+        local_logger.debug(read_grp)
         filter_read_path = f"{filter_path}/pass/read_{read_id}"
         # Create a hard link from the filter read path to the actual read path
         f5[filter_read_path] = read_grp

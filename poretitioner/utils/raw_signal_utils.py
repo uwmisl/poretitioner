@@ -94,11 +94,7 @@ def get_fractional_blockage(
 
 
 def get_local_fractional_blockage(
-    f5,
-    open_channel_guess=220,
-    open_channel_bound=15,
-    channel=None,
-    local_window_sz=1000,
+    f5, open_channel_guess=220, open_channel_bound=15, channel=None, local_window_sz=1000
 ):
     """Retrieve the scaled raw signal for the channel, compute the open pore
     current, and return the fractional blockage for that channel."""
@@ -258,7 +254,6 @@ def get_scale_metadata_for_read(f5, read_id):
         channel_path = f"{read_id}/channel_id"
     else:
         channel_path = f"read_{read_id}/channel_id"
-    print("channel_path", channel_path)
     attrs = f5.get(channel_path).attrs
     offset = attrs.get("offset")
     rng = attrs.get("range")

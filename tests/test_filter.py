@@ -119,16 +119,12 @@ def apply_filters_to_read_test():
     standard_filter = {
         "mean": (0.05, 0.9),
         "min": (0.001, 0.9),
-        "length": (None, 100000),
+        "length": (None, 100_000),
         "median": (0.05, 0.9),
         "stdv": (0.01, 0.5),
         "ejected": False,
     }
-    config = {
-        "filters": {
-            "standard filter": standard_filter,
-        }
-    }
+    config = {"filters": {"standard filter": standard_filter}}
     pass_reads = [
         "697de4c1-1aef-41b9-ae0d-d676e983cb7e",
         "8e8181d2-d749-4735-9cab-37648b463f88",
@@ -164,7 +160,7 @@ def filter_and_store_result_test():
     standard_filter = {
         "mean": (0.05, 0.9),
         "min": (0.001, 0.9),
-        "length": (None, 100000),
+        "length": (None, 100_000),
         "median": (0.05, 0.9),
         "stdv": (0.01, None),
         "ejected": False,
@@ -209,10 +205,7 @@ def write_filter_results_test():
             "end_tol": 0,
             "terminal_capture_only": False,
         },
-        "filters": {
-            "base filter": {"length": (100, None)},
-            "test filter": {"min": (100, None)},
-        },
+        "filters": {"base filter": {"length": (100, None)}, "test filter": {"min": (100, None)}},
         "output": {"capture_f5_dir": "tests/", "captures_per_f5": 1000},
     }
 
