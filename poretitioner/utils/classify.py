@@ -83,7 +83,6 @@ def classify_fast5_file(
             passed_classification = False if p <= classifier_conf else True
         else:
             passed_classification = None
-        print(f"read_id: {read_id}\tp: {p} {type(p)}")
         write_classifier_result(f5, results_path, read_id, y, p, passed_classification)
 
 

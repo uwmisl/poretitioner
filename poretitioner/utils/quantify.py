@@ -199,7 +199,11 @@ def calc_time_until_capture(capture_windows, captures, blockages=None):
 
 
 def get_time_between_captures(
-    filtered_file, time_interval=None, raw_file_dir="", capture_file_dir="", config_file=""
+    filtered_file,
+    time_interval=None,
+    raw_file_dir="",
+    capture_file_dir="",
+    config_file="",
 ):
     """Get the average time between captures across all channels. Can be
     computed for the specified time interval, or across the entire run if not
@@ -388,7 +392,11 @@ def get_time_between_captures(
 
 
 def get_capture_freq(
-    filtered_file, time_interval=None, raw_file_dir="", capture_file_dir="", config_file=""
+    filtered_file,
+    time_interval=None,
+    raw_file_dir="",
+    capture_file_dir="",
+    config_file="",
 ):
     # TODO: Implement logger best practices : https://github.com/uwmisl/poretitioner/issues/12
     local_logger = logger.getLogger()

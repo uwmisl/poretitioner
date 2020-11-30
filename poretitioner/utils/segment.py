@@ -95,7 +95,6 @@ def find_captures(
         annotated_captures.append((capture[0], capture[1], ejected))
     captures = annotated_captures[:]
     # If terminal_capture_only, reduce list of captures to only last
-    print(captures[-1])
     if terminal_capture_only:
         if len(captures) > 1 and captures[-1][2]:
             captures = [captures[-1]]
@@ -248,7 +247,7 @@ def create_capture_fast5(
             # config = {"param": "value",
             #           "filters": {"f1": (min, max), "f2: (min, max)"}}
             g = capture_f5.create_group("/Meta/Segmentation")
-            print(__name__)
+            # print(__name__)
             g.attrs.create("segmenter", __name__, dtype=f"S{len(__name__)}")
             g.attrs.create("segmenter_version", __version__, dtype=f"S{len(__version__)}")
             g_filt = capture_f5.create_group("/Meta/Segmentation/filters")
@@ -320,7 +319,10 @@ def _prep_capture_windows(
         signal_metadata = []  # Metadata -- no need to pass through the segmenter
         for channel_no in good_channels:
             raw = raw_signal_utils.get_scaled_raw_for_channel(
-                bulk_f5, channel_no=channel_no, start=f5_subsection_start, end=f5_subsection_end
+                bulk_f5,
+                channel_no=channel_no,
+                start=f5_subsection_start,
+                end=f5_subsection_end,
             )
             offset, rng, digi = raw_signal_utils.get_scale_metadata(bulk_f5, channel_no)
             for capture_window in capture_windows:

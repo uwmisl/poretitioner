@@ -134,8 +134,8 @@ def apply_filters_to_read(config, f5, read_id, filter_name):
 
     # Apply all the filters
     signal = raw_signal_utils.get_fractional_blockage_for_read(f5, read_id)
-    print(config["filters"][filter_name])
-    print(f"min = {np.min(signal)}")
+    # print(config["filters"][filter_name])
+    # print(f"min = {np.min(signal)}")
     passed_filters = apply_feature_filters(signal, config["filters"][filter_name])
     return passed_filters
 

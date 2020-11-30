@@ -94,15 +94,18 @@ def get_fractional_blockage(
 
 
 def get_local_fractional_blockage(
-    f5, open_channel_guess=220, open_channel_bound=15, channel=None, local_window_sz=1000
+    f5,
+    open_channel_guess=220,
+    open_channel_bound=15,
+    channel=None,
+    local_window_sz=1000,
 ):
     """Retrieve the scaled raw signal for the channel, compute the open pore
     current, and return the fractional blockage for that channel."""
     signal = get_scaled_raw_for_channel(f5, channel=channel)
     open_channel = find_open_channel_current(signal, open_channel_guess, bound=open_channel_bound)
     if open_channel is None:
-        print("open pore is None")
-
+        # print("open pore is None")
         return None
 
     frac = np.zeros(len(signal))
