@@ -238,9 +238,9 @@ def classify_fast5_file_unfiltered_test():
                 actual_prob = correct_results[read_id]["prob"]
                 t = clf_config["min_confidence"]
 
-                print(
-                    f"read_id: {read_id}\tactual_label: {actual_label}\tpred_label: {pred_label}"
-                )
+                # print(
+                #     f"read_id: {read_id}\tactual_label: {actual_label}\tpred_label: {pred_label}"
+                # )
 
                 assert actual_label == pred_label
                 assert abs(actual_prob - pred_prob) < 0.02
@@ -313,9 +313,9 @@ def classify_fast5_file_filtered_test():
                 actual_prob = correct_results[read_id]["prob"]
                 t = clf_config["min_confidence"]
 
-                print(
-                    f"read_id: {read_id}\tactual_label: {actual_label}\tpred_label: {pred_label}"
-                )
+                # print(
+                #     f"read_id: {read_id}\tactual_label: {actual_label}\tpred_label: {pred_label}"
+                # )
 
                 assert actual_label == pred_label
                 assert abs(actual_prob - pred_prob) < 0.02
@@ -390,9 +390,9 @@ def filter_and_classify_test():
                 actual_prob = correct_results[read_id]["prob"]
                 t = config["classify"]["min_confidence"]
 
-                print(
-                    f"read_id: {read_id}\tactual_label: {actual_label}\tpred_label: {pred_label}"
-                )
+                # print(
+                #     f"read_id: {read_id}\tactual_label: {actual_label}\tpred_label: {pred_label}"
+                # )
 
                 assert actual_label == pred_label
                 assert abs(actual_prob - pred_prob) < 0.02

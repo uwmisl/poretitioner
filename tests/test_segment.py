@@ -464,7 +464,7 @@ def parallel_find_captures_test(tmpdir):
             assert start_time_local == start_time_bulk  # No offset here
 
             duration = a.get("duration")
-            print(d["Signal"])
+            # print(d["Signal"])
             len_signal = len(d["Signal"][()])
             assert len_signal == duration
 
