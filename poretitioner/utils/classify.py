@@ -166,7 +166,7 @@ def predict_class(classifier_name, classifier, raw, class_labels=None):
         if use_cuda:
             X_test = X_test.cuda()
         outputs = classifier(X_test)
-        out = nn.functional.softmax(outputs)
+        out = nn.functional.softmax(outputs, dim=1)
         prob, lab = torch.topk(out, 1)
         if use_cuda:
             lab = lab.cpu().numpy()[0][0]
