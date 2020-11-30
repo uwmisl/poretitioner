@@ -44,8 +44,8 @@ def filter_and_classify(config, fast5_fnames, overwrite=False, filter_name=None)
 
     # Classify
     for fast5_fname in fast5_fnames:
-        with h5py.File(fast5_fname, "r") as f5:
-            classify_fast5_file(f5, clf_config, classifier, read_path)
+        with h5py.File(fast5_fname, "r+") as f5:
+            classify_fast5_file(f5, clf_config, classifier, classifier_name, read_path)
 
 
 def classify_fast5_file(
