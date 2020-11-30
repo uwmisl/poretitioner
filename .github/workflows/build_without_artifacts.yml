@@ -24,6 +24,8 @@ jobs:
 
     - name: Install Nix
       uses: cachix/install-nix-action@v12
+      with:
+        nix_path: nixpkgs=channel:nixos-20.09 
     # Runs a set of commands using the runners shell
     - name: Build application
       shell: bash
