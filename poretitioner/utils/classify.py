@@ -22,7 +22,7 @@ use_cuda = False  # True
 # TODO : Don't hardcode use of CUDA : https://github.com/uwmisl/poretitioner/issues/41
 
 
-def classify_and_store_result(config, fast5_fnames, overwrite=False, filter_name=None):
+def filter_and_classify(config, fast5_fnames, overwrite=False, filter_name=None):
     local_logger = logger.getLogger()
     clf_config = config["classify"]
     classifier_name = clf_config["classifier"]
@@ -55,7 +55,7 @@ def classify_fast5_file(
     local_logger.debug(f"Beginning classification for file {f5.filename}.")
     classifier_name = clf_config["classifier"]
     classify_start = clf_config["start_obs"]  # 100 in NTER paper
-    classify_end = clf_config["end_obs"]  # 2100 in NTER paper
+    classify_end = clf_config["end_obs"]  # 21000 in NTER paper
     classifier_conf = clf_config["min_confidence"]
 
     assert classify_start >= 0 and classify_end >= 0
@@ -83,6 +83,7 @@ def classify_fast5_file(
             passed_classification = False if p <= classifier_conf else True
         else:
             passed_classification = None
+        print(f"read_id: {read_id}\tp: {p} {type(p)}")
         write_classifier_result(f5, results_path, read_id, y, p, passed_classification)
 
 
@@ -174,7 +175,7 @@ def predict_class(classifier_name, classifier, raw, class_labels=None):
             lab = lab.numpy()[0][0]
         if class_labels is not None:
             lab = class_labels[lab]
-        prob = prob[0][0]
+        prob = prob[0][0].data
         return lab, prob
     elif classifier_name == "NTER_rf":
         class_proba = classifier.predict_proba(
@@ -189,23 +190,39 @@ def predict_class(classifier_name, classifier, raw, class_labels=None):
         raise NotImplementedError(f"Classifier {classifier_name} not implemented.")
 
 
-def write_classifier_details(f5, classifier_config, results_path, classifier_run_name):
+def get_classification_for_read(f5, read_id, results_path):
+    results_path = f"{results_path}/{read_id}"
+    try:
+        assert results_path in f5
+    except AssertionError:
+        raise ValueError(
+            f"Read {read_id} has not been classified yet, or result"
+            f"is not stored at {results_path} in file {f5.filename}."
+        )
+    pred_class = f5[results_path].attrs["best_class"]
+    prob = f5[results_path].attrs["best_score"]
+    assigned_class = f5[results_path].attrs["assigned_class"]
+    passed_classification = True if assigned_class == pred_class else False
+    return pred_class, prob, assigned_class, passed_classification
+
+
+def write_classifier_details(f5, classifier_config, results_path):
     """Write metadata about the classifier that doesn't need to be repeated for
     each read.
 
     Parameters
     ----------
     f5 : h5py.File
-        Opened fast5 file.
+        Opened fast5 file in a writable mode.
     classifier_config : dict
         Subset of the configuration parameters that belong to the classifier.
-    results_path : [type]
+    results_path : str
         Where the classification results will be stored in the f5 file.
     """
     if results_path not in f5:
         f5.create_group(results_path)
     f5[results_path].attrs["model"] = classifier_config["classifier"]
-    f5[results_path].attrs["model_version"] = classifier_config["classifier version"]
+    f5[results_path].attrs["model_version"] = classifier_config["classifier_version"]
     f5[results_path].attrs["model_file"] = classifier_config["classifier_path"]
     f5[results_path].attrs["classification_threshold"] = classifier_config["min_confidence"]
 
@@ -216,4 +233,4 @@ def write_classifier_result(f5, results_path, read_id, pred_class, prob, passed_
         f5.create_group(results_path)
     f5[results_path].attrs["best_class"] = pred_class
     f5[results_path].attrs["best_score"] = prob
-    f5[results_path].attrs["assigned_class"] = prob if passed_classification else -1
+    f5[results_path].attrs["assigned_class"] = pred_class if passed_classification else -1
