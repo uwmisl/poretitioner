@@ -85,7 +85,7 @@ in with python.pkgs; rec {
     # Test runner
     pytestrunner
     # Test code coverage generator
-    pytest-cov
+    pytestcov
   ];
 
   ###########################################################################################

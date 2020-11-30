@@ -18,7 +18,7 @@ repos:
     hooks:
     -   id: isort
         name: Sort imports
-        always_run: true
+        always_run: false
         args: [--multi-line=3, --trailing-comma, --force-grid-wrap=0, --use-parentheses, --line-width=99]
 
     #####################################
