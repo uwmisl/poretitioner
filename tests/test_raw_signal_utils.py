@@ -7,6 +7,7 @@ This module contains tests for raw_signal_utils.py functionality.
 
 """
 import h5py
+
 import poretitioner.utils.raw_signal_utils as raw_signal_utils
 
 
@@ -31,8 +32,7 @@ def get_voltage_segment_test():
 
 
 def unscale_raw_current_test():
-    """Test ability to convert back & forth between digital data & pA.
-    """
+    """Test ability to convert back & forth between digital data & pA."""
     bulk_f5_fname = "tests/data/bulk_fast5_dummy.fast5"
     channel_no = 1
     with h5py.File(bulk_f5_fname, "r") as f5:

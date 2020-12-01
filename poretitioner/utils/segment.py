@@ -7,7 +7,6 @@ This module contains functionality for segmenting nanopore captures from
 bulk fast5s.
 
 """
-import logging
 import os
 import uuid
 
@@ -15,9 +14,11 @@ import dask.bag as db
 import h5py
 import numpy as np
 from dask.diagnostics import ProgressBar
+
+from poretitioner import logger
 from poretitioner.application_info import get_application_info
 
-from . import raw_signal_utils
+from . import filter, raw_signal_utils
 
 ProgressBar().register()
 
@@ -25,60 +26,6 @@ app_info = get_application_info()
 
 __version__ = app_info.version
 __name__ = app_info.name
-
-
-def apply_capture_filters(capture, filters):
-    """
-    Check whether a single nanopore capture passes a set of filters. Filters
-    are based on summary statistics (e.g., mean) and a range of allowed values.
-
-    Notes on filter behavior: If the filters dict is empty, there are no filters
-    and the capture passes. Filters are inclusive of high and low values. Only
-    supported filters are allowed. (mean, stdv, median, min, max, length)
-
-    More complex filtering should be done with a custom function.
-
-    TODO : Move filtering to its own module : (somewhat related: https://github.com/uwmisl/poretitioner/issues/43)
-
-    Parameters
-    ----------
-    capture : array or list
-        Time series of nanopore current values for a single capture.
-    filters : dict
-        Keys are strings matching the supported filters, values are a tuple
-        giving the endpoints of the valid range. E.g. {"mean": (0.1, 0.5)}
-        defines a filter such that 0.1 <= mean(capture) <= 0.5.
-
-    Returns
-    -------
-    boolean
-        True if capture passes all filters; False otherwise.
-    """
-    logger = logging.getLogger("apply_capture_filters")
-    # TODO: Implement logger best practices : https://github.com/uwmisl/poretitioner/issues/12
-    if logger.handlers:
-        logger.handlers = []
-    logger.setLevel(logging.INFO)
-    logger.addHandler(logging.StreamHandler())
-    supported_filters = {
-        "mean": np.mean,
-        "stdv": np.std,
-        "median": np.median,
-        "min": np.min,
-        "max": np.max,
-        "length": len,
-    }
-    pass_filters = True
-    for filt, (low, high) in filters.items():
-        if filt in supported_filters:
-            val = supported_filters[filt](capture)
-            if (low is not None and low > val) or (high is not None and val > high):
-                pass_filters = False
-                return pass_filters
-        else:
-            # Warn filter not supported
-            logger.warning(f"Filter {filt} not supported; ignoring.")
-    return pass_filters
 
 
 def find_captures(
@@ -142,25 +89,30 @@ def find_captures(
     del signal_pA
     # Apply signal threshold & get list of captures
     captures = raw_signal_utils.find_segments_below_threshold(frac_current, signal_threshold_frac)
-    # If last_capture_only, reduce list of captures to only last
-    if terminal_capture_only and len(captures) > 1:
-        if np.abs(captures[-1][1] - len(frac_current)) <= end_tol:
+    annotated_captures = []
+    for capture in captures:
+        ejected = np.abs(capture[1] - len(frac_current)) <= end_tol
+        annotated_captures.append((capture[0], capture[1], ejected))
+    captures = annotated_captures[:]
+    # If terminal_capture_only, reduce list of captures to only last
+    if terminal_capture_only:
+        if len(captures) > 1 and captures[-1][2]:
             captures = [captures[-1]]
         else:
             captures = []
 
     if delay > 0:
         for i, capture in enumerate(captures):
-            capture_start, capture_end = capture
+            capture_start, capture_end, ejected = capture
             if capture_end - capture_start > delay:
                 capture_start += delay
-                captures[i] = (capture_start, capture_end)
+                captures[i] = (capture_start, capture_end, capture[2])
 
     # Apply filters to remaining capture(s)
     filtered_captures = []
     for capture in captures:
-        capture_start, capture_end = capture
-        if apply_capture_filters(frac_current[capture_start:capture_end], filters):
+        capture_start, capture_end, ejected = capture
+        if filter.apply_feature_filters(frac_current[capture_start:capture_end], filters):
             filtered_captures.append(capture)
     # Return list of captures
     return filtered_captures, open_channel_pA
@@ -295,17 +247,17 @@ def create_capture_fast5(
             # config = {"param": "value",
             #           "filters": {"f1": (min, max), "f2: (min, max)"}}
             g = capture_f5.create_group("/Meta/Segmentation")
-            print(__name__)
+            # print(__name__)
             g.attrs.create("segmenter", __name__, dtype=f"S{len(__name__)}")
             g.attrs.create("segmenter_version", __version__, dtype=f"S{len(__version__)}")
             g_filt = capture_f5.create_group("/Meta/Segmentation/filters")
             for k, v in config.items():
-                if k == "filters":
+                if k == "base filter":
                     for filt, (min_filt, max_filt) in v.items():
                         # Create compound dset for filters
                         dtypes = np.dtype([("min", type(min_filt), ("max", type(max_filt)))])
                         d = g_filt.create_dataset(k, (2,), dtype=dtypes)
-                        d[...] = (min_filt, max_filt)
+                        d[filt] = (min_filt, max_filt)
                 else:
                     g.create(k, v)
 
@@ -346,38 +298,36 @@ def _prep_capture_windows(
         about these segments (channel number, window endpoints, offset, range,
         digitisation).
     """
-    logger = logging.getLogger("_prep_capture_windows")
-    if logger.handlers:
-        logger.handlers = []
-    logger.setLevel(logging.DEBUG)
-    logger.addHandler(logging.StreamHandler())
+    local_logger = logger.getLogger()
     with h5py.File(bulk_f5_fname, "r") as bulk_f5:
-        logger.info(f"Reading in signals for bulk file: {bulk_f5_fname}")
+        local_logger.info(f"Reading in signals for bulk file: {bulk_f5_fname}")
         voltage = raw_signal_utils.get_voltage(
             bulk_f5, start=f5_subsection_start, end=f5_subsection_end
         )
-        logger.debug(f"voltage: {voltage}")
+        local_logger.debug(f"voltage: {voltage}")
         run_id = str(bulk_f5["/UniqueGlobalKey/tracking_id"].attrs.get("run_id"))[2:-1]
         sampling_rate = int(bulk_f5["/UniqueGlobalKey/context_tags"].attrs.get("sample_frequency"))
 
-        logger.info("Identifying capture windows (via voltage threshold).")
+        local_logger.info("Identifying capture windows (via voltage threshold).")
         capture_windows = raw_signal_utils.find_segments_below_threshold(voltage, voltage_t)
-        logger.debug(
+        local_logger.debug(
             f"run_id: {run_id}, sampling_rate: {sampling_rate}, "
             f"#/capture windows: {len(capture_windows)}"
         )
-        logger.debug("Prepping raw signals for parallel processing.")
+        local_logger.debug("Prepping raw signals for parallel processing.")
         raw_signals = []  # Input data to find_captures_dask_wrapper
         signal_metadata = []  # Metadata -- no need to pass through the segmenter
         for channel_no in good_channels:
             raw = raw_signal_utils.get_scaled_raw_for_channel(
-                bulk_f5, channel_no=channel_no, start=f5_subsection_start, end=f5_subsection_end
+                bulk_f5,
+                channel_no=channel_no,
+                start=f5_subsection_start,
+                end=f5_subsection_end,
             )
             offset, rng, digi = raw_signal_utils.get_scale_metadata(bulk_f5, channel_no)
             for capture_window in capture_windows:
-                raw_signals.append(
-                    (raw[capture_window[0] : capture_window[1]], signal_t, open_channel_prior_mean)
-                )
+                start, end = capture_window[0], capture_window[1]
+                raw_signals.append((raw[start:end], signal_t, open_channel_prior_mean))
                 signal_metadata.append([channel_no, capture_window, offset, rng, digi])
     return raw_signals, signal_metadata, run_id, sampling_rate
 
@@ -417,11 +367,7 @@ def parallel_find_captures(
         the config, raise IOError.
     """
 
-    logger = logging.getLogger("parallel_find_captures")
-    if logger.handlers:
-        logger.handlers = []
-    logger.setLevel(logging.DEBUG)
-    logger.addHandler(logging.StreamHandler())
+    local_logger = logger.getLogger()
 
     n_workers = config["compute"]["n_workers"]
     assert type(n_workers) is int
@@ -432,10 +378,10 @@ def parallel_find_captures(
     good_channels = config["segment"]["good_channels"]
     end_tol = config["segment"]["end_tol"]
     terminal_capture_only = config["segment"]["terminal_capture_only"]
-    filters = config["filters"]
+    filters = config["filters"]["base filter"]
     save_location = config["output"][
         "capture_f5_dir"
-    ]  # TODO : Verify exists; don't create (handle earlier)
+    ]  # TODO: Verify exists; don't create (handle earlier)
     n_per_file = config["output"]["captures_per_f5"]
     if f5_subsection_start is None:
         f5_subsection_start = 0
@@ -453,7 +399,7 @@ def parallel_find_captures(
         open_channel_prior_mean,
     )
 
-    logger.debug("Loading up the bag with signals.")
+    local_logger.debug("Loading up the bag with signals.")
     bag = db.from_sequence(raw_signals, npartitions=64)
     capture_map = bag.map(
         find_captures_dask_wrapper,
@@ -462,10 +408,10 @@ def parallel_find_captures(
         delay=delay,
         end_tol=end_tol,
     )
-    logger.info("Beginning segmentation.")
+    local_logger.info("Beginning segmentation.")
     captures = capture_map.compute(num_workers=n_workers)
     assert len(captures) == len(context)
-    logger.debug(f"Captures (1st 10): {captures[:10]}")
+    local_logger.debug(f"Captures (1st 10): {captures[:10]}")
 
     # Write captures to fast5
     n_in_file = 0
@@ -487,14 +433,16 @@ def parallel_find_captures(
                 start_time_local + f5_subsection_start
             )  # relative to the start of the entire bulk f5
             capture_duration = capture[1] - capture[0]
-            logger.debug(f"Capture duration: {capture_duration}")
+            ejected = capture[2]
+            local_logger.debug(f"Capture duration: {capture_duration}")
             if n_in_file >= n_per_file:
                 n_in_file = 0
                 file_no += 1
                 capture_f5_fname = os.path.join(save_location, f"{run_id}_{file_no}.fast5")
             n_in_file += 1
-            raw_pA = window_raw[capture[0] : capture[1]]
-            logger.debug(f"Length of raw signal : {len(raw_pA)}")
+            start, end = capture[0], capture[1]
+            raw_pA = window_raw[start:end]
+            local_logger.debug(f"Length of raw signal : {len(raw_pA)}")
             write_capture_to_fast5(
                 capture_f5_fname,
                 read_id,
@@ -502,6 +450,7 @@ def parallel_find_captures(
                 start_time_bulk,
                 start_time_local,
                 capture_duration,
+                ejected,
                 voltage_t,
                 open_channel_pA,
                 channel_no,
@@ -517,6 +466,7 @@ def parallel_find_captures(
                     start_time_bulk,
                     start_time_local,
                     capture_duration,
+                    ejected,
                     voltage_t,
                     open_channel_pA,
                     channel_no,
@@ -533,6 +483,7 @@ def write_capture_to_fast5(
     start_time_bulk,
     start_time_local,
     duration,
+    ejected,
     voltage,
     open_channel_pA,
     channel_no,
@@ -560,6 +511,8 @@ def write_capture_to_fast5(
         region. (Relative to f5_subsection_start in parallel_find_captures().)
     duration : int
         Number of data points in the capture.
+    ejected : boolean
+        Whether or not the capture was ejected from the pore.
     voltage : int
         Voltage at which the capture occurs (single value for entire window).
     open_channel_pA : float
@@ -586,6 +539,7 @@ def write_capture_to_fast5(
         f5[signal_path].attrs["start_time_bulk"] = start_time_bulk
         f5[signal_path].attrs["start_time_local"] = start_time_local
         f5[signal_path].attrs["duration"] = duration
+        f5[signal_path].attrs["ejected"] = ejected
         f5[signal_path].attrs["voltage"] = voltage
         f5[signal_path].attrs["open_channel_pA"] = open_channel_pA
 

@@ -10,8 +10,9 @@ import os
 
 import h5py
 import numpy as np
-import poretitioner.utils.segment as segment
 import pytest
+
+import poretitioner.utils.segment as segment
 
 
 def create_capture_fast5_test():
@@ -64,8 +65,7 @@ def create_capture_fast5_overwrite_test():
 
 
 def create_capture_fast5_bulk_exists_test():
-    """Test error thrown when bulk fast5 does not exist.
-    """
+    """Test error thrown when bulk fast5 does not exist."""
     bulk_f5_fname = "tests/data/bulk_fast5_dummy_fake.fast5"
     capture_f5_fname = "tests/data/capture_fast5_dummy_bulkdemo.fast5"
     config = {}
@@ -76,8 +76,7 @@ def create_capture_fast5_bulk_exists_test():
 
 
 def create_capture_fast5_capture_path_missing_test():
-    """Test error thrown when bulk fast5 does not exist.
-    """
+    """Test error thrown when bulk fast5 does not exist."""
     bulk_f5_fname = "tests/data/bulk_fast5_dummy_fake.fast5"
     capture_f5_fname = "tests/DNE/capture_fast5_dummy_bulkdemo.fast5"
     config = {}
@@ -114,74 +113,10 @@ def create_capture_fast5_subrun_test():
     os.remove(capture_f5_fname)
 
 
-def apply_capture_filters_empty_test():
-    """Check for pass when no valid filters are provided."""
-    # capture -- mean: 1; stdv: 0; median: 1; min: 1; max: 1; len: 6
-    capture = [1, 1, 1, 1, 1, 1]
-    filters = {}
-    # No filter given -- pass
-    pass_filters = segment.apply_capture_filters(capture, filters)
-    filters = {"not_a_filter": (0, 1)}
-    # No *valid* filter given -- pass
-    pass_filters = segment.apply_capture_filters(capture, filters)
-    assert pass_filters
-
-
-def apply_capture_filters_length_test():
-    """Test length filter function."""
-    # capture -- mean: 1; stdv: 0; median: 1; min: 1; max: 1; len: 6
-    capture = [1, 1, 1, 1, 1, 1]
-
-    # Only length filter -- pass (edge case, inclusive high)
-    filters = {"length": (0, 6)}
-    pass_filters = segment.apply_capture_filters(capture, filters)
-    assert pass_filters
-
-    # Only length filter -- pass (edge case, inclusive low)
-    filters = {"length": (6, 10)}
-    pass_filters = segment.apply_capture_filters(capture, filters)
-    assert pass_filters
-
-    # Only length filter -- fail (too short)
-    filters = {"length": (8, 10)}
-    pass_filters = segment.apply_capture_filters(capture, filters)
-    assert not pass_filters
-
-    # Only length filter -- fail (too long)
-    filters = {"length": (0, 5)}
-    pass_filters = segment.apply_capture_filters(capture, filters)
-    assert not pass_filters
-
-    # Only length filter -- pass (no filter actually given)
-    filters = {"length": (None, None)}
-    pass_filters = segment.apply_capture_filters(capture, filters)
-    assert pass_filters
-
-
-def apply_capture_filters_mean_test():
-    """Test mean filter function. stdv, median, min, and max apply similarly."""
-    # capture -- mean: 0.5; stdv: 0.07; median: 0.5; min: 0.4; max: 0.6; len: 5
-    capture = [0.5, 0.5, 0.6, 0.4, 0.5]
-    # Only mean filter -- pass
-    filters = {"mean": (0, 1)}
-    pass_filters = segment.apply_capture_filters(capture, filters)
-    assert pass_filters
-
-    # Only mean filter -- fail (too high)
-    filters = {"mean": (0, 0.4)}
-    pass_filters = segment.apply_capture_filters(capture, filters)
-    assert not pass_filters
-
-    # Only mean filter -- fail (too low)
-    filters = {"mean": (0.6, 1)}
-    pass_filters = segment.apply_capture_filters(capture, filters)
-    assert not pass_filters
-
-
 def find_captures_0_single_capture_test():
     data_file = "tests/data/capture_windows/test_data_capture_window_0.txt.gz"
     data = np.loadtxt(data_file, delimiter="\t", comments="#")
-    actual_captures = [(33822, 92691)]
+    actual_captures = [(33822, 92691, True)]
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = False
@@ -205,7 +140,7 @@ def find_captures_0_single_capture_test():
 def find_captures_0_single_capture_terminal_test():
     data_file = "tests/data/capture_windows/test_data_capture_window_0.txt.gz"
     data = np.loadtxt(data_file, delimiter="\t", comments="#")
-    actual_captures = [(33822, 92691)]
+    actual_captures = [(33822, 92691, True)]
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = True
@@ -492,7 +427,7 @@ def find_captures_8_capture_no_open_channel_test():
         end_tol=end_tol,
     )
     assert len(captures) == 2
-    actual_captures = [(11310, 22098), (26617, 94048)]
+    actual_captures = [(11310, 22098, False), (26617, 94048, True)]
     for test_capture in captures:
         assert test_capture in actual_captures
 
@@ -511,7 +446,7 @@ def parallel_find_captures_test(tmpdir):
             "end_tol": 0,
             "terminal_capture_only": False,
         },
-        "filters": {"length": (100, None)},
+        "filters": {"base filter": {"length": (100, None)}},
         "output": {"capture_f5_dir": "tests/", "captures_per_f5": 1000},
     }
     segment.parallel_find_captures(bulk_f5_fname, config)
@@ -529,7 +464,7 @@ def parallel_find_captures_test(tmpdir):
             assert start_time_local == start_time_bulk  # No offset here
 
             duration = a.get("duration")
-            print(d["Signal"])
+            # print(d["Signal"])
             len_signal = len(d["Signal"][()])
             assert len_signal == duration
 
@@ -551,6 +486,7 @@ def write_capture_to_fast5_test(tmpdir):
     duration = 8000
     voltage = -180
     open_channel_pA = 229.1
+    ejected = True
     channel_no = 3
     offset, rng, digi = -21.0, 3013.53, 8192.0
     sampling_rate = 10000
@@ -561,6 +497,7 @@ def write_capture_to_fast5_test(tmpdir):
         start_time_bulk,
         start_time_local,
         duration,
+        ejected,
         voltage,
         open_channel_pA,
         channel_no,
