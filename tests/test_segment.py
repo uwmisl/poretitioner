@@ -432,7 +432,7 @@ def find_captures_8_capture_no_open_channel_test():
         assert test_capture in actual_captures
 
 
-def parallel_find_captures_test(tmpdir):
+def parallel_find_captures_test():
     bulk_f5_fname = "tests/data/bulk_fast5_dummy.fast5"
     config = {
         "compute": {"n_workers": 4},
@@ -456,6 +456,8 @@ def parallel_find_captures_test(tmpdir):
     capture_f5_fname = f"tests/{run_id}_1.fast5"
     with h5py.File(capture_f5_fname, "r") as f5:
         for grp in f5.get("/"):
+            if "read" not in grp:
+                continue
             n_captures += 1
             d = f5[grp]
             a = d["Signal"].attrs
@@ -472,6 +474,52 @@ def parallel_find_captures_test(tmpdir):
             assert voltage == config["segment"]["voltage_threshold"]
 
     assert n_captures == actual_n_captures
+    os.remove(capture_f5_fname)
+
+
+def sort_capture_windows_by_channel_test():
+    signal_metadata = np.array(
+        [
+            # channel_no, capture_window, offset, rng, digi
+            [1, (0, 20000), 0, 0, 0],
+            [2, (100001, 200001), 0, 0, 0],
+            [1, (100000, 200000), 0, 0, 0],
+            [1, (50000, 80000), 0, 0, 0],
+            [3, (1234, 10000), 0, 0, 0],
+            [2, (1111, 20000), 0, 0, 0],
+        ],
+        dtype=object,
+    )
+    sorted = segment.sort_capture_windows_by_channel(signal_metadata)
+    valid_channels = [1, 2, 3]
+    valid_counts = [3, 2, 1]
+    for channel, count in zip(valid_channels, valid_counts):
+        meta = sorted.get(channel)
+        assert len(meta) == count
+        last_window = meta[0]
+        for window in meta[1:]:
+            assert window[0] >= last_window[0]
+            last_window = window
+
+
+def write_capture_windows_to_fast5_test():
+    capture_f5_fname = "tests/write_windows_test_dummy.fast5"
+    if os.path.exists(capture_f5_fname):
+        os.remove(capture_f5_fname)
+    signal_metadata = np.array(
+        [
+            # channel_no, capture_window, offset, rng, digi
+            [1, (0, 20000), 0, 0, 0],
+            [2, (100001, 200001), 0, 0, 0],
+            [1, (100000, 200000), 0, 0, 0],
+            [1, (50000, 80000), 0, 0, 0],
+            [3, (1234, 10000), 0, 0, 0],
+            [2, (1111, 20000), 0, 0, 0],
+        ],
+        dtype=object,
+    )
+    segment.write_capture_windows_to_fast5(capture_f5_fname, signal_metadata)
+    assert os.path.exists(capture_f5_fname)
     os.remove(capture_f5_fname)
 
 

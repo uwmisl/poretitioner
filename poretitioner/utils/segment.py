@@ -417,6 +417,10 @@ def parallel_find_captures(
     n_in_file = 0
     file_no = 1
     capture_f5_fname = os.path.join(save_location, f"{run_id}_{file_no}.fast5")
+    print(f"1: {capture_f5_fname}")
+    write_capture_windows_to_fast5(capture_f5_fname, context)
+    # Write channel statuses to fast5 (times when the channel had proper voltage to accept captures)
+
     capture_metadata = []
     for (
         i,
@@ -439,6 +443,8 @@ def parallel_find_captures(
                 n_in_file = 0
                 file_no += 1
                 capture_f5_fname = os.path.join(save_location, f"{run_id}_{file_no}.fast5")
+                print(f"{file_no}: {capture_f5_fname}")
+                write_capture_windows_to_fast5(capture_f5_fname, context)
             n_in_file += 1
             start, end = capture[0], capture[1]
             raw_pA = window_raw[start:end]
@@ -474,6 +480,49 @@ def parallel_find_captures(
                 ]
             )
     return capture_metadata
+
+
+def sort_capture_windows_by_channel(signal_metadata):
+    # Initialize dictionary of {channel: [windows]}
+    try:
+        channels = np.unique(signal_metadata[:, 0])
+    except TypeError:
+        raise TypeError("signal_metadata must be an array.")
+    windows_by_channel = {}
+    for channel in channels:
+        windows_by_channel[channel] = []
+
+    # Populate dictionary values
+    for row in signal_metadata:
+        channel = row[0]
+        windows_by_channel[channel].append(row)
+
+    # Sort the windows within each channel by time
+    for channel, captures in windows_by_channel.items():
+        captures = np.array(captures)
+        windows_by_channel[channel] = captures[captures[:, 1].argsort()]
+    return windows_by_channel
+
+
+def write_capture_windows_to_fast5(capture_f5_fname, signal_metadata):
+    # Check to make sure the path exists
+    path, fname = os.path.split(capture_f5_fname)
+    if not os.path.exists(path):
+        raise IOError(f"Path to capture file location does not exist: {path}")
+
+    with h5py.File(capture_f5_fname, "a") as f5:
+        base_path = "/Meta/Segmentation/capture_windows"
+        # Sort the windows by channel and write to file
+        # signal_metadata = [[channel_no, capture_window, offset, rng, digi], ...]
+        signal_metadata = np.array(signal_metadata, dtype=object)
+        windows_by_channel = sort_capture_windows_by_channel(signal_metadata)
+        for channel, signal_meta in windows_by_channel.items():
+            path = f"{base_path}/Channel_{channel}"
+            capture_windows = []
+            for meta in signal_meta:
+                channel_no, capture_window, offset, rng, digi = meta
+                capture_windows.append(capture_window)
+            f5[path] = capture_windows
 
 
 def write_capture_to_fast5(
