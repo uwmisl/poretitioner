@@ -165,6 +165,11 @@ def quantify_files_time_until_capture_test():
     assert times[0] == 93720
 
 
+def quantify_files_time_until_capture_intervals_test():
+    # TODO need to create a fast5 that covers this case
+    assert True is False
+
+
 def quantify_files_capture_freq_test():
     # Define config dict that contains filter info
     config = {
@@ -194,3 +199,8 @@ def quantify_files_capture_freq_test():
     )
     assert len(times) == 1
     assert times[0] < 2.08 and times[0] > 2.07
+
+
+def quantify_files_capture_freq_intervals_test():
+    # TODO need to create a fast5 that covers this case
+    assert True is False
