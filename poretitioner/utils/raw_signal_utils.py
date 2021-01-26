@@ -85,7 +85,9 @@ def get_fractional_blockage(
         Fractionalized current from the specified input channel.
     """
     signal = get_scaled_raw_for_channel(f5, channel_no, start=start, end=end)
-    open_channel = find_open_channel_current(signal, open_channel_guess, bound=open_channel_bound)
+    open_channel = find_open_channel_current(
+        signal, open_channel_guess, bound=open_channel_bound
+    )
     if open_channel is None:
         # TODO add logging here to give the reason for returning None
         return None
@@ -103,7 +105,9 @@ def get_local_fractional_blockage(
     """Retrieve the scaled raw signal for the channel, compute the open pore
     current, and return the fractional blockage for that channel."""
     signal = get_scaled_raw_for_channel(f5, channel=channel)
-    open_channel = find_open_channel_current(signal, open_channel_guess, bound=open_channel_bound)
+    open_channel = find_open_channel_current(
+        signal, open_channel_guess, bound=open_channel_bound
+    )
     if open_channel is None:
         # print("open pore is None")
         return None
@@ -156,7 +160,10 @@ def get_sampling_rate(f5):
     int
         Sampling rate
     """
-    sample_rate = int(f5.get("Meta").attrs["sample_rate"])
+    try:
+        sample_rate = int(f5.get("Meta").attrs["sample_rate"])
+    except KeyError:
+        sample_rate = int(f5.get("/Meta/context_tags").attrs["sample_frequency"])
     return sample_rate
 
 
@@ -501,7 +508,9 @@ def find_segments_below_threshold(time_series, threshold):
         Each item in the list represents the (start, end) points of regions
         where the input array drops at or below the threshold.
     """
-    diff_points = np.where(np.abs(np.diff(np.where(time_series <= threshold, 1, 0))) == 1)[0]
+    diff_points = np.where(
+        np.abs(np.diff(np.where(time_series <= threshold, 1, 0))) == 1
+    )[0]
     if time_series[0] <= threshold:
         diff_points = np.hstack([[0], diff_points])
     if time_series[-1] <= threshold:
