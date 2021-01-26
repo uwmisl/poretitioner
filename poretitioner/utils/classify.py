@@ -29,14 +29,14 @@ def filter_and_classify(config, fast5_fnames, overwrite=False, filter_name=None)
     classifier_path = clf_config["classifier_path"]
 
     # Load classifier
-    local_logger.info(f"Loading classifier {classifier_name}.")
+    # local_logger.info(f"Loading classifier {classifier_name}.")
     assert classifier_name in ["NTER_cnn", "NTER_rf"]
     assert classifier_path is not None and len(classifier_path) > 0
     classifier = init_classifier(classifier_name, classifier_path)
 
     # Filter (optional)
     if filter_name is not None:
-        local_logger.info("Beginning filtering.")
+        # local_logger.info("Beginning filtering.")
         filter.filter_and_store_result(config, fast5_fnames, filter_name, overwrite=overwrite)
         read_path = f"/Filter/{filter_name}/pass"
     else:
@@ -51,8 +51,8 @@ def filter_and_classify(config, fast5_fnames, overwrite=False, filter_name=None)
 def classify_fast5_file(
     f5, clf_config, classifier, classifier_run_name, read_path, class_labels=None
 ):
-    local_logger = logger.getLogger()
-    local_logger.debug(f"Beginning classification for file {f5.filename}.")
+    # local_logger = logger.getLogger()
+    # local_logger.debug(f"Beginning classification for file {f5.filename}.")
     classifier_name = clf_config["classifier"]
     classify_start = clf_config["start_obs"]  # 100 in NTER paper
     classify_end = clf_config["end_obs"]  # 21000 in NTER paper
@@ -61,11 +61,11 @@ def classify_fast5_file(
     assert classify_start >= 0 and classify_end >= 0
     assert classifier_conf is None or (0 <= classifier_conf and classifier_conf <= 1)
 
-    local_logger.debug(
-        f"Classification parameters: name: {classifier_name}, "
-        f"range of data points: ({classify_start}, {classify_end})"
-        f"confidence required to pass: {classifier_conf}"
-    )
+    # local_logger.debug(
+    #     f"Classification parameters: name: {classifier_name}, "
+    #     f"range of data points: ({classify_start}, {classify_end})"
+    #     f"confidence required to pass: {classifier_conf}"
+    # )
 
     results_path = f"/Classification/{classifier_run_name}"
     write_classifier_details(f5, clf_config, results_path)
@@ -190,18 +190,22 @@ def predict_class(classifier_name, classifier, raw, class_labels=None):
 
 
 def get_classification_for_read(f5, read_id, results_path):
+    local_logger = logger.getLogger()
     results_path = f"{results_path}/{read_id}"
-    try:
-        assert results_path in f5
-    except AssertionError:
-        raise ValueError(
+    if results_path not in f5:
+        local_logger.info(
             f"Read {read_id} has not been classified yet, or result"
             f"is not stored at {results_path} in file {f5.filename}."
         )
-    pred_class = f5[results_path].attrs["best_class"]
-    prob = f5[results_path].attrs["best_score"]
-    assigned_class = f5[results_path].attrs["assigned_class"]
-    passed_classification = True if assigned_class == pred_class else False
+        pred_class = None
+        prob = None
+        assigned_class = -1
+        passed_classification = None
+    else:
+        pred_class = f5[results_path].attrs["best_class"]
+        prob = f5[results_path].attrs["best_score"]
+        assigned_class = f5[results_path].attrs["assigned_class"]
+        passed_classification = True if assigned_class == pred_class else False
     return pred_class, prob, assigned_class, passed_classification
 
 

@@ -205,7 +205,10 @@ def write_filter_results_test():
             "end_tol": 0,
             "terminal_capture_only": False,
         },
-        "filters": {"base filter": {"length": (100, None)}, "test filter": {"min": (100, None)}},
+        "filters": {
+            "base filter": {"length": (100, None)},
+            "test filter": {"min": (100, None)},
+        },
         "output": {"capture_f5_dir": "tests/", "captures_per_f5": 1000},
     }
 

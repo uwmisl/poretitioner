@@ -557,3 +557,19 @@ def write_capture_to_fast5_test(tmpdir):
     assert os.path.exists(capture_f5_fname)
     # TODO further validation, incl. contents of file
     os.remove(capture_f5_fname)
+
+
+# def add_capture_windows_test():
+#     # Hack to add capture windows to test data
+#     dir = "tests/data"
+#     bulk_f5_fname = "tests/data/bulk_fast5_dummy.fast5"
+#     files = [
+#         os.path.join(dir, x)
+#         for x in os.listdir(dir)
+#         if "bulk" not in x and x.endswith("fast5")
+#     ]
+#     for f in files:
+#         raw_signals, context, run_id, sampling_rate = segment._prep_capture_windows(
+#             bulk_f5_fname, None, None, -180, 0.7, [1, 2, 3], 229.1,
+#         )
+#        segment.write_capture_windows_to_fast5(f, context)

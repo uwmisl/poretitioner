@@ -7,7 +7,6 @@ quantify.py
 This module contains functionality for quantifying nanopore captures.
 
 """
-import os
 import re
 
 import h5py
@@ -15,111 +14,195 @@ import numpy as np
 import pandas as pd
 
 from poretitioner import logger
-
-from .raw_signal_utils import find_segments_below_threshold
-from .yaml_assistant import YAMLAssistant
-
-# # Retrieving Related Data Files from Filtered File or Capture File
-# Returns list containing path names of `[raw_file, capture_file, config_file]`
-# corresponding to the passed in file name. Passed in file can be either filter
-# file or capture file (total captures).
+from poretitioner.utils import classify, raw_signal_utils
 
 
-def get_related_files(input_file, raw_file_dir="", capture_file_dir=""):
-    """TODO : Deprecate! : https://github.com/uwmisl/poretitioner/issues/40
+def quantify_files(
+    config,
+    fast5_fnames,
+    overwrite=False,
+    filter_name=None,
+    quant_method="time between captures",
+    classified_only=False,
+):
+    # All fast5_fnames are assumed to be from the same run
 
-    Find files matching the input file in the data directory tree.
+    #
+    # If a filter is specified in the config, use those reads only
 
-    Parameters
-    ----------
-    input_file : string
-        # TODO ???
-        Seems like this can be the filtered or unfiltered captures file.
-    raw_file_dir : str, optional
-        Directory to search for the capture files (for us that's
-        /disk1/pore_data/MinION_raw_data_YYYYMMDD/), by default, the cwd.
-    capture_file_dir : str, optional
-        Directory to search for the capture files (for us that's
-        /disk1/pore_data/segmented/peptides/YYYYMMDD/), by default, the cwd.
+    # The challenge here is that reads will be in different files. Need to read
+    # in all the reads from all the files, sort them by channel and time, and
+    # then quantify.
 
-    Returns
-    -------
-    Iterable of filenames (strings)
-        The raw file (fast5) and capture file (unfiltered).
-    """
-    local_logger = logger.getLogger()
+    # This also requires having a lenient filtering at the start to identify all blockages.
+    # Use unfiltered captures as "blockages" and filtered captures as "captures".
 
-    run_name = re.findall(r"(run\d\d_.*)\..*", input_file)[0]  # e.g. "run01_a"
-    local_logger.debug(run_name)
-
-    assert len(raw_file_dir) > 0
-    raw_file = [x for x in os.listdir(raw_file_dir) if run_name in x][0]
-
-    assert len(capture_file_dir) > 0
-    if input_file.endswith(".csv"):
-        # Given file is the filtered file and we're looking for the capture file
-        filtered_file = input_file
-        capture_file = [x for x in os.listdir(capture_file_dir) if x.endswith(run_name + ".pkl")][
-            0
-        ]
-    elif input_file.endswith(".pkl"):
-        # Given file is the capture file and filtered file is unspecified
-        capture_file = input_file
-        filtered_file = "Unspecified"
+    if filter_name:
+        read_path = f"/Filter/{filter_name}/pass"
     else:
-        local_logger.error("Invalid file name")
-        return
+        read_path = "/"
+    blockage_path = "/"
 
-    local_logger.info("Filter File: " + filtered_file)
-    raw_file = os.path.join(raw_file_dir, raw_file)
-    local_logger.info("Raw File: " + raw_file)
-    capture_file = os.path.join(capture_file_dir, capture_file)
-    local_logger.info("Capture File: " + capture_file)
+    if "classify" in config:
+        classification_path = f"/Classification/{config['classify']['classifier']}"
+    else:
+        classification_path = None
 
-    return raw_file, capture_file
+    if quant_method == "time between captures":
+        quantifier = calc_time_until_capture
+    elif quant_method == "capture freq":
+        quantifier = calc_capture_freq
+    else:
+        raise ValueError(f"This quantification method is not supported: {quant_method}")
+
+    # TODO: Streaming opportunity -- shouldn't have to read all data at once.
+    capture_arrays = []
+    blockage_arrays = []
+    for fast5_fname in fast5_fnames:
+        with h5py.File(fast5_fname, "r") as f5:
+            capture_array = get_capture_details_in_f5(f5, read_path, classification_path)
+            if classified_only:
+                ix = np.where(capture_array[:, 4] != "-1")[0]
+                capture_array = capture_array[ix, :]
+            capture_arrays.append(capture_array)
+            # Get all of the "blockages" -- all regions where the pore is
+            # assumed to be blocked by something (capture or not)
+            if read_path == blockage_path:
+                blockage_array = capture_array
+            else:
+                blockage_array = get_capture_details_in_f5(f5, read_path, classification_path)
+            blockage_arrays.append(blockage_array)
+
+    captures_by_channel = sort_captures_by_channel(np.vstack(capture_arrays))
+    blockages_by_channel = sort_captures_by_channel(np.vstack(blockage_arrays))
+
+    del capture_arrays, blockage_arrays
+
+    # The capture windows are stored identically in each read fast5, so no need for loop
+    capture_windows = get_capture_windows_by_channel(fast5_fname)
+
+    # Compute capture freq for all channels separately, pooling results
+    capture_times = []
+    for channel in captures_by_channel.keys():
+        captures = captures_by_channel[channel]
+        blockages = blockages_by_channel[channel]
+        windows = capture_windows[channel]
+
+        assert captures is not None
+        assert blockages is not None
+        assert windows is not None
+        ts = quantifier(windows, captures, blockages=blockages)
+        capture_times.extend(ts)
+
+    return capture_times
 
 
-def get_overlapping_regions(window, regions):
-    """get_overlapping_regions
+def get_capture_windows_by_channel(fast5_fname):
+    base_path = "/Meta/Segmentation/capture_windows"
+    windows_by_channel = {}
+    with h5py.File(fast5_fname, "r") as f5:
+        for grp_name in f5.get(base_path):
+            if "Channel" in grp_name:
+                channel_no = int(re.findall(r"Channel_(\d+)", grp_name)[0])
+                windows = f5.get(f"{base_path}/{grp_name}")[()]
+                windows_by_channel[channel_no] = windows
+    return windows_by_channel
 
-    Finds all of the regions in the given list that overlap with the window.
-    Needs to have at least one overlapping point; cannot be just adjacent.
-    Incomplete overlaps are returned.
 
-    # TODO move to raw_signal_utils -- general purpose signal fn not specific to quant
+def sort_captures_by_channel(capture_array):
+    """Take a list of captures (defined below), and sort it to produce a dictionary
+    of {channel: [capture0, capture1, ...]}, where the captures are sorted in order.
+
+    The format of each capture is [read_id, capture_start, capture_end, channel_no, assigned_class].
 
     Parameters
     ----------
-    window : tuple of numerics (start, end)
-        Specifies the start and end points of the desired overlap.
-    regions : list of tuples of numerics [(start, end), ...]
-        Start and end points to check for overlap with the specified window.
-        All regions are assumed to be mutually exclusive and sorted in
-        ascending order.
+    capture_array : list
+        list of lists: [[read_id, capture_start, capture_end, channel_no, assigned_class]]
 
     Returns
     -------
-    overlapping_regions : list of tuples of numerics [(start, end), ...]
-        Regions that overlap with the window in whole or part, returned in
-        ascending order.
+    dict
+        {channel_no: [(capture_start, capture_end), ...]}
     """
-    window_start, window_end = window
-    overlapping_regions = []
-    for region in regions:
-        region_start, region_end = region
-        if region_start >= window_end:
-            # Region comes after the window, we're done searching
-            break
-        elif region_end <= window_start:
-            # Region ends before the window starts
+    # Initialize dictionary of {channel: [captures]}
+    channels = np.unique(capture_array[:, 3])
+    captures_by_channel = {}
+    for channel in channels:
+        captures_by_channel[int(channel)] = []
+
+    # Populate dictionary values
+    for row in capture_array:
+        channel = int(row[3])
+        captures_by_channel[channel].append(row)
+
+    # Sort the captures within each channel by time
+    for channel, captures in captures_by_channel.items():
+        captures = np.array(captures)
+        captures = captures[captures[:, 1].argsort()]
+        capture_regions = []
+        for _, capture_start, capture_end, _, _ in captures:
+            capture_regions.append((int(capture_start), int(capture_end)))
+        captures_by_channel[channel] = capture_regions
+
+    return captures_by_channel
+
+
+def get_capture_details_in_f5(f5, read_path=None, classification_path=None):
+    """Get capture times & channel info for all reads in the fast5 at read_path.
+    If a classification_path is specified, get the label for each read too.
+
+    Parameters
+    ----------
+    f5 : h5py.File
+        Open fast5 file in read mode.
+    read_path : str, optional
+        Location of the reads to retrieve, by default None (if None, defaults
+        to "/" for the read location.)
+    classification_path : str, optional
+        Location of the classification results, by default None (if None, no
+        labels are returned)
+
+    Returns
+    -------
+    np.array
+        Array containing read_id, capture/read start & end, channel number, and
+        the classification label (if applicable). Shape is (5 x n_reads).
+    """
+
+    read_path = read_path if read_path is not None else "/"
+    read_h5group_names = f5.get(read_path)
+
+    captures_in_f5 = []
+
+    if read_h5group_names is None:
+        return None
+
+    for grp_name in read_h5group_names:
+        if "read" not in grp_name:
             continue
-        elif region_end > window_start or region_start >= window_start:
-            # Overlapping
-            overlapping_regions.append(region)
+        read_id = re.findall(r"read_(.*)", grp_name)[0]
+        grp = f5.get(grp_name)
+        a = grp["Signal"].attrs
+        capture_start = a["start_time_local"]
+        capture_end = capture_start + a["duration"]
+
+        a = grp["channel_id"].attrs
+        channel_no = int(a["channel_number"])
+
+        if classification_path:
+            (
+                pred_class,
+                prob,
+                assigned_class,
+                passed_classification,
+            ) = classify.get_classification_for_read(f5, read_id, classification_path)
         else:
-            e = f"Shouldn't have gotten here! Region: {region}, Window: {window}."
-            raise Exception(e)
-    return overlapping_regions
+            assigned_class = None
+
+        captures_in_f5.append((read_id, capture_start, capture_end, channel_no, assigned_class))
+
+    return np.array(captures_in_f5)
 
 
 def calc_time_until_capture(capture_windows, captures, blockages=None):
@@ -151,7 +234,7 @@ def calc_time_until_capture(capture_windows, captures, blockages=None):
         List of all capture times from a single channel.
     """
     # TODO: Implement logger best practices : https://github.com/uwmisl/poretitioner/issues/12
-    # local_logger = logger.getLogger()
+    local_logger = logger.getLogger()
 
     all_capture_times = []
 
@@ -161,9 +244,11 @@ def calc_time_until_capture(capture_windows, captures, blockages=None):
     elapsed_time_until_capture = 0
     for capture_window_i, capture_window in enumerate(capture_windows):
         # Get all the captures & blockages within that window
-        captures_in_window = get_overlapping_regions(capture_window, captures)
+        captures_in_window = raw_signal_utils.get_overlapping_regions(capture_window, captures)
         if blockages is not None:
-            blockages_in_window = get_overlapping_regions(capture_window, blockages)
+            blockages_in_window = raw_signal_utils.get_overlapping_regions(
+                capture_window, blockages
+            )
         else:
             blockages_in_window = []
         # If there are no captures in the window, add the window to the elapsed
@@ -193,9 +278,18 @@ def calc_time_until_capture(capture_windows, captures, blockages=None):
     return all_capture_times
 
 
+def calc_capture_freq():
+    pass
+
+
 # # Getting Time Between Captures
 # Returns list of average times until capture for given time intervals of a
 # single run
+
+
+def get_related_files(item, raw_file_dir="", capture_file_dir=""):
+    # Temporary to prevent errors
+    pass
 
 
 def get_time_between_captures(
@@ -241,7 +335,7 @@ def get_time_between_captures(
     f5 = h5py.File(raw_file)
     # Find regions where voltage is normal
     voltage = f5.get("/Device/MetaData").value["bias_voltage"] * 5.0
-    voltage_changes = find_segments_below_threshold(voltage, -180)
+    voltage_changes = raw_signal_utils.find_segments_below_threshold(voltage, -180)
     f5.close()
 
     # Process unfiltered captures file
@@ -251,12 +345,12 @@ def get_time_between_captures(
         blockages = pd.read_csv(capture_file, index_col=0, header=0, sep="\t")
 
     # Process config file
-    y = YAMLAssistant(config_file)
+    y = ""  # yaml_assistant.YAMLAssistant(config_file)
     run_name = re.findall(r"(run\d\d_.*)\..*", filtered_file)[0]
     good_channels = y.get_variable("fast5:good_channels:" + run_name)
     for i in range(0, len(good_channels)):
         good_channels[i] = "Channel_" + str(good_channels[i])
-    logger.info("Number of Channels: " + str(len(good_channels)))
+    local_logger.info("Number of Channels: " + str(len(good_channels)))
 
     # Process filtered captures file
     captures = pd.read_csv(filtered_file, index_col=0, header=0, sep="\t")
@@ -283,6 +377,7 @@ def get_time_between_captures(
     checkpoint = 0
     for timepoint in time_segments:
         voltage_changes_segment = []
+        blockage_ends, blockage_starts = "", ""
         # Find open voltage regions that start within this time segment
         for voltage_region in voltage_changes:
             if voltage_region[0] < timepoint and voltage_region[0] >= checkpoint:
@@ -371,7 +466,7 @@ def get_time_between_captures(
             captures_count.append(len(capture_times))
             checkpoint = end_voltage_seg
         else:
-            local_logger.warn(
+            local_logger.warning(
                 "No open voltage region in time segment ["
                 + str(checkpoint)
                 + ", "
@@ -411,11 +506,12 @@ def get_capture_freq(
     f5 = h5py.File(raw_file)
     # Find regions where voltage is normal
     voltage = f5.get("/Device/MetaData").value["bias_voltage"] * 5.0
-    voltage_changes = find_segments_below_threshold(voltage, -180)
+    voltage_changes = []  # find_segments_below_threshold(voltage, -180)
     f5.close()
 
     # Process config file
-    y = YAMLAssistant(config_file)
+    # y = YAMLAssistant(config_file)
+    y = ""
     # [-11:-4] gives run_seg (i.e. "run01_a")
     good_channels = y.get_variable("fast5:good_channels:" + filtered_file[-11:-4])
     for i in range(0, len(good_channels)):
@@ -474,7 +570,7 @@ def get_capture_freq(
             all_capture_freq.append(np.mean(capture_counts) / (time_segments[0] / 600_000.0))
             checkpoint = end_voltage_seg
         else:
-            local_logger.warn(
+            local_logger.warning(
                 "No open voltage region in time segment ["
                 + str(checkpoint)
                 + ", "

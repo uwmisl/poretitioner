@@ -578,3 +578,44 @@ def judge_channels(bulk_f5_fname, expected_open_channel=235):
         # Case 4: The channel is assumed to be good
         good_channels.append(i)
     return good_channels
+
+
+def get_overlapping_regions(window, regions):
+    """get_overlapping_regions
+
+    Finds all of the regions in the given list that overlap with the window.
+    Needs to have at least one overlapping point; cannot be just adjacent.
+    Incomplete overlaps are returned.
+
+    Parameters
+    ----------
+    window : tuple of numerics (start, end)
+        Specifies the start and end points of the desired overlap.
+    regions : list of tuples of numerics [(start, end), ...]
+        Start and end points to check for overlap with the specified window.
+        All regions are assumed to be mutually exclusive and sorted in
+        ascending order.
+
+    Returns
+    -------
+    overlapping_regions : list of tuples of numerics [(start, end), ...]
+        Regions that overlap with the window in whole or part, returned in
+        ascending order.
+    """
+    window_start, window_end = window
+    overlapping_regions = []
+    for region in regions:
+        region_start, region_end = region
+        if region_start >= window_end:
+            # Region comes after the window, we're done searching
+            break
+        elif region_end <= window_start:
+            # Region ends before the window starts
+            continue
+        elif region_end > window_start or region_start >= window_start:
+            # Overlapping
+            overlapping_regions.append(region)
+        else:
+            e = f"Shouldn't have gotten here! Region: {region}, Window: {window}."
+            raise Exception(e)
+    return overlapping_regions
