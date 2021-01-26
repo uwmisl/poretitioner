@@ -11,7 +11,6 @@ import re
 
 import h5py
 import numpy as np
-import pandas as pd
 
 from poretitioner import logger
 from poretitioner.utils import classify, raw_signal_utils
@@ -98,58 +97,41 @@ def quantify_files(
 
     if quant_method == "time between captures":
         # TODO move this to its own function, taking in intervals as well
-        capture_times = []
-        elapsed_time_obs = 0
-        for interval in intervals:
-            start_obs, end_obs = interval
-            # Compute capture freq for all channels separately, pooling results
-            interval_capture_times = []
-            for channel in captures_by_channel.keys():
-                captures = captures_by_channel[channel]
-                captures = raw_signal_utils.get_overlapping_regions(interval, captures)
-                blockages = blockages_by_channel[channel]
-                blockages = raw_signal_utils.get_overlapping_regions(interval, blockages)
-                windows = capture_windows[channel]
-                windows = raw_signal_utils.get_overlapping_regions(interval, windows)
-
-                assert captures is not None
-                assert blockages is not None
-                assert windows is not None
-                ts = calc_time_until_capture(windows, captures, blockages=blockages)
-                if ts is None:
-                    elapsed_time_obs += end_obs - start_obs
-                else:
-                    ts = [ts[0] + elapsed_time_obs] + ts[1:]
-                    interval_capture_times.extend(ts)
-                    elapsed_time_obs = 0
-            capture_times.append(np.mean(interval_capture_times))
+        capture_times = calc_time_until_capture_intervals(
+            capture_windows,
+            captures_by_channel,
+            blockages_by_channel=blockages_by_channel,
+            intervals=intervals,
+        )
         return capture_times
 
     elif quant_method == "capture freq":
-        # TODO implement intervals
-        capture_freqs = []
-        for interval in intervals:
-            start_obs, end_obs = interval
-            interval_capture_counts = []
-            for channel in captures_by_channel.keys():
-                captures = captures_by_channel[channel]
-                windows = capture_windows[channel]
-
-                assert captures is not None
-                assert windows is not None
-                counts = calc_capture_freq(windows, captures)
-                interval_capture_counts.append(counts)
-            avg_capture_count = np.mean(interval_capture_counts)
-            elapsed_time_obs = 0
-            for window in windows:
-                # For now, all channel windows identical
-                elapsed_time_obs += window[1] - window[0]
-            avg_capture_freq = avg_capture_count / (elapsed_time_obs / sampling_rate / 60.0)
-            capture_freqs.append(avg_capture_freq)
+        # TODO move this to its own function, taking in intervals as well
+        capture_freqs = calc_capture_freq_intervals(
+            capture_windows,
+            captures_by_channel,
+            blockages_by_channel=blockages_by_channel,
+            intervals=intervals,
+            sampling_rate=sampling_rate,
+        )
         return capture_freqs
 
 
 def get_capture_windows_by_channel(fast5_fname):
+    """Extract capture windows (regions where the voltage is appropriate to accept
+    a captured peptide or other analyte) from a fast5 file, in a dictionary and
+    sorted by channel
+
+    Parameters
+    ----------
+    fast5_fname : string
+        Location of a fast5 file.
+
+    Returns
+    -------
+    dict
+        {channel_no: [(window_start, window_end), ...]}
+    """
     base_path = "/Meta/Segmentation/capture_windows"
     windows_by_channel = {}
     with h5py.File(fast5_fname, "r") as f5:
@@ -330,6 +312,38 @@ def calc_time_until_capture(capture_windows, captures, blockages=None):
     return all_capture_times
 
 
+def calc_time_until_capture_intervals(
+    capture_windows, captures_by_channel, blockages_by_channel=None, intervals=[]
+):
+    assert len(intervals) > 0
+    capture_times = []
+    elapsed_time_obs = 0
+    for interval in intervals:
+        start_obs, end_obs = interval
+        # Compute capture freq for all channels separately, pooling results
+        interval_capture_times = []
+        for channel in captures_by_channel.keys():
+            captures = captures_by_channel[channel]
+            captures = raw_signal_utils.get_overlapping_regions(interval, captures)
+            blockages = blockages_by_channel[channel]
+            blockages = raw_signal_utils.get_overlapping_regions(interval, blockages)
+            windows = capture_windows[channel]
+            windows = raw_signal_utils.get_overlapping_regions(interval, windows)
+
+            assert captures is not None
+            assert blockages is not None
+            assert windows is not None
+            ts = calc_time_until_capture(windows, captures, blockages=blockages)
+            if ts is None:
+                elapsed_time_obs += end_obs - start_obs
+            else:
+                ts = [ts[0] + elapsed_time_obs] + ts[1:]
+                interval_capture_times.extend(ts)
+                elapsed_time_obs = 0
+        capture_times.append(np.mean(interval_capture_times))
+    return capture_times
+
+
 def calc_capture_freq(capture_windows, captures, blockages=None):
     # local_logger = logger.getLogger()
 
@@ -347,297 +361,34 @@ def calc_capture_freq(capture_windows, captures, blockages=None):
     return n_captures
 
 
-# # Getting Time Between Captures
-# Returns list of average times until capture for given time intervals of a
-# single run
-
-
-def get_related_files(item, raw_file_dir="", capture_file_dir=""):
-    # Temporary to prevent errors
-    pass
-
-
-def get_time_between_captures(
-    filtered_file, time_interval=None, raw_file_dir="", capture_file_dir="", config_file=""
+def calc_capture_freq_intervals(
+    capture_windows,
+    captures_by_channel,
+    blockages_by_channel=None,
+    intervals=[],
+    sampling_rate=10000,
 ):
-    """Get the average time between captures across all channels. Can be
-    computed for the specified time interval, or across the entire run if not
-    specified.
+    assert len(intervals) > 0
+    capture_freqs = []
+    for interval in intervals:
+        start_obs, end_obs = interval
+        interval_capture_counts = []
+        for channel in captures_by_channel.keys():
+            captures = captures_by_channel[channel]
+            windows = capture_windows[channel]
 
-    Parameters
-    ----------
-    filtered_file : [type]
-        [description]
-    time_interval : [type], optional
-        [description], by default None
-    raw_file_dir : str, optional
-        [description], by default ""
-    capture_file_dir : str, optional
-        [description], by default ""
-    config_file : str, optional
-        [description], by default ""
-
-    Returns
-    -------
-    [type]
-        [description]
-    """
-    # TODO: Implement logger best practices : https://github.com/uwmisl/poretitioner/issues/12
-    local_logger = logger.getLogger("get_time_between_captures")
-
-    # TODO : Implement capture fast5 I/O : https://github.com/uwmisl/poretitioner/issues/40
-
-    # Retrieve raw file, unfiltered capture file, and config file names
-    raw_file, capture_file = get_related_files(
-        filtered_file, raw_file_dir=raw_file_dir, capture_file_dir=capture_file_dir
-    )
-
-    # Process raw file
-    f5 = h5py.File(raw_file)
-    # Find regions where voltage is normal
-    voltage = f5.get("/Device/MetaData").value["bias_voltage"] * 5.0
-    voltage_changes = raw_signal_utils.find_segments_below_threshold(voltage, -180)
-    f5.close()
-
-    # Process unfiltered captures file
-    if capture_file.endswith(".pkl"):
-        blockages = pd.read_pickle(capture_file)
-    else:
-        blockages = pd.read_csv(capture_file, index_col=0, header=0, sep="\t")
-
-    # Process config file
-    y = ""  # yaml_assistant.YAMLAssistant(config_file)
-    run_name = re.findall(r"(run\d\d_.*)\..*", filtered_file)[0]
-    good_channels = y.get_variable("fast5:good_channels:" + run_name)
-    for i in range(0, len(good_channels)):
-        good_channels[i] = "Channel_" + str(good_channels[i])
-    local_logger.info("Number of Channels: " + str(len(good_channels)))
-
-    # Process filtered captures file
-    captures = pd.read_csv(filtered_file, index_col=0, header=0, sep="\t")
-
-    # Break run into time segments based on time interval (given in minutes).
-    # If no time interval given then just take average time between captures of
-    # entire run
-    if time_interval:
-        # TODO un-hardcode 10k number -- look up from fast5 file directly.
-        time_segments = range(
-            time_interval * 60 * 10000, len(voltage) + 1, time_interval * 60 * 10000
-        )
-    else:
-        time_segments = [len(voltage)]
-
-    # Calculate Average Time Between Captures for Each Time Segment #
-
-    # Tracks time elapsed (no capture) for each channel across time segments
-    time_elapsed = [0 for x in range(0, len(good_channels))]
-    # List of mean capture times across all channels for each timepoint
-    timepoint_captures = []
-    captures_count = []  # Number of captures across all channels for each
-    # timepoint
-    checkpoint = 0
-    for timepoint in time_segments:
-        voltage_changes_segment = []
-        blockage_ends, blockage_starts = "", ""
-        # Find open voltage regions that start within this time segment
-        for voltage_region in voltage_changes:
-            if voltage_region[0] < timepoint and voltage_region[0] >= checkpoint:
-                voltage_changes_segment.append(voltage_region)
-        # If this time segment contains open voltage regions...
-        if voltage_changes_segment:
-            # End of last voltage region in tseg
-            end_voltage_seg = voltage_changes_segment[len(voltage_changes_segment) - 1][1]
-            capture_times = []  # Master list of all capture times from this seg
-            # Loop through all good channels and get captures times from each
-            for i, channel in enumerate(good_channels):
-                channel_blockages = blockages[blockages.channel == channel]
-                blockage_exists = False
-                # If there are any blockages in this tseg (includes both
-                # non-captures and captures)
-                blockage_segment = channel_blockages[
-                    np.logical_and(
-                        channel_blockages.start_obs <= end_voltage_seg,
-                        channel_blockages.start_obs > checkpoint,
-                    )
-                ]
-                if not channel_blockages.empty and not blockage_segment.empty:
-                    blockage_exists = True
-                    blockage_starts = list(blockage_segment.start_obs)
-                    blockage_ends = list(blockage_segment.end_obs)
-                    # TODO temporary fix; may be equivalent to blockage_segment
-                    blockages = list(zip(blockage_starts, blockage_ends))
-
-                channel_captures = captures[captures.channel == channel]
-                # Check that channel actually has captures in this tseg
-                captures_segment = channel_captures[
-                    np.logical_and(
-                        channel_captures.start_obs <= end_voltage_seg,
-                        channel_captures.start_obs > checkpoint,
-                    )
-                ]
-                if not channel_captures.empty and not captures_segment.empty:
-
-                    time_until_capture = calc_time_until_capture(
-                        voltage_changes_segment, captures_segment, blockages=blockages
-                    )
-                    # Add time since channel's last capture from previous
-                    # tsegs to time until first capture in current tseg
-                    time_until_capture[0] += time_elapsed[i]
-
-                    # Update to new time elapsed (time from end of last capture
-                    # in this tseg to end of tseg minus blockages)
-                    time_elapsed[i] = 0
-                    voltage_ix = 0
-                    while voltage_ix < len(voltage_changes_segment):
-                        if voltage_changes_segment[voltage_ix][0] > captures_segment[-1].end_obs:
-                            time_elapsed[i] += np.sum(
-                                calc_time_until_capture(
-                                    voltage_changes_segment[voltage_ix:], blockages
-                                )
-                            )
-                            break
-                        voltage_ix += 1
-                    time_elapsed[i] += end_voltage_seg - blockage_ends[-1]
-
-                    capture_times.extend(time_until_capture)
-                else:
-                    # No captures but still blockages, so add duration of open
-                    # voltage regions minus blockages to time elapsed
-                    if blockage_exists:
-                        time_elapsed[i] += np.sum(
-                            calc_time_until_capture(
-                                voltage_changes_segment, blockage_starts, blockage_ends
-                            )
-                        )
-                        time_elapsed[i] += end_voltage_seg - blockage_ends[-1]
-                    # No captures or blockages for channel in this tseg, so add
-                    # total duration of open voltage regions to time elapsed
-                    else:
-                        time_elapsed[i] += np.sum(
-                            [
-                                voltage_region[1] - voltage_region[0]
-                                for voltage_region in voltage_changes_segment
-                            ]
-                        )
-            if capture_times:
-                timepoint_captures.append(np.mean(capture_times))
-            else:
-                timepoint_captures.append(-1)
-
-            captures_count.append(len(capture_times))
-            checkpoint = end_voltage_seg
-        else:
-            local_logger.warning(
-                "No open voltage region in time segment ["
-                + str(checkpoint)
-                + ", "
-                + str(timepoint)
-                + "]"
-            )
-            timepoint_captures.append(-1)
-            checkpoint = timepoint
-
-    local_logger.info("Number of Captures: " + str(captures_count))
-    return timepoint_captures
-
-
-# # Getting Capture Frequency
-# Returns list of capture frequencies (captures/channel/min) for each time
-# interval.
-# Time intervals must be equal duration and start from zero!
-
-
-def get_capture_freq(
-    filtered_file, time_interval=None, raw_file_dir="", capture_file_dir="", config_file=""
-):
-    # TODO: Implement logger best practices : https://github.com/uwmisl/poretitioner/issues/12
-    local_logger = logger.getLogger()
-    # TODO : Implement capture fast5 I/O : https://github.com/uwmisl/poretitioner/issues/40
-
-    # Retrieve raw file and config file names
-    raw_file, capture_file = get_related_files(
-        filtered_file, raw_file_dir=raw_file_dir, capture_file_dir=capture_file_dir
-    )
-
-    # Process raw file
-    f5 = h5py.File(raw_file)
-    # Find regions where voltage is normal
-    voltage = f5.get("/Device/MetaData").value["bias_voltage"] * 5.0
-    voltage_changes = []  # find_segments_below_threshold(voltage, -180)
-    f5.close()
-
-    # Process config file
-    # y = YAMLAssistant(config_file)
-    y = ""
-    # [-11:-4] gives run_seg (i.e. "run01_a")
-    good_channels = y.get_variable("fast5:good_channels:" + filtered_file[-11:-4])
-    for i in range(0, len(good_channels)):
-        good_channels[i] = "Channel_" + str(good_channels[i])
-    local_logger.info("Number of Channels: " + str(len(good_channels)))
-
-    # Process filtered captures file
-    captures = pd.read_csv(filtered_file, index_col=0, header=0, sep="\t")
-
-    # Break run into time segments based on time interval (given in minutes).
-    # If no time interval given then just take average time between captures of
-    # entire run
-    if time_interval:
-        time_segments = range(
-            time_interval * 60 * 10000, len(voltage) + 1, time_interval * 60 * 10000
-        )
-    else:
-        time_segments = [len(voltage)]
-
-    # Calculate Capture Frequency for Each Time Segment #
-
-    all_capture_freq = []  # List of capture frequencies for each timepoint
-    checkpoint = 0
-    for timepoint in time_segments:
-        voltage_changes_segment = []
-        # Find open voltage regions that start within this time segment
-        for voltage_region in voltage_changes:
-            if voltage_region[0] < timepoint and voltage_region[0] >= checkpoint:
-                voltage_changes_segment.append(voltage_region)
-
-        # If this time segment contains open voltage regions...
-        if voltage_changes_segment:
-            # End of last voltage region in tseg
-            end_voltage_seg = voltage_changes_segment[len(voltage_changes_segment) - 1][1]
-            # List of capture counts for each channel from this tseg (length of
-            # list = # of channels)
-            capture_counts = []
-            # Loop through all good channels and get captures times from each
-            for i, channel in enumerate(good_channels):
-                channel_captures = captures[captures.channel == channel]
-                # Check that channel actually has captures and add the # of
-                # captures in this tseg to capture_counts
-                if not channel_captures.empty:
-                    capture_counts.append(
-                        len(
-                            channel_captures[
-                                np.logical_and(
-                                    channel_captures.start_obs <= end_voltage_seg,
-                                    channel_captures.start_obs > checkpoint,
-                                )
-                            ]
-                        )
-                    )
-                else:
-                    capture_counts.append(0)
-            all_capture_freq.append(np.mean(capture_counts) / (time_segments[0] / 600_000.0))
-            checkpoint = end_voltage_seg
-        else:
-            local_logger.warning(
-                "No open voltage region in time segment ["
-                + str(checkpoint)
-                + ", "
-                + str(timepoint)
-                + "]"
-            )
-            all_capture_freq.append(0)
-            checkpoint = timepoint
-
-    return all_capture_freq
+            assert captures is not None
+            assert windows is not None
+            counts = calc_capture_freq(windows, captures)
+            interval_capture_counts.append(counts)
+        avg_capture_count = np.mean(interval_capture_counts)
+        elapsed_time_obs = 0
+        for window in windows:
+            # For now, all channel windows identical
+            elapsed_time_obs += window[1] - window[0]
+        avg_capture_freq = avg_capture_count / (elapsed_time_obs / sampling_rate / 60.0)
+        capture_freqs.append(avg_capture_freq)
+    return capture_freqs
 
 
 # Calibration Curves
