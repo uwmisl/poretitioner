@@ -12,27 +12,51 @@ import re
 import h5py
 import numpy as np
 
-from poretitioner import logger
 from poretitioner.utils import classify, raw_signal_utils
 
 
 def quantify_files(
     config,
     fast5_fnames,
-    overwrite=False,
     filter_name=None,
     quant_method="time between captures",
     classified_only=False,
     interval_mins=None,
 ):
-    # All fast5_fnames are assumed to be from the same run
+    """Quantify how often captures occur in a batch of FAST5 files.
 
-    #
-    # If a filter is specified in the config, use those reads only
+    This works best with a lenient filtering at the start to identify all blockages.
+    Use unfiltered captures as "blockages" and filtered captures as "captures".
 
-    # The challenge here is that reads will be in different files. Need to read
-    # in all the reads from all the files, sort them by channel and time, and
-    # then quantify.
+    Parameters
+    ----------
+    config : dict
+        Configuration parameters for the segmenter.
+        # TODO : document allowed values : https://github.com/uwmisl/poretitioner/issues/27
+    fast5_fnames : list of str
+        FAST5 filenames containing the reads to classify
+    filter_name : str, optional
+        If only some reads should be considered as captures, specify a filter that
+        contains only those reads. Specify None to use all reads, by default None
+    quant_method : str, optional
+        The quantification method to run, by default "time between captures"
+    classified_only : bool, optional
+        Only quantify captures that have been successfully classified, by default False
+    interval_mins : int, optional
+        When quantifying captures over time, this is the length of the window of
+        time considered at once. Specify None to quantify the entire file, by default None
+
+    Returns
+    -------
+    list of float
+        Quantification results where each data point represents one window of time.
+        If one value is returned in this list, it represents the entire file.
+
+    Raises
+    ------
+    ValueError
+        Raised if the quantification method (quant_method) is not supported.
+    """
 
     # This also requires having a lenient filtering at the start to identify all blockages.
     # Use unfiltered captures as "blockages" and filtered captures as "captures".
@@ -48,17 +72,12 @@ def quantify_files(
     else:
         classification_path = None
 
-    # if quant_method == "time between captures":
-    #     quantifier = calc_time_until_capture
-    # elif quant_method == "capture freq":
-    #     quantifier = calc_capture_freq
-    # else:
-    #     raise ValueError(f"This quantification method is not supported: {quant_method}")
-
-    # TODO: Streaming opportunity -- shouldn't have to read all data at once.
     capture_arrays = []
     blockage_arrays = []
 
+    # The challenge here is that reads will be in different files. Need to read
+    # in all the reads from all the files, sort them by channel and time, and
+    # then quantify.
     for fast5_fname in fast5_fnames:
         with h5py.File(fast5_fname, "r") as f5:
             sampling_rate = raw_signal_utils.get_sampling_rate(f5)
@@ -96,7 +115,6 @@ def quantify_files(
         intervals = list(zip([start_obs] + intervals, intervals + [end_obs]))
 
     if quant_method == "time between captures":
-        # TODO move this to its own function, taking in intervals as well
         capture_times = calc_time_until_capture_intervals(
             capture_windows,
             captures_by_channel,
@@ -106,15 +124,16 @@ def quantify_files(
         return capture_times
 
     elif quant_method == "capture freq":
-        # TODO move this to its own function, taking in intervals as well
         capture_freqs = calc_capture_freq_intervals(
             capture_windows,
             captures_by_channel,
-            blockages_by_channel=blockages_by_channel,
             intervals=intervals,
             sampling_rate=sampling_rate,
         )
         return capture_freqs
+
+    else:
+        raise ValueError(f"Quantification method not implemented: {quant_method}")
 
 
 def get_capture_windows_by_channel(fast5_fname):
@@ -247,8 +266,6 @@ def calc_time_until_capture(capture_windows, captures, blockages=None):
     current capture. Includes subtracting other non-capture blockages since
     those blockages reduce the amount of overall open pore time.
 
-    Note: called by "get_capture_time" and "get_capture_time_tseg"
-
     Parameters
     ----------
     capture_windows : list of tuples of ints [(start, end), ...]
@@ -315,6 +332,29 @@ def calc_time_until_capture(capture_windows, captures, blockages=None):
 def calc_time_until_capture_intervals(
     capture_windows, captures_by_channel, blockages_by_channel=None, intervals=[]
 ):
+    """Compute time_until_capture across specified intervals of time.
+
+    Parameters
+    ----------
+    capture_windows : list of tuples of ints [(start, end), ...]
+        Regions of current where the nanopore is available to accept a
+        capture. (I.e., is in a "normal" voltage state.) [(start, end), ...]
+    captures_by_channel : dictionary of captures {channel_no: [(start, end), ...]}
+        Regions of current where a capture is residing in the pore. The
+        function is calculating time between these values (minus blockages).
+    blockages_by_channel : dictionary of blockages {channel_no: [(start, end), ...]}
+        Regions of current where the pore is blocked by any capture or non-
+        capture. These are removed from the time between captures, if
+        specified.
+    intervals : list, optional
+        List of start and end times, in observations (#/datapoints, not minutes), by default []
+
+    Returns
+    -------
+    list of floats
+        List of the average time between captures, where each item in this list
+        corresponds to an entry in the input list intervals.
+    """
     assert len(intervals) > 0
     capture_times = []
     elapsed_time_obs = 0
@@ -344,8 +384,23 @@ def calc_time_until_capture_intervals(
     return capture_times
 
 
-def calc_capture_freq(capture_windows, captures, blockages=None):
-    # local_logger = logger.getLogger()
+def calc_capture_freq(capture_windows, captures):
+    """Calculate the capture frequency -- the number of captures per unit of time.
+
+    Parameters
+    ----------
+    capture_windows : list of tuples of ints [(start, end), ...]
+        Regions of current where the nanopore is available to accept a
+        capture. (I.e., is in a "normal" voltage state.) [(start, end), ...]
+    captures : list of tuples of ints [(start, end), ...]
+        Regions of current where a capture is residing in the pore. The
+        function is calculating time between these values (minus blockages).
+
+    Returns
+    -------
+    list of floats
+        List of all capture times from a single channel.
+    """
 
     if captures is None or len(captures) == 0:
         return None
@@ -364,21 +419,46 @@ def calc_capture_freq(capture_windows, captures, blockages=None):
 def calc_capture_freq_intervals(
     capture_windows,
     captures_by_channel,
-    blockages_by_channel=None,
     intervals=[],
     sampling_rate=10000,
 ):
+    """Compute capture_freq across specified intervals of time.
+
+    Parameters
+    ----------
+    capture_windows : list of tuples of ints [(start, end), ...]
+        Regions of current where the nanopore is available to accept a
+        capture. (I.e., is in a "normal" voltage state.) [(start, end), ...]
+    captures_by_channel : dictionary of captures {channel_no: [(start, end), ...]}
+        Regions of current where a capture is residing in the pore. The
+        function is calculating time between these values (minus blockages).
+    blockages_by_channel : dictionary of blockages {channel_no: [(start, end), ...]}
+        Regions of current where the pore is blocked by any capture or non-
+        capture. These are removed from the time between captures, if
+        specified.
+    intervals : list, optional
+        List of start and end times, in observations (#/datapoints, not minutes), by default []
+
+    Returns
+    -------
+    list of floats
+        List of the average time between captures, where each item in this list
+        corresponds to an entry in the input list intervals.
+    """
     assert len(intervals) > 0
     capture_freqs = []
     for interval in intervals:
         start_obs, end_obs = interval
         interval_capture_counts = []
+        windows = []
         for channel in captures_by_channel.keys():
             captures = captures_by_channel[channel]
             windows = capture_windows[channel]
-
             assert captures is not None
             assert windows is not None
+
+            # TODO compute overlap with interval
+
             counts = calc_capture_freq(windows, captures)
             interval_capture_counts.append(counts)
         avg_capture_count = np.mean(interval_capture_counts)
@@ -391,11 +471,20 @@ def calc_capture_freq_intervals(
     return capture_freqs
 
 
-# Calibration Curves
-
-
 def NTER_time_fit(time):
-    # TODO : Document the hardcoded values : https://github.com/uwmisl/poretitioner/issues/44
+    """Convert time_between_captures to concentration per the NTER paper.
+
+    Parameters
+    ----------
+    time : float
+        Returned value from def calc_time_until_capture.
+
+
+    Returns
+    -------
+    float
+        Concentration
+    """
 
     if time == -1:
         return 0
@@ -406,7 +495,19 @@ def NTER_time_fit(time):
 
 
 def NTER_freq_fit(freq):
-    # TODO : Document the hardcoded values : https://github.com/uwmisl/poretitioner/issues/44
+    """Convert capture_freq to concentration per the NTER paper.
+
+    Parameters
+    ----------
+    freq : float
+        Returned value from def calc_capture_freq.
+
+
+    Returns
+    -------
+    float
+        Concentration
+    """
 
     if freq == -1:
         return 0

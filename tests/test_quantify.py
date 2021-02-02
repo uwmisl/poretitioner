@@ -138,7 +138,10 @@ def quantify_files_time_until_capture_test():
     # Define config dict that contains filter info
     config = {
         "compute": {"n_workers": 4},
-        "filters": {"base filter": {"length": (100, None)}, "test filter": {"min": (100, None)}},
+        "filters": {
+            "base filter": {"length": (100, None)},
+            "test filter": {"min": (100, None)},
+        },
         "output": {"capture_f5_dir": "tests/", "captures_per_f5": 1000},
         "classify": {
             "classifier": "NTER_cnn",
@@ -150,13 +153,11 @@ def quantify_files_time_until_capture_test():
         },
     }
     fast5_fnames = ["tests/data/classified_9captures.fast5"]
-    overwrite = False
     filter_name = None
     quant_method = "time between captures"
     times = quantify.quantify_files(
         config,
         fast5_fnames,
-        overwrite=overwrite,
         filter_name=filter_name,
         quant_method=quant_method,
         classified_only=True,
@@ -174,7 +175,10 @@ def quantify_files_capture_freq_test():
     # Define config dict that contains filter info
     config = {
         "compute": {"n_workers": 4},
-        "filters": {"base filter": {"length": (100, None)}, "test filter": {"min": (100, None)}},
+        "filters": {
+            "base filter": {"length": (100, None)},
+            "test filter": {"min": (100, None)},
+        },
         "output": {"capture_f5_dir": "tests/", "captures_per_f5": 1000},
         "classify": {
             "classifier": "NTER_cnn",
@@ -186,13 +190,11 @@ def quantify_files_capture_freq_test():
         },
     }
     fast5_fnames = ["tests/data/classified_9captures.fast5"]
-    overwrite = False
     filter_name = None
     quant_method = "capture freq"
     times = quantify.quantify_files(
         config,
         fast5_fnames,
-        overwrite=overwrite,
         filter_name=filter_name,
         quant_method=quant_method,
         classified_only=True,
