@@ -24,7 +24,17 @@ def create_capture_fast5_test():
     """
     bulk_f5_fname = "tests/data/bulk_fast5_dummy.fast5"
     capture_f5_fname = "tests/data/capture_fast5_dummy.fast5"
-    config = {}
+    segment_config = {
+        "voltage_threshold": -140,
+        "signal_threshold": 0.7,
+        "translocation_delay": 20,
+        "open_channel_prior_mean": 220,
+        "good_channels": [2, 3, 4, 5, 6, 7, 8, 9, 10],
+        "end_tol": 50,
+        "terminal_capture_only": True,
+        "filter": {"length": (100, None)},
+    }
+    config = {"segment": segment_config}
     segment.create_capture_fast5(
         bulk_f5_fname, capture_f5_fname, config, overwrite=True, sub_run=None
     )
@@ -51,7 +61,17 @@ def create_capture_fast5_overwrite_test():
     capture_f5_fname = "tests/data/capture_fast5_dummy_exists.fast5"
     with open(capture_f5_fname, "w") as f:
         f.write("\n")
-    config = {}
+    segment_config = {
+        "voltage_threshold": -140,
+        "signal_threshold": 0.7,
+        "translocation_delay": 20,
+        "open_channel_prior_mean": 220,
+        "good_channels": [2, 3, 4, 5, 6, 7, 8, 9, 10],
+        "end_tol": 50,
+        "terminal_capture_only": True,
+        "filter": {"length": (100, None)},
+    }
+    config = {"segment": segment_config}
     with pytest.raises(FileExistsError):
         segment.create_capture_fast5(
             bulk_f5_fname, capture_f5_fname, config, overwrite=False, sub_run=None
@@ -95,7 +115,17 @@ def create_capture_fast5_subrun_test():
     """
     bulk_f5_fname = "tests/data/bulk_fast5_dummy.fast5"
     capture_f5_fname = "tests/data/capture_fast5_dummy_sub.fast5"
-    config = {}
+    segment_config = {
+        "voltage_threshold": -140,
+        "signal_threshold": 0.7,
+        "translocation_delay": 20,
+        "open_channel_prior_mean": 220,
+        "good_channels": [2, 3, 4, 5, 6, 7, 8, 9, 10],
+        "end_tol": 50,
+        "terminal_capture_only": True,
+        "filter": {"length": (100, None)},
+    }
+    config = {"segment": segment_config}
     segment.create_capture_fast5(
         bulk_f5_fname,
         capture_f5_fname,
@@ -434,22 +464,26 @@ def find_captures_8_capture_no_open_channel_test():
 
 def parallel_find_captures_test():
     bulk_f5_fname = "tests/data/bulk_fast5_dummy.fast5"
-    config = {
-        "compute": {"n_workers": 4},
-        "segment": {
-            "voltage_threshold": -180,
-            "signal_threshold": 0.7,
-            "translocation_delay": 10,
-            "open_channel_prior_mean": 230,
-            "open_channel_prior_stdv": 25,
-            "good_channels": [1, 2, 3],
-            "end_tol": 0,
-            "terminal_capture_only": False,
-        },
-        "filters": {"base filter": {"length": (100, None)}},
-        "output": {"capture_f5_dir": "tests/", "captures_per_f5": 1000},
+    segment_config = {
+        "voltage_threshold": -180,
+        "signal_threshold": 0.7,
+        "translocation_delay": 20,
+        "open_channel_prior_mean": 220,
+        "good_channels": [1, 2, 3],
+        "end_tol": 50,
+        "terminal_capture_only": False,
+        "filter": {"length": (100, None)},
     }
-    segment.parallel_find_captures(bulk_f5_fname, config)
+    compute_config = {
+        "n_workers": 2,
+    }
+    output_config = {"capture_f5_dir": "tests", "captures_per_f5": 4000}
+    config = {
+        "compute": compute_config,
+        "segment": segment_config,
+        "output": output_config,
+    }
+    segment.parallel_find_captures(bulk_f5_fname, config, overwrite=True)
     run_id = "d0befb838f5a9a966e3c559dc3a75a6612745849"
     actual_n_captures = 9
     n_captures = 0
@@ -466,7 +500,6 @@ def parallel_find_captures_test():
             assert start_time_local == start_time_bulk  # No offset here
 
             duration = a.get("duration")
-            # print(d["Signal"])
             len_signal = len(d["Signal"][()])
             assert len_signal == duration
 
@@ -557,19 +590,3 @@ def write_capture_to_fast5_test(tmpdir):
     assert os.path.exists(capture_f5_fname)
     # TODO further validation, incl. contents of file
     os.remove(capture_f5_fname)
-
-
-# def add_capture_windows_test():
-#     # Hack to add capture windows to test data
-#     dir = "tests/data"
-#     bulk_f5_fname = "tests/data/bulk_fast5_dummy.fast5"
-#     files = [
-#         os.path.join(dir, x)
-#         for x in os.listdir(dir)
-#         if "bulk" not in x and x.endswith("fast5")
-#     ]
-#     for f in files:
-#         raw_signals, context, run_id, sampling_rate = segment._prep_capture_windows(
-#             bulk_f5_fname, None, None, -180, 0.7, [1, 2, 3], 229.1,
-#         )
-#        segment.write_capture_windows_to_fast5(f, context)
