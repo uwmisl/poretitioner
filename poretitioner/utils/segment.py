@@ -196,6 +196,12 @@ def create_capture_fast5(
         sub_run_duration : int). sub_run_id is the identifier for the sub run,
         sub_run_offset is the time the sub run starts in the bulk fast5,
         measured in #/time series points.
+
+    Raises
+    ------
+    OSError
+        Raised if the bulk fast5 file does not exist.
+        Raised if the path to the capture fast5 file does not exist.
     """
     local_logger = logger.getLogger()
     if not os.path.exists(bulk_f5_fname):
@@ -311,6 +317,12 @@ def _prep_capture_windows(
         Segments of the raw signal representing capture windows, and metadata
         about these segments (channel number, window endpoints, offset, range,
         digitisation).
+
+    Raises
+    ------
+    ValueError
+        Raised when no voltage is present at or below the threshold.
+        Raised when any channel in good_channels is not present in the bulk file.
     """
     local_logger = logger.getLogger()
     with h5py.File(bulk_f5_fname, "r") as bulk_f5:

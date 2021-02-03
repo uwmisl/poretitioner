@@ -111,6 +111,8 @@ def init_classifier(classifier_name, classifier_path):
     ------
     ValueError
         Raised if the classifier name is not supported.
+    OSError
+        Raised if the classifier path does not exist.
     """
     if classifier_name == "NTER_cnn":  # CNN classifier
         if not os.path.exists(classifier_path):

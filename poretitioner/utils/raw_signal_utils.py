@@ -139,6 +139,11 @@ def get_voltage(f5, start=None, end=None):
     -------
     float
         Voltage (mV).
+
+    Raises
+    ------
+    ValueError
+        Raised if f5 is not an h5py.File object.
     """
     if type(f5) is not h5py._hl.files.File:
         raise ValueError("f5 must be an open h5py.File object.")
@@ -161,6 +166,11 @@ def get_sampling_rate(f5):
     -------
     int
         Sampling rate
+
+    Raises
+    ------
+    ValueError
+        Raised if f5 is not an h5py.File object.
     """
     if type(f5) is not h5py._hl.files.File:
         raise ValueError("f5 must be an open h5py.File object.")
@@ -185,6 +195,11 @@ def get_fractional_blockage_for_read(f5, read_id, start=None, end=None):
     -------
     Numpy array (float)
         Fractionalized current from the specified read_id.
+
+    Raises
+    ------
+    ValueError
+        Raised if f5 is not an h5py.File object.
     """
     if type(f5) is not h5py._hl.files.File:
         raise ValueError("f5 must be an open h5py.File object.")
@@ -213,6 +228,12 @@ def get_raw_signal_for_read(f5, read_id, start=None, end=None):
     -------
     Numpy array
         Array representing sampled nanopore current.
+
+    Raises
+    ------
+    ValueError
+        Raised if f5 is not an h5py.File object.
+        Raised if the path to the signal is not present in f5.
     """
     if type(f5) is not h5py._hl.files.File:
         raise ValueError("f5 must be an open h5py.File object.")
@@ -246,6 +267,11 @@ def get_scaled_raw_for_read(f5, read_id, start=None, end=None):
     -------
     Numpy array
         Array representing sampled nanopore current, scaled to pA.
+
+    Raises
+    ------
+    ValueError
+        Raised if f5 is not an h5py.File object.
     """
     if type(f5) is not h5py._hl.files.File:
         raise ValueError("f5 must be an open h5py.File object.")
@@ -271,6 +297,11 @@ def get_scale_metadata_for_read(f5, read_id):
     -------
     Tuple
         Offset, range, and digitisation values.
+
+    Raises
+    ------
+    ValueError
+        Raised if f5 is not an h5py.File object.
     """
     if type(f5) is not h5py._hl.files.File:
         raise ValueError("f5 must be an open h5py.File object.")
@@ -341,6 +372,11 @@ def get_scale_metadata(f5, channel_no):
     -------
     Tuple
         Offset, range, and digitisation values.
+
+    Raises
+    ------
+    ValueError
+        Raised if f5 is not an h5py.File object.
     """
     if type(f5) is not h5py._hl.files.File:
         raise ValueError("f5 must be an open h5py.File object.")
@@ -378,6 +414,11 @@ def get_scaled_raw_for_channel(f5, channel_no, start=None, end=None):
     -------
     Numpy array
         Array representing sampled nanopore current, scaled to pA.
+
+    Raises
+    ------
+    ValueError
+        Raised if f5 is not an h5py.File object.
     """
     if type(f5) is not h5py._hl.files.File:
         raise ValueError("f5 must be an open h5py.File object.")
