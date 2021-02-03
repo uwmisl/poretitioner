@@ -19,7 +19,7 @@ def quantify_files(
     config,
     fast5_fnames,
     filter_name=None,
-    quant_method="time between captures",
+    quant_method="time_between_captures",
     classified_only=False,
     interval_mins=None,
 ):
@@ -39,7 +39,7 @@ def quantify_files(
         If only some reads should be considered as captures, specify a filter that
         contains only those reads. Specify None to use all reads, by default None
     quant_method : str, optional
-        The quantification method to run, by default "time between captures"
+        The quantification method to run, by default "time_between_captures"
     classified_only : bool, optional
         Only quantify captures that have been successfully classified, by default False
     interval_mins : int, optional
@@ -75,6 +75,9 @@ def quantify_files(
     capture_arrays = []
     blockage_arrays = []
 
+    if len(fast5_fnames) == 0:
+        raise ValueError("No fast5 files specified (len(fast5_fnames) == 0).")
+
     # The challenge here is that reads will be in different files. Need to read
     # in all the reads from all the files, sort them by channel and time, and
     # then quantify.
@@ -82,17 +85,19 @@ def quantify_files(
         with h5py.File(fast5_fname, "r") as f5:
             sampling_rate = raw_signal_utils.get_sampling_rate(f5)
             capture_array = get_capture_details_in_f5(f5, read_path, classification_path)
-            if classified_only:
-                ix = np.where(capture_array[:, 4] != "-1")[0]
-                capture_array = capture_array[ix, :]
-            capture_arrays.append(capture_array)
+            if len(capture_array) > 0:
+                if classified_only:
+                    ix = np.where(capture_array[:, 4] != "-1")[0]
+                    capture_array = capture_array[ix, :]
+                capture_arrays.append(capture_array)
             # Get all of the "blockages" -- all regions where the pore is
             # assumed to be blocked by something (capture or not)
             if read_path == blockage_path:
                 blockage_array = capture_array
             else:
                 blockage_array = get_capture_details_in_f5(f5, read_path, classification_path)
-            blockage_arrays.append(blockage_array)
+            if len(blockage_array) > 0:
+                blockage_arrays.append(blockage_array)
 
     captures_by_channel = sort_captures_by_channel(np.vstack(capture_arrays))
     blockages_by_channel = sort_captures_by_channel(np.vstack(blockage_arrays))
@@ -106,7 +111,6 @@ def quantify_files(
     start_obs = capture_windows[first_channel][0][0]  # Start of first window
     end_obs = capture_windows[first_channel][-1][1]  # End of last window
     # Intervals in format [(start time, end time), ...]
-    interval_mins = 1
     if interval_mins is None:
         intervals = [(start_obs, end_obs)]
     else:
@@ -114,7 +118,7 @@ def quantify_files(
         intervals = list(range(interval_obs + start_obs, end_obs + 1, interval_obs))
         intervals = list(zip([start_obs] + intervals, intervals + [end_obs]))
 
-    if quant_method == "time between captures":
+    if quant_method == "time_between_captures":
         capture_times = calc_time_until_capture_intervals(
             capture_windows,
             captures_by_channel,
@@ -123,7 +127,7 @@ def quantify_files(
         )
         return capture_times
 
-    elif quant_method == "capture freq":
+    elif quant_method == "capture_freq":
         capture_freqs = calc_capture_freq_intervals(
             capture_windows,
             captures_by_channel,
@@ -402,8 +406,11 @@ def calc_capture_freq(capture_windows, captures):
         List of all capture times from a single channel.
     """
 
-    if captures is None or len(captures) == 0:
+    if captures is None:
         return None
+
+    if len(captures) == 0:
+        return 0
 
     n_captures = 0
 
@@ -453,9 +460,12 @@ def calc_capture_freq_intervals(
         windows = []
         for channel in captures_by_channel.keys():
             captures = captures_by_channel[channel]
+            captures = raw_signal_utils.get_overlapping_regions(interval, captures)
             windows = capture_windows[channel]
+            windows = raw_signal_utils.get_overlapping_regions(interval, windows)
             assert captures is not None
             assert windows is not None
+            assert len(windows) > 0
 
             # TODO compute overlap with interval
 
@@ -469,6 +479,35 @@ def calc_capture_freq_intervals(
         avg_capture_freq = avg_capture_count / (elapsed_time_obs / sampling_rate / 60.0)
         capture_freqs.append(avg_capture_freq)
     return capture_freqs
+
+
+# assert len(intervals) > 0
+#     capture_times = []
+#     elapsed_time_obs = 0
+#     for interval in intervals:
+#         start_obs, end_obs = interval
+#         # Compute capture freq for all channels separately, pooling results
+#         interval_capture_times = []
+#         for channel in captures_by_channel.keys():
+#             captures = captures_by_channel[channel]
+#             captures = raw_signal_utils.get_overlapping_regions(interval, captures)
+#             blockages = blockages_by_channel[channel]
+#             blockages = raw_signal_utils.get_overlapping_regions(interval, blockages)
+#             windows = capture_windows[channel]
+#             windows = raw_signal_utils.get_overlapping_regions(interval, windows)
+
+#             assert captures is not None
+#             assert blockages is not None
+#             assert windows is not None
+#             ts = calc_time_until_capture(windows, captures, blockages=blockages)
+#             if ts is None:
+#                 elapsed_time_obs += end_obs - start_obs
+#             else:
+#                 ts = [ts[0] + elapsed_time_obs] + ts[1:]
+#                 interval_capture_times.extend(ts)
+#                 elapsed_time_obs = 0
+#         capture_times.append(np.mean(interval_capture_times))
+#     return capture_times
 
 
 def NTER_time_fit(time):

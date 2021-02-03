@@ -154,7 +154,7 @@ def quantify_files_time_until_capture_test():
     }
     fast5_fnames = ["tests/data/classified_9captures.fast5"]
     filter_name = None
-    quant_method = "time between captures"
+    quant_method = "time_between_captures"
     times = quantify.quantify_files(
         config,
         fast5_fnames,
@@ -167,12 +167,39 @@ def quantify_files_time_until_capture_test():
 
 
 def quantify_files_time_until_capture_intervals_test():
-    # TODO need to create a fast5 that covers this case
-    assert True is False
+    config = {
+        "compute": {"n_workers": 4},
+        "filters": {
+            "base filter": {"length": (100, None)},
+            "test filter": {"min": (100, None)},
+        },
+        "output": {"capture_f5_dir": "tests/", "captures_per_f5": 1000},
+        "classify": {
+            "classifier": "NTER_cnn",
+            "classifier_path": "poretitioner/utils/model/NTERs_trained_cnn_05152019.statedict.pt",
+            "classifier_version": "1.0",
+            "start_obs": 100,
+            "end_obs": 21000,
+            "min_confidence": 0.9,
+        },
+    }
+    fast5_fnames = ["tests/data/classified_10mins_4channels.fast5"]
+    filter_name = None
+    quant_method = "time_between_captures"
+    interval_mins = 3
+    times = quantify.quantify_files(
+        config,
+        fast5_fnames,
+        filter_name=filter_name,
+        quant_method=quant_method,
+        classified_only=True,
+        interval_mins=interval_mins,
+    )
+    assert len(times) == 4
+    assert times[0] < 220401 and times[0] > 220400
 
 
 def quantify_files_capture_freq_test():
-    # Define config dict that contains filter info
     config = {
         "compute": {"n_workers": 4},
         "filters": {
@@ -191,7 +218,7 @@ def quantify_files_capture_freq_test():
     }
     fast5_fnames = ["tests/data/classified_9captures.fast5"]
     filter_name = None
-    quant_method = "capture freq"
+    quant_method = "capture_freq"
     times = quantify.quantify_files(
         config,
         fast5_fnames,
@@ -204,5 +231,33 @@ def quantify_files_capture_freq_test():
 
 
 def quantify_files_capture_freq_intervals_test():
-    # TODO need to create a fast5 that covers this case
-    assert True is False
+    config = {
+        "compute": {"n_workers": 4},
+        "filters": {
+            "base filter": {"length": (100, None)},
+            "test filter": {"min": (100, None)},
+        },
+        "output": {"capture_f5_dir": "tests/", "captures_per_f5": 1000},
+        "classify": {
+            "classifier": "NTER_cnn",
+            "classifier_path": "poretitioner/utils/model/NTERs_trained_cnn_05152019.statedict.pt",
+            "classifier_version": "1.0",
+            "start_obs": 100,
+            "end_obs": 21000,
+            "min_confidence": 0.9,
+        },
+    }
+    fast5_fnames = ["tests/data/classified_10mins_4channels.fast5"]
+    filter_name = None
+    quant_method = "capture_freq"
+    interval_mins = 3
+    times = quantify.quantify_files(
+        config,
+        fast5_fnames,
+        filter_name=filter_name,
+        quant_method=quant_method,
+        classified_only=True,
+        interval_mins=interval_mins,
+    )
+    assert len(times) == 4
+    assert times[0] < 1.17 and times[0] > 1.16
