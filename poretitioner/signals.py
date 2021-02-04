@@ -8,7 +8,7 @@ This module encapsulates data related to nanopore signals and the channels that 
 """
 
 from collections import namedtuple
-from typing import Optional
+from typing import List, Optional
 
 import numpy as np
 from utils.core import Channel, NumpyArrayLike, Window
@@ -189,20 +189,7 @@ class FractionalizedSignal(BaseSignal):
         FractionalizedSignal instance.
     """
 
-    @classmethod
-    def from_picoamperes(
-        self, picoamperes: PicoampereSignal, channel: Channel, read_id: str = None
-    ):
-        open_channel_guess = channel.open_channel_guess
-        open_channel_bound = channel.open_channel_bound
-        open_channel = find_open_channel_current(
-            picoamperes, open_channel_guess, bound=open_channel_bound
-        )
-        if open_channel is None:
-            # TODO add logging here to give the reason for returning None
-            return None
-        frac = compute_fractional_blockage(picoamperes, open_channel)
-        super().__init__(frac, channel, read_id=read_id)
+    pass
 
 
 class Capture(namedtuple("Capture", ["window", "signal"])):
