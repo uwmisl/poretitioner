@@ -196,7 +196,14 @@ def create_capture_fast5(
         sub_run_duration : int). sub_run_id is the identifier for the sub run,
         sub_run_offset is the time the sub run starts in the bulk fast5,
         measured in #/time series points.
+
+    Raises
+    ------
+    OSError
+        Raised if the bulk fast5 file does not exist.
+        Raised if the path to the capture fast5 file does not exist.
     """
+    local_logger = logger.getLogger()
     if not os.path.exists(bulk_f5_fname):
         raise OSError(f"Bulk fast5 file does not exist: {bulk_f5_fname}")
     if overwrite:
@@ -226,6 +233,8 @@ def create_capture_fast5(
             for k, v in attrs.items():
                 g.attrs.create(k, v)
             g.attrs.create("bulk_filename", bulk_f5_fname, dtype=f"S{len(bulk_f5_fname)}")
+            sample_frequency = bulk_f5.get("Meta").attrs["sample_rate"]
+            g.attrs.create("sample_frequency", sample_frequency)
 
             # /Meta/tracking_id
             attrs = ugk["tracking_id"].attrs
@@ -251,15 +260,26 @@ def create_capture_fast5(
             g.attrs.create("segmenter", __name__, dtype=f"S{len(__name__)}")
             g.attrs.create("segmenter_version", __version__, dtype=f"S{len(__version__)}")
             g_filt = capture_f5.create_group("/Meta/Segmentation/filters")
-            for k, v in config.items():
-                if k == "base filter":
-                    for filt, (min_filt, max_filt) in v.items():
-                        # Create compound dset for filters
-                        dtypes = np.dtype([("min", type(min_filt), ("max", type(max_filt)))])
-                        d = g_filt.create_dataset(k, (2,), dtype=dtypes)
-                        d[filt] = (min_filt, max_filt)
+            g_seg = capture_f5.create_group("/Meta/Segmentation/context_id")
+            segment_config = config.get("segment")
+            if segment_config is None:
+                raise ValueError("No segment configuration provided.")
+            for k, v in segment_config.items():
+                if k == "filter":
+                    for filt, filt_vals in v.items():
+                        if len(filt_vals) == 2:
+                            (min_filt, max_filt) = filt_vals
+                            # Create compound dset for filters
+                            local_logger.debug("filt types", type(min_filt), type(max_filt))
+                            if min_filt is None:
+                                min_filt = -1
+                            if max_filt is None:
+                                max_filt = -1
+                            if min_filt == -1 and max_filt == -1:
+                                continue
+                            g_filt.create_dataset(filt, data=(min_filt, max_filt))
                 else:
-                    g.create(k, v)
+                    g_seg.create_dataset(k, data=v)
 
 
 def _prep_capture_windows(
@@ -297,6 +317,12 @@ def _prep_capture_windows(
         Segments of the raw signal representing capture windows, and metadata
         about these segments (channel number, window endpoints, offset, range,
         digitisation).
+
+    Raises
+    ------
+    ValueError
+        Raised when no voltage is present at or below the threshold.
+        Raised when any channel in good_channels is not present in the bulk file.
     """
     local_logger = logger.getLogger()
     with h5py.File(bulk_f5_fname, "r") as bulk_f5:
@@ -310,6 +336,8 @@ def _prep_capture_windows(
 
         local_logger.info("Identifying capture windows (via voltage threshold).")
         capture_windows = raw_signal_utils.find_segments_below_threshold(voltage, voltage_t)
+        if len(capture_windows) == 0:
+            raise ValueError(f"No voltage at or below threshold ({voltage_t})")
         local_logger.debug(
             f"run_id: {run_id}, sampling_rate: {sampling_rate}, "
             f"#/capture windows: {len(capture_windows)}"
@@ -318,22 +346,36 @@ def _prep_capture_windows(
         raw_signals = []  # Input data to find_captures_dask_wrapper
         signal_metadata = []  # Metadata -- no need to pass through the segmenter
         for channel_no in good_channels:
+            # Verify that the channel is actually in the file
+            signal_path = f"/Raw/Channel_{channel_no}"
+            if signal_path not in bulk_f5:
+                raise ValueError(
+                    f"Channel {channel_no} specified in good_channels but is not in the bulk fast5."
+                )
+            # Get raw signal
             raw = raw_signal_utils.get_scaled_raw_for_channel(
                 bulk_f5,
                 channel_no=channel_no,
                 start=f5_subsection_start,
                 end=f5_subsection_end,
             )
+            open_channel = raw_signal_utils.find_open_channel_current(raw, open_channel_prior_mean)
+            if open_channel is None:
+                open_channel = open_channel_prior_mean
             offset, rng, digi = raw_signal_utils.get_scale_metadata(bulk_f5, channel_no)
             for capture_window in capture_windows:
                 start, end = capture_window[0], capture_window[1]
-                raw_signals.append((raw[start:end], signal_t, open_channel_prior_mean))
+                raw_signals.append((raw[start:end], signal_t, open_channel))
                 signal_metadata.append([channel_no, capture_window, offset, rng, digi])
     return raw_signals, signal_metadata, run_id, sampling_rate
 
 
 def parallel_find_captures(
-    bulk_f5_fname, config, f5_subsection_start=None, f5_subsection_end=None
+    bulk_f5_fname,
+    config,
+    f5_subsection_start=None,
+    f5_subsection_end=None,
+    overwrite=False,
 ):
     """Identify captures within the bulk fast5 file in the specified range
     (from f5_subsection_start to f5_subsection_end.)
@@ -354,6 +396,9 @@ def parallel_find_captures(
         Time point at which to start segmenting, by default None
     f5_subsection_end : int, optional
         Time point at which to stop segmenting, by default None
+    overwrite : bool, optional
+        If segmented files already exist, overwrite them if True, otherwise
+        return None.
 
     Returns
     -------
@@ -378,16 +423,25 @@ def parallel_find_captures(
     good_channels = config["segment"]["good_channels"]
     end_tol = config["segment"]["end_tol"]
     terminal_capture_only = config["segment"]["terminal_capture_only"]
-    filters = config["filters"]["base filter"]
-    save_location = config["output"][
-        "capture_f5_dir"
-    ]  # TODO: Verify exists; don't create (handle earlier)
+    filters = config["segment"]["filter"]
+    # TODO: location change for base segmenter filters ^
+    save_location = config["output"]["capture_f5_dir"]
     n_per_file = config["output"]["captures_per_f5"]
-    if f5_subsection_start is None:
-        f5_subsection_start = 0
+    # if f5_subsection_start is None:
+    #     f5_subsection_start = 0
+
+    with h5py.File(bulk_f5_fname, "r") as bulk_f5:
+        run_id = str(bulk_f5["/UniqueGlobalKey/tracking_id"].attrs.get("run_id"))[2:-1]
 
     if not os.path.exists(save_location):
         raise IOError(f"Path to capture file location does not exist: {save_location}")
+
+    extant_files = [x for x in os.listdir(save_location) if run_id in x]
+    if not overwrite and len(extant_files) > 0:
+        local_logger.warning(
+            f"Overwrite set to False and FAST5 files found in output directory {save_location}. Returning None."
+        )
+        return None
 
     raw_signals, context, run_id, sampling_rate = _prep_capture_windows(
         bulk_f5_fname,
@@ -413,10 +467,34 @@ def parallel_find_captures(
     assert len(captures) == len(context)
     local_logger.debug(f"Captures (1st 10): {captures[:10]}")
 
+    # If we're writing over files, delete the old ones here.
+    if overwrite:
+        for f in extant_files:
+            os.remove(os.path.join(save_location, f))
+
     # Write captures to fast5
     n_in_file = 0
     file_no = 1
     capture_f5_fname = os.path.join(save_location, f"{run_id}_{file_no}.fast5")
+    local_logger.info(f"1: {capture_f5_fname}")
+    sub_run_id = str(f5_subsection_start)
+    sub_run_start = f5_subsection_start
+    if f5_subsection_start is None or f5_subsection_end is None:
+        sub_run_duration = None
+    else:
+        sub_run_duration = f5_subsection_end - f5_subsection_start
+    create_capture_fast5(
+        bulk_f5_fname,
+        capture_f5_fname,
+        config,
+        overwrite=overwrite,
+        sub_run=(sub_run_id, sub_run_start, sub_run_duration),
+    )
+    write_capture_windows_to_fast5(capture_f5_fname, context)
+    # Write channel statuses to fast5 (times when the channel had proper voltage to accept captures)
+
+    if f5_subsection_start is None:
+        f5_subsection_start = 0
     capture_metadata = []
     for (
         i,
@@ -439,6 +517,15 @@ def parallel_find_captures(
                 n_in_file = 0
                 file_no += 1
                 capture_f5_fname = os.path.join(save_location, f"{run_id}_{file_no}.fast5")
+                create_capture_fast5(
+                    bulk_f5_fname,
+                    capture_f5_fname,
+                    config,
+                    overwrite=overwrite,
+                    sub_run=(sub_run_id, sub_run_start, sub_run_duration),
+                )
+                # print(f"{file_no}: {capture_f5_fname}")
+                write_capture_windows_to_fast5(capture_f5_fname, context)
             n_in_file += 1
             start, end = capture[0], capture[1]
             raw_pA = window_raw[start:end]
@@ -474,6 +561,49 @@ def parallel_find_captures(
                 ]
             )
     return capture_metadata
+
+
+def sort_capture_windows_by_channel(signal_metadata):
+    # Initialize dictionary of {channel: [windows]}
+    try:
+        channels = np.unique(signal_metadata[:, 0])
+    except TypeError:
+        raise TypeError("signal_metadata must be an array.")
+    windows_by_channel = {}
+    for channel in channels:
+        windows_by_channel[channel] = []
+
+    # Populate dictionary values
+    for row in signal_metadata:
+        channel = row[0]
+        windows_by_channel[channel].append(row)
+
+    # Sort the windows within each channel by time
+    for channel, captures in windows_by_channel.items():
+        captures = np.array(captures)
+        windows_by_channel[channel] = captures[captures[:, 1].argsort()]
+    return windows_by_channel
+
+
+def write_capture_windows_to_fast5(capture_f5_fname, signal_metadata):
+    # Check to make sure the path exists
+    path, fname = os.path.split(capture_f5_fname)
+    if not os.path.exists(path):
+        raise IOError(f"Path to capture file location does not exist: {path}")
+
+    with h5py.File(capture_f5_fname, "a") as f5:
+        base_path = "/Meta/Segmentation/capture_windows"
+        # Sort the windows by channel and write to file
+        # signal_metadata = [[channel_no, capture_window, offset, rng, digi], ...]
+        signal_metadata = np.array(signal_metadata, dtype=object)
+        windows_by_channel = sort_capture_windows_by_channel(signal_metadata)
+        for channel, signal_meta in windows_by_channel.items():
+            path = f"{base_path}/Channel_{channel}"
+            capture_windows = []
+            for meta in signal_meta:
+                channel_no, capture_window, offset, rng, digi = meta
+                capture_windows.append(capture_window)
+            f5[path] = capture_windows
 
 
 def write_capture_to_fast5(

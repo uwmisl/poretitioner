@@ -87,7 +87,6 @@ def predict_class_test():
                 # print(
                 #     f'"{read_id}": {{"label": {pred_label}, "prob": {pred_prob:0.3f}}},'
                 # )
-                p = pred_prob
                 # print(f"p: {p} {type(p)}")
 
                 actual_label = correct_results[read_id]["label"]

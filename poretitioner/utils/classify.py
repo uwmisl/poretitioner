@@ -111,6 +111,8 @@ def init_classifier(classifier_name, classifier_path):
     ------
     ValueError
         Raised if the classifier name is not supported.
+    OSError
+        Raised if the classifier path does not exist.
     """
     if classifier_name == "NTER_cnn":  # CNN classifier
         if not os.path.exists(classifier_path):
@@ -190,18 +192,22 @@ def predict_class(classifier_name, classifier, raw, class_labels=None):
 
 
 def get_classification_for_read(f5, read_id, results_path):
+    local_logger = logger.getLogger()
     results_path = f"{results_path}/{read_id}"
-    try:
-        assert results_path in f5
-    except AssertionError:
-        raise ValueError(
+    if results_path not in f5:
+        local_logger.info(
             f"Read {read_id} has not been classified yet, or result"
             f"is not stored at {results_path} in file {f5.filename}."
         )
-    pred_class = f5[results_path].attrs["best_class"]
-    prob = f5[results_path].attrs["best_score"]
-    assigned_class = f5[results_path].attrs["assigned_class"]
-    passed_classification = True if assigned_class == pred_class else False
+        pred_class = None
+        prob = None
+        assigned_class = -1
+        passed_classification = None
+    else:
+        pred_class = f5[results_path].attrs["best_class"]
+        prob = f5[results_path].attrs["best_score"]
+        assigned_class = f5[results_path].attrs["assigned_class"]
+        passed_classification = True if assigned_class == pred_class else False
     return pred_class, prob, assigned_class, passed_classification
 
 

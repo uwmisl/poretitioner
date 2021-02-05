@@ -84,6 +84,8 @@ def get_fractional_blockage(
     Numpy array (float)
         Fractionalized current from the specified input channel.
     """
+    if type(f5) is not h5py._hl.files.File:
+        raise ValueError("f5 must be an open h5py.File object.")
     signal = get_scaled_raw_for_channel(f5, channel_no, start=start, end=end)
     open_channel = find_open_channel_current(signal, open_channel_guess, bound=open_channel_bound)
     if open_channel is None:
@@ -102,6 +104,8 @@ def get_local_fractional_blockage(
 ):
     """Retrieve the scaled raw signal for the channel, compute the open pore
     current, and return the fractional blockage for that channel."""
+    if type(f5) is not h5py._hl.files.File:
+        raise ValueError("f5 must be an open h5py.File object.")
     signal = get_scaled_raw_for_channel(f5, channel=channel)
     open_channel = find_open_channel_current(signal, open_channel_guess, bound=open_channel_bound)
     if open_channel is None:
@@ -135,7 +139,14 @@ def get_voltage(f5, start=None, end=None):
     -------
     float
         Voltage (mV).
+
+    Raises
+    ------
+    ValueError
+        Raised if f5 is not an h5py.File object.
     """
+    if type(f5) is not h5py._hl.files.File:
+        raise ValueError("f5 must be an open h5py.File object.")
     voltage = f5.get("/Device/MetaData")["bias_voltage"][start:end] * 5.0
     return voltage
 
@@ -155,8 +166,18 @@ def get_sampling_rate(f5):
     -------
     int
         Sampling rate
+
+    Raises
+    ------
+    ValueError
+        Raised if f5 is not an h5py.File object.
     """
-    sample_rate = int(f5.get("Meta").attrs["sample_rate"])
+    if type(f5) is not h5py._hl.files.File:
+        raise ValueError("f5 must be an open h5py.File object.")
+    try:
+        sample_rate = int(f5.get("Meta").attrs["sample_rate"])
+    except KeyError:
+        sample_rate = int(f5.get("/Meta/context_tags").attrs["sample_frequency"])
     return sample_rate
 
 
@@ -174,7 +195,14 @@ def get_fractional_blockage_for_read(f5, read_id, start=None, end=None):
     -------
     Numpy array (float)
         Fractionalized current from the specified read_id.
+
+    Raises
+    ------
+    ValueError
+        Raised if f5 is not an h5py.File object.
     """
+    if type(f5) is not h5py._hl.files.File:
+        raise ValueError("f5 must be an open h5py.File object.")
     signal = get_scaled_raw_for_read(f5, read_id, start=start, end=end)
     if "read" in read_id:
         channel_path = f"{read_id}/channel_id"
@@ -200,11 +228,21 @@ def get_raw_signal_for_read(f5, read_id, start=None, end=None):
     -------
     Numpy array
         Array representing sampled nanopore current.
+
+    Raises
+    ------
+    ValueError
+        Raised if f5 is not an h5py.File object.
+        Raised if the path to the signal is not present in f5.
     """
+    if type(f5) is not h5py._hl.files.File:
+        raise ValueError("f5 must be an open h5py.File object.")
     if "read" in read_id:
         signal_path = f"/{read_id}/Signal"
     else:
         signal_path = f"/read_{read_id}/Signal"
+    if signal_path not in f5:
+        raise ValueError(f"Could not find path in fast5 file: {signal_path}, {f5.filename}")
     if signal_path in f5:
         raw = f5.get(signal_path)[start:end]
         return raw
@@ -229,7 +267,14 @@ def get_scaled_raw_for_read(f5, read_id, start=None, end=None):
     -------
     Numpy array
         Array representing sampled nanopore current, scaled to pA.
+
+    Raises
+    ------
+    ValueError
+        Raised if f5 is not an h5py.File object.
     """
+    if type(f5) is not h5py._hl.files.File:
+        raise ValueError("f5 must be an open h5py.File object.")
     raw = get_raw_signal_for_read(f5, read_id, start=start, end=end)
     offset, rng, digi = get_scale_metadata_for_read(f5, read_id)
     return scale_raw_current(raw, offset, rng, digi)
@@ -252,7 +297,14 @@ def get_scale_metadata_for_read(f5, read_id):
     -------
     Tuple
         Offset, range, and digitisation values.
+
+    Raises
+    ------
+    ValueError
+        Raised if f5 is not an h5py.File object.
     """
+    if type(f5) is not h5py._hl.files.File:
+        raise ValueError("f5 must be an open h5py.File object.")
     if "read" in read_id:
         channel_path = f"{read_id}/channel_id"
     else:
@@ -292,7 +344,11 @@ def get_raw_signal(f5, channel_no, start=None, end=None):
     Numpy array
         Array representing sampled nanopore current.
     """
+    if type(f5) is not h5py._hl.files.File:
+        raise ValueError("f5 must be an open h5py.File object.")
     signal_path = f"/Raw/Channel_{channel_no}/Signal"
+    if signal_path not in f5:
+        raise ValueError(f"Could not find path in fast5 file: {signal_path}, {f5.filename}")
     if start is not None or end is not None:
         raw = f5.get(signal_path)[start:end]
     else:
@@ -316,7 +372,14 @@ def get_scale_metadata(f5, channel_no):
     -------
     Tuple
         Offset, range, and digitisation values.
+
+    Raises
+    ------
+    ValueError
+        Raised if f5 is not an h5py.File object.
     """
+    if type(f5) is not h5py._hl.files.File:
+        raise ValueError("f5 must be an open h5py.File object.")
     meta_path = f"/Raw/Channel_{channel_no}/Meta"
     attrs = f5.get(meta_path).attrs
     offset = attrs.get("offset")
@@ -351,7 +414,14 @@ def get_scaled_raw_for_channel(f5, channel_no, start=None, end=None):
     -------
     Numpy array
         Array representing sampled nanopore current, scaled to pA.
+
+    Raises
+    ------
+    ValueError
+        Raised if f5 is not an h5py.File object.
     """
+    if type(f5) is not h5py._hl.files.File:
+        raise ValueError("f5 must be an open h5py.File object.")
     raw = get_raw_signal(f5, channel_no, start=start, end=end)
     offset, rng, digi = get_scale_metadata(f5, channel_no)
     return scale_raw_current(raw, offset, rng, digi)
@@ -544,12 +614,12 @@ def judge_channels(bulk_f5_fname, expected_open_channel=235):
         List of good channels.
     """
     f5 = h5py.File(name=bulk_f5_fname)
-    channels = f5.get("Raw").keys()
+    channels = list(f5.get("Raw").keys())
     channels.sort(key=natkey)
     good_channels = []
     for channel in channels:
-        i = int(re.findall(r"Channel_(\d+)", channel)[0])
-        raw = get_scaled_raw_for_channel(f5, channel)
+        channel_no = int(re.findall(r"Channel_(\d+)", channel)[0])
+        raw = get_scaled_raw_for_channel(f5, channel_no)
 
         # Case 1: Channel might not be totally off, but has little variance
         if np.abs(np.mean(raw)) < 20 and np.std(raw) < 50:
@@ -557,15 +627,15 @@ def judge_channels(bulk_f5_fname, expected_open_channel=235):
 
         # Case 2: Neither the median or 75th percentile value contains the
         #         open pore current.
-        if expected_open_channel is not None:
-            sorted_raw = sorted(raw)
-            len_raw = len(raw)
-            q_50 = len_raw / 2
-            q_75 = len_raw * 3 / 4
-            median_outside_rng = np.abs(sorted_raw[q_50] - expected_open_channel) > 25
-            upper_outside_rng = np.abs(sorted_raw[q_75] - expected_open_channel) > 25
-            if median_outside_rng and upper_outside_rng:
-                continue
+        # if expected_open_channel is not None:
+        #     sorted_raw = sorted(raw)
+        #     len_raw = len(raw)
+        #     q_50 = int(len_raw / 2)
+        #     q_75 = int(len_raw * 3 / 4)
+        #     median_outside_rng = np.abs(sorted_raw[q_50] - expected_open_channel) > 25
+        #     upper_outside_rng = np.abs(sorted_raw[q_75] - expected_open_channel) > 25
+        #     if median_outside_rng and upper_outside_rng:
+        #         continue
 
         # Case 3: The channel is off
         off_regions = find_signal_off_regions(raw, current_range=100)
@@ -576,5 +646,46 @@ def judge_channels(bulk_f5_fname, expected_open_channel=235):
             continue
 
         # Case 4: The channel is assumed to be good
-        good_channels.append(i)
+        good_channels.append(channel_no)
     return good_channels
+
+
+def get_overlapping_regions(window, regions):
+    """get_overlapping_regions
+
+    Finds all of the regions in the given list that overlap with the window.
+    Needs to have at least one overlapping point; cannot be just adjacent.
+    Incomplete overlaps are returned.
+
+    Parameters
+    ----------
+    window : tuple of numerics (start, end)
+        Specifies the start and end points of the desired overlap.
+    regions : list of tuples of numerics [(start, end), ...]
+        Start and end points to check for overlap with the specified window.
+        All regions are assumed to be mutually exclusive and sorted in
+        ascending order.
+
+    Returns
+    -------
+    overlapping_regions : list of tuples of numerics [(start, end), ...]
+        Regions that overlap with the window in whole or part, returned in
+        ascending order.
+    """
+    window_start, window_end = window
+    overlapping_regions = []
+    for region in regions:
+        region_start, region_end = region
+        if region_start >= window_end:
+            # Region comes after the window, we're done searching
+            break
+        elif region_end <= window_start:
+            # Region ends before the window starts
+            continue
+        elif region_end > window_start or region_start >= window_start:
+            # Overlapping
+            overlapping_regions.append(region)
+        else:
+            e = f"Shouldn't have gotten here! Region: {region}, Window: {window}."
+            raise Exception(e)
+    return overlapping_regions
