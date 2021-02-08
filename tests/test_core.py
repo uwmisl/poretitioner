@@ -13,9 +13,9 @@ def window_duration_test():
 
 
 def window_invalid_start_end_test():
-    """Test that windows with start times after end times are invalid.
+    """Test that windows with start times after end times have invalid durations.
     """
     start = 10
     end = 5  # Can't go back in time!
     with pytest.raises(ValueError):
-        Window(start, end)
+        Window(start, end).duration
