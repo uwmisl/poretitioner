@@ -1,4 +1,4 @@
-from . import core
+# from . import core
 
 # Re-import once we've figured out our module structure.
 # from . import classify
