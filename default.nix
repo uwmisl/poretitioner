@@ -67,7 +67,7 @@ let
   ];
 
   # Currently can't build docker images on Mac OS (Darwin): https://github.com/NixOS/nixpkgs/blob/f5a90a7aab126857e9cac4f048930ddabc720c55/pkgs/build-support/docker/default.nix#L620
-  dockerImage = lib.optionals stdenv.isLinux (dockerTools.buildImage {
+  dockerImage = lib.optionals (!stdenv.isDarwin) (dockerTools.buildImage {
     name = "${name}_v${version}";
     tag = "latest";
 
