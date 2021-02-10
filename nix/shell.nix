@@ -12,9 +12,9 @@
 #
 ###########################################################################################
 
-{ pkgs ? import <nixpkgs> { config = import ./config.nix; },
-python ? pkgs.callPackage ./python.nix { inherit pkgs; },
-cudaSupport ? false }:
+{ pkgs ? import <nixpkgs> { config = import ./config.nix; }
+, python ? pkgs.callPackage ./python.nix { inherit pkgs; }, cudaSupport ? false
+}:
 with pkgs;
 let
   dependencies = callPackage ./dependencies.nix { inherit python cudaSupport; };

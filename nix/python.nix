@@ -10,7 +10,6 @@
 #
 ###########################################################################################
 
-
 { pkgs }:
 let
   python = pkgs.python37; # Specifies Python version. In our case, Python 3.7;

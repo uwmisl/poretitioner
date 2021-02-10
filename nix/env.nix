@@ -11,7 +11,8 @@
 # replacing '<<path to this file>>' with the absolute path to this `env.nix` file.
 #
 ###########################################################################################
-{ pkgs ? import <nixpkgs> { config = import ./config.nix; }, cudaSupport ? false }:
+{ pkgs ? import <nixpkgs> { config = import ./config.nix; }, cudaSupport ? false
+}:
 with pkgs;
 let
   python = callPackage ./python.nix { inherit pkgs; };
