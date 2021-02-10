@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 import pytest
 from poretitioner.fast5s import (
+    BaseFile,
     BulkFile,
     CaptureFile,
     channel_path_for_read_id,
@@ -21,17 +22,17 @@ test_bulk_fas5_filepath = "tests/data/bulk_fast5_dummy.fast5"
 
 
 @patch("h5py.File")
-def bulk_fast5_expands_homedir_test(Mockf5File):
+def base_fast5_expands_homedir_test(Mockf5File):
     """Test that '~' for home directory expands as expected.
     """
     file_in_homedir = "~/"
 
     home = Path.home()
     expected = f"{home}/"
-    bulk = BulkFile(file_in_homedir)
-    assert Path(bulk.filepath) == Path(
+    base = BaseFile(file_in_homedir)
+    assert Path(base.filepath) == Path(
         expected
-    ), f"{file_in_homedir} should expand to {expected}, instead expanding to {bulk.filepath}"
+    ), f"{file_in_homedir} should expand to {expected}, instead expanding to {base.filepath}"
 
 
 @patch("h5py.File")

@@ -19,7 +19,7 @@ __all__ = ["BulkFile", "CaptureFile", "channel_path_for_read_id", "signal_path_f
 
 
 class BaseFile:
-    def __init__(self, filepath: str, logger: Logger = getLogger()):
+    def __init__(self, filepath: PathLike, logger: Logger = getLogger()):
         """Base class for interfacing with Fast5 files. This class should not be instantiated directly, instead it should be subclassed.
         Most of the time, nanopore devices/software write data in an HDFS [1] file format called Fast5.
         We expect a certain format for these files, and write our own.
@@ -115,7 +115,7 @@ class BulkFile(BaseFile):
         Parameters
         ----------
         bulk_filepath : PathLike
-            Absolute path to the bulk fast 5 file.
+            File path to the bulk fast 5 file.
         logger : Logger, optional
             Logger to use, by default getLogger()
 
