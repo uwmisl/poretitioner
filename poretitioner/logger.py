@@ -11,6 +11,8 @@ Most importantly, it provides a method for accessing a pre-configured logger.
 import logging
 from logging import Logger
 
+__all__ = ["getLogger", "Logger"]
+
 
 def verbosity_to_log_level(verbosity=0) -> int:
     """Converts a verbosity to a logging level from the standard library logging module.
