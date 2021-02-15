@@ -180,6 +180,12 @@ class TestRawSignal:
 class TestPicoampereSignal:
     def signal_converts_to_fractionalized_test(self):
         pico = PicoampereSignal(PICO_SIGNAL, CHANNEL_NUMBER, CALIBRATION)
+        median = np.median(pico)
+
+        expected = compute_fractional_blockage(pico, median)
+        frac = raw.to_fractionalized()
+        assert np.isclose(frac, expected), "Fractionalized current should match expected."
+
 
 class PicoampereSignalTest:
     def __init__(self):

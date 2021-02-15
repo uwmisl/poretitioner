@@ -6,7 +6,6 @@ fast5.py
 Classes for reading, writing and validating fast5 files.
 """
 
-from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path, PurePosixPath
 from typing import List, NewType, Optional, Union
@@ -21,6 +20,7 @@ from .signals import (
     RawSignal,
     VoltageSignal,
 )
+
 from .utils.classify import (
     NULL_CLASSIFICATION_RESULT,
     ClassificationResult,
@@ -28,7 +28,6 @@ from .utils.classify import (
     ClassifierDetails,
     NullClassificationResult,
 )
-from .utils.core import NumpyArrayLike
 
 __all__ = ["BulkFile", "CaptureFile", "channel_path_for_read_id", "signal_path_for_read_id"]
 
@@ -348,7 +347,7 @@ class BulkFile(BaseFile):
 
         Returns
         -------
-        NumpyArrayLike[int]
+        VoltageSignal[int]
             Voltage(s) in millivolts (mV).
         """
         bias_voltage_multiplier = 5  # Signal changes in increments of 5 mV.
