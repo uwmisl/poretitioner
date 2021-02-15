@@ -8,16 +8,18 @@ This module contains functionality for quantifying nanopore captures.
 
 """
 import re
+from typing import List, Optional
 
 import h5py
 import numpy as np
-
-from poretitioner.utils import classify, raw_signal_utils
+from poretitioner.fast5s import CaptureFile
+from poretitioner.utils import classify
+from poretitioner.utils.core import Window, WindowsByChannel
 
 
 def quantify_files(
     config,
-    fast5_fnames,
+    capture_filepaths,
     filter_name=None,
     quant_method="time_between_captures",
     classified_only=False,
@@ -33,7 +35,7 @@ def quantify_files(
     config : dict
         Configuration parameters for the segmenter.
         # TODO : document allowed values : https://github.com/uwmisl/poretitioner/issues/27
-    fast5_fnames : list of str
+    capture_filepaths : list of str
         FAST5 filenames containing the reads to classify
     filter_name : str, optional
         If only some reads should be considered as captures, specify a filter that
@@ -75,15 +77,16 @@ def quantify_files(
     capture_arrays = []
     blockage_arrays = []
 
-    if len(fast5_fnames) == 0:
-        raise ValueError("No fast5 files specified (len(fast5_fnames) == 0).")
+    if len(capture_filepaths) == 0:
+        raise ValueError("No fast5 files specified (len(capture_filepaths) == 0).")
 
     # The challenge here is that reads will be in different files. Need to read
     # in all the reads from all the files, sort them by channel and time, and
     # then quantify.
-    for fast5_fname in fast5_fnames:
-        with h5py.File(fast5_fname, "r") as f5:
-            sampling_rate = raw_signal_utils.get_sampling_rate(f5)
+    for capture_file in capture_filepaths:
+        with CaptureFile(capture_file) as capture:
+            sampling_rate = capture.sampling_rate
+
             capture_array = get_capture_details_in_f5(f5, read_path, classification_path)
             if len(capture_array) > 0:
                 if classified_only:
@@ -105,7 +108,7 @@ def quantify_files(
     del capture_arrays, blockage_arrays
 
     # The capture windows are stored identically in each read fast5, so no need for loop
-    capture_windows = get_capture_windows_by_channel(fast5_fname)
+    capture_windows = get_capture_windows_by_channel(capture_file)
     first_channel = list(capture_windows.keys())[0]
 
     start_obs = capture_windows[first_channel][0][0]  # Start of first window
@@ -129,10 +132,7 @@ def quantify_files(
 
     elif quant_method == "capture_freq":
         capture_freqs = calc_capture_freq_intervals(
-            capture_windows,
-            captures_by_channel,
-            intervals=intervals,
-            sampling_rate=sampling_rate,
+            capture_windows, captures_by_channel, intervals=intervals, sampling_rate=sampling_rate
         )
         return capture_freqs
 
@@ -140,14 +140,14 @@ def quantify_files(
         raise ValueError(f"Quantification method not implemented: {quant_method}")
 
 
-def get_capture_windows_by_channel(fast5_fname):
+def get_capture_windows_by_channel(capture_file):
     """Extract capture windows (regions where the voltage is appropriate to accept
     a captured peptide or other analyte) from a fast5 file, in a dictionary and
     sorted by channel
 
     Parameters
     ----------
-    fast5_fname : string
+    capture_file : string
         Location of a fast5 file.
 
     Returns
@@ -157,7 +157,7 @@ def get_capture_windows_by_channel(fast5_fname):
     """
     base_path = "/Meta/Segmentation/capture_windows"
     windows_by_channel = {}
-    with h5py.File(fast5_fname, "r") as f5:
+    with h5py.File(capture_file, "r") as f5:
         for grp_name in f5.get(base_path):
             if "Channel" in grp_name:
                 channel_no = int(re.findall(r"Channel_(\d+)", grp_name)[0])
@@ -205,7 +205,7 @@ def sort_captures_by_channel(capture_array):
     return captures_by_channel
 
 
-def get_capture_details_in_f5(f5, read_path=None, classification_path=None):
+def get_capture_details_in_f5(capture: CaptureFile, read_path=None, classification_path=None):
     """Get capture times & channel info for all reads in the fast5 at read_path.
     If a classification_path is specified, get the label for each read too.
 
@@ -231,6 +231,8 @@ def get_capture_details_in_f5(f5, read_path=None, classification_path=None):
     read_h5group_names = f5.get(read_path)
 
     captures_in_f5 = []
+    for read in capture.reads:
+        capture_metadata = capture.get_capture_metadata_for_read(read)
 
     if read_h5group_names is None:
         return None
@@ -241,11 +243,11 @@ def get_capture_details_in_f5(f5, read_path=None, classification_path=None):
         read_id = re.findall(r"read_(.*)", grp_name)[0]
         grp = f5.get(grp_name)
         a = grp["Signal"].attrs
-        capture_start = a["start_time_local"]
-        capture_end = capture_start + a["duration"]
+        capture_start = capture_metadata.start_time_local
+        capture_end = capture_start + capture_metadata.duration
 
         a = grp["channel_id"].attrs
-        channel_no = int(a["channel_number"])
+        channel_number = capture_metadata.channel_number
 
         if classification_path:
             (
@@ -257,14 +259,19 @@ def get_capture_details_in_f5(f5, read_path=None, classification_path=None):
         else:
             assigned_class = None
 
-        captures_in_f5.append((read_id, capture_start, capture_end, channel_no, assigned_class))
+        captures_in_f5.append(
+            (read_id, capture_start, capture_end, channel_number, assigned_class)
+        )
 
     return np.array(captures_in_f5)
 
 
-def calc_time_until_capture(capture_windows, captures, blockages=None):
-    """calc_time_until_capture
-
+def calc_time_until_capture(
+    open_pore_windows: List[Window],
+    captures: List[Window],
+    blockages: Optional[List[Window]] = None,
+) -> List[float]:
+    """
     Finds all times between captures from a single channel. This is defined
     as the open pore time from the end of the previous capture to the
     current capture. Includes subtracting other non-capture blockages since
@@ -272,85 +279,87 @@ def calc_time_until_capture(capture_windows, captures, blockages=None):
 
     Parameters
     ----------
-    capture_windows : list of tuples of ints [(start, end), ...]
+    open_pore_windows : List[Window]
         Regions of current where the nanopore is available to accept a
         capture. (I.e., is in a "normal" voltage state.) [(start, end), ...]
-    captures : list of tuples of ints [(start, end), ...]
+    captures : List[Window]
         Regions of current where a capture is residing in the pore. The
         function is calculating time between these values (minus blockages).
-    blockages : list of tuples of ints [(start, end), ...]
+    blockages : Optional[List[Window]], optional
         Regions of current where the pore is blocked by any capture or non-
         capture. These are removed from the time between captures, if
-        specified.
+        specified. None by default.
 
     Returns
     -------
-    list of floats
+    List[float]
         List of all capture times from a single channel.
     """
     # TODO: Implement logger best practices : https://github.com/uwmisl/poretitioner/issues/12
     # local_logger = logger.getLogger()
+    if captures is None or len(captures) == 0:
+        return []
 
     all_capture_times = []
 
-    if captures is None or len(captures) == 0:
-        return None
-
+    # TODO Katie Q: Would you mind double-checking my changes here?
+    # (e.g. that I'm getting the window start and ends right, and haven't introduced bugs into your original code)
     elapsed_time_until_capture = 0
-    for capture_window_i, capture_window in enumerate(capture_windows):
+    for capture_window_i, capture_window in enumerate(open_pore_windows):
         # Get all the captures & blockages within that window
-        captures_in_window = raw_signal_utils.get_overlapping_regions(capture_window, captures)
+        captures_in_window = capture_window.overlaps(captures)
         if blockages is not None:
-            blockages_in_window = raw_signal_utils.get_overlapping_regions(
-                capture_window, blockages
-            )
+            blockages_in_window = capture_window.overlaps(blockages)
         else:
             blockages_in_window = []
         # If there are no captures in the window, add the window to the elapsed
         # time and subtract any blockages.
         if len(captures_in_window) == 0:
-            elapsed_time_until_capture += capture_window[1] - capture_window[0]
+            elapsed_time_until_capture += capture_window.duration
             for blockage in blockages_in_window:
-                elapsed_time_until_capture -= blockage[1] - blockage[0]
+                elapsed_time_until_capture -= blockage.duration
             continue
         # If there's a capture in the window, add the partial window to the
         # elapsed time. Subtract blockages that came before the capture.
         else:
-            last_capture_end = capture_window[0]
+            last_capture_end = capture_window.start
             for capture_i, capture in enumerate(captures_in_window):
-                elapsed_time_until_capture += capture[0] - last_capture_end
+                elapsed_time_until_capture += capture.start - last_capture_end
                 for blockage in blockages_in_window:
                     # Blockage must start after the last capture ended and
                     # finish before the next capture starts; otherwise skip
-                    if blockage[0] >= last_capture_end and blockage[1] < capture[0]:
-                        elapsed_time_until_capture -= blockage[1] - blockage[0]
+                    if blockage.start >= last_capture_end and blockage.end < capture.start:
+                        elapsed_time_until_capture -= blockage.duration
                         blockages.pop(0)
                 all_capture_times.append(elapsed_time_until_capture)
                 # Reset elapsed time.
-                elapsed_time_until_capture = max(capture_window[1] - capture[1], 0)
+                elapsed_time_until_capture = max(capture_window.end - capture.end, 0)
                 captures.pop(0)
-                last_capture_end = capture[1]
+                last_capture_end = capture.end
     return all_capture_times
 
 
 def calc_time_until_capture_intervals(
-    capture_windows, captures_by_channel, blockages_by_channel=None, intervals=[]
-):
+    capture_windows: List[Window],
+    captures_by_channel: WindowsByChannel,
+    blockages_by_channel: WindowsByChannel = None,
+    intervals: Optional[List[Window]] = None,
+) -> List[float]:
     """Compute time_until_capture across specified intervals of time.
 
     Parameters
     ----------
-    capture_windows : list of tuples of ints [(start, end), ...]
+    capture_windows : List[Window]
         Regions of current where the nanopore is available to accept a
         capture. (I.e., is in a "normal" voltage state.) [(start, end), ...]
-    captures_by_channel : dictionary of captures {channel_no: [(start, end), ...]}
+    captures_by_channel : WindowsByChannel of captures e.{channel_no: [(start, end), ...]}
         Regions of current where a capture is residing in the pore. The
         function is calculating time between these values (minus blockages).
-    blockages_by_channel : dictionary of blockages {channel_no: [(start, end), ...]}
+    blockages_by_channel : dictionary of blockages {channel_no: [(start, end), ...]}, optional
         Regions of current where the pore is blocked by any capture or non-
         capture. These are removed from the time between captures, if
         specified.
-    intervals : list, optional
+    intervals : List[Window], optional
         List of start and end times, in observations (#/datapoints, not minutes), by default []
 
     Returns
@@ -359,6 +368,8 @@ def calc_time_until_capture_intervals(
         List of the average time between captures, where each item in this list
         corresponds to an entry in the input list intervals.
     """
+    intervals: List[Window] = intervals if intervals is not None else []  # Defaults to empty list.
+
     assert len(intervals) > 0
     capture_times = []
     elapsed_time_obs = 0
@@ -368,17 +379,17 @@ def calc_time_until_capture_intervals(
         interval_capture_times = []
         for channel in captures_by_channel.keys():
             captures = captures_by_channel[channel]
-            captures = raw_signal_utils.get_overlapping_regions(interval, captures)
+            interval.overlaps(captures)
             blockages = blockages_by_channel[channel]
-            blockages = raw_signal_utils.get_overlapping_regions(interval, blockages)
+            interval.overlaps(blockages)
             windows = capture_windows[channel]
-            windows = raw_signal_utils.get_overlapping_regions(interval, windows)
+            interval.overlaps(windows)
 
             assert captures is not None
             assert blockages is not None
             assert windows is not None
             ts = calc_time_until_capture(windows, captures, blockages=blockages)
-            if ts is None:
+            if len(ts) < 1:
                 elapsed_time_obs += end_obs - start_obs
             else:
                 ts = [ts[0] + elapsed_time_obs] + ts[1:]
@@ -418,16 +429,13 @@ def calc_capture_freq(capture_windows, captures):
         window_start, window_end = capture_window
 
         # Get all the captures within that window
-        captures_in_window = raw_signal_utils.get_overlapping_regions(capture_window, captures)
+        captures_in_window = capture_window.overlaps(captures)
         n_captures += len(captures_in_window)
     return n_captures
 
 
 def calc_capture_freq_intervals(
-    capture_windows,
-    captures_by_channel,
-    intervals=[],
-    sampling_rate=10000,
+    capture_windows, captures_by_channel, intervals=[], sampling_rate=10000
 ):
     """Compute capture_freq across specified intervals of time.
 
@@ -460,9 +468,9 @@ def calc_capture_freq_intervals(
         windows = []
         for channel in captures_by_channel.keys():
             captures = captures_by_channel[channel]
-            captures = raw_signal_utils.get_overlapping_regions(interval, captures)
+            captures = interval.overlaps(captures)
             windows = capture_windows[channel]
-            windows = raw_signal_utils.get_overlapping_regions(interval, windows)
+            windows = interval.overlaps(windows)
             assert captures is not None
             assert windows is not None
             assert len(windows) > 0
@@ -500,7 +508,7 @@ def calc_capture_freq_intervals(
 #             assert blockages is not None
 #             assert windows is not None
 #             ts = calc_time_until_capture(windows, captures, blockages=blockages)
-#             if ts is None:
+#             if len(ts) < 1:
 #                 elapsed_time_obs += end_obs - start_obs
 #             else:
 #                 ts = [ts[0] + elapsed_time_obs] + ts[1:]

@@ -11,7 +11,7 @@ Most importantly, it provides a method for accessing a pre-configured logger.
 import logging
 from logging import Logger
 
-__all__ = ["getLogger", "Logger"]
+__all__ = ["configure_root_logger", "getLogger", "verbosity_to_log_level", "Logger"]
 
 
 def verbosity_to_log_level(verbosity=0) -> int:

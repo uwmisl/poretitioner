@@ -8,7 +8,6 @@ This module contains tests for quantify.py functionality.
 """
 import h5py
 import numpy as np
-
 import poretitioner.utils.quantify as quantify
 
 
@@ -138,10 +137,7 @@ def quantify_files_time_until_capture_test():
     # Define config dict that contains filter info
     config = {
         "compute": {"n_workers": 4},
-        "filters": {
-            "base filter": {"length": (100, None)},
-            "test filter": {"min": (100, None)},
-        },
+        "filters": {"base filter": {"length": (100, None)}, "test filter": {"min": (100, None)}},
         "output": {"capture_f5_dir": "tests/", "captures_per_f5": 1000},
         "classify": {
             "classifier": "NTER_cnn",
@@ -169,10 +165,7 @@ def quantify_files_time_until_capture_test():
 def quantify_files_time_until_capture_intervals_test():
     config = {
         "compute": {"n_workers": 4},
-        "filters": {
-            "base filter": {"length": (100, None)},
-            "test filter": {"min": (100, None)},
-        },
+        "filters": {"base filter": {"length": (100, None)}, "test filter": {"min": (100, None)}},
         "output": {"capture_f5_dir": "tests/", "captures_per_f5": 1000},
         "classify": {
             "classifier": "NTER_cnn",
@@ -202,10 +195,7 @@ def quantify_files_time_until_capture_intervals_test():
 def quantify_files_capture_freq_test():
     config = {
         "compute": {"n_workers": 4},
-        "filters": {
-            "base filter": {"length": (100, None)},
-            "test filter": {"min": (100, None)},
-        },
+        "filters": {"base filter": {"length": (100, None)}, "test filter": {"min": (100, None)}},
         "output": {"capture_f5_dir": "tests/", "captures_per_f5": 1000},
         "classify": {
             "classifier": "NTER_cnn",
@@ -233,10 +223,7 @@ def quantify_files_capture_freq_test():
 def quantify_files_capture_freq_intervals_test():
     config = {
         "compute": {"n_workers": 4},
-        "filters": {
-            "base filter": {"length": (100, None)},
-            "test filter": {"min": (100, None)},
-        },
+        "filters": {"base filter": {"length": (100, None)}, "test filter": {"min": (100, None)}},
         "output": {"capture_f5_dir": "tests/", "captures_per_f5": 1000},
         "classify": {
             "classifier": "NTER_cnn",

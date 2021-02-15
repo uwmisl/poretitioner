@@ -1,0 +1,117 @@
+from typing import Optional
+
+import h5py
+from logger import Logger, getLogger
+
+
+class BulkFile:
+    # TODO: Katie Q: Work with Katie to determine how we want to handle validation.
+    TRACKING_ID_PATH = "/UniqueGlobalKey/tracking_id"
+
+    def __init__(self, bulk_filename, logger: Logger = getLogger()):
+        self.bulk_f5 = h5py.File(bulk_filename, "r")
+        self.log = logger
+        if not self.log:
+            self.log = getLogger()
+
+    def __enter__(self):
+        return self.bulk_f5
+
+    def __exit__(self, type, value, traceback):
+        self.bulk_f5.close()
+
+    def validate(self) -> bool:
+        """Make sure this represents a valid bulk poretitioner file.
+
+        Returns
+        -------
+        bool
+            [description]
+        """
+
+        log = getLogger()
+        log.error()
+
+        # Need tracking ID
+        path = BulkFile.TRACKING_ID_PATH
+
+        # Accessing these fields with raise an exception if any of them are invalid or not present.
+
+        tracking_id = self.run_id
+
+        if tracking_id is None:
+            error_message = f"Attribute 'tracking_id' missing from path:{path} in bulk file: {self.bulk_f5.f5.filename}. Double check that the bulk file includes this field at that path."
+            self.log.error()
+            raise ValueError(error_message)
+
+
+    @property
+    def run_id(self) -> str:
+        """[summary]
+
+        Returns
+        -------
+        str
+            [description]
+
+        Raises
+        ------
+        ValueError
+            RunID attribute doesn't exist in the expected group.
+        """
+        path = BulkFile.TRACKING_ID_PATH
+        try:
+            tracking_id = self.bulk_f5[filepath]
+        except KeyError:
+            error_message = f"Group 'tracking_id' missing from path:{path} in bulk file: {self.bulk_f5.filename}. Double check that the bulk file includes this field at that path."
+            raise ValueError(error_message)
+
+        try:
+            # TODO: Katie Q: Why the [2:-1] at the end?
+            run_id = str(tracking_id.attrs["run_id"])[2:-1]
+        except KeyError:
+            error_message = f"Attribute 'run_id' missing from path:{path} in bulk file '{self.bulk_f5.filename}'. Double check that the bulk file includes this field at that path."
+            self.log.error()
+            raise ValueError(error_message)
+        return run_id
+
+    @property
+    def sampling_rate(self) -> int:
+        """Retrieve the sampling rate from a bulk fast5 file. Units: Hz.
+
+        Also referred to as the sample rate, sample frequency, or sampling
+        frequency.
+
+        Parameters
+        ----------
+        f5 : h5py.File
+            Fast5 file, open for reading using h5py.File.
+
+        Returns
+        -------
+        int
+            Sampling rate
+        """
+
+        sample_frequency_path = "/UniqueGlobalKey/context_tags"
+        sample_frequency_key = "sample_frequency"
+        sample_rate_path = "Meta"
+        sample_rate_key = "sample_rate"
+        try:
+            sample_frequency = int(self.bulk_f5[sample_frequency_path].attrs.get(sample_frequency_key))
+        except KeyError:
+            pass # Try checking the Meta group as a fallback.
+
+        try:
+            sample_rate = int(f5.get(sample_rate_path).attrs[sample_rate_key])
+        except KeyError:
+            error_msg = f"Sampling rate not present in bulk file '{self.bulk_f5.filename}'. Make sure a sampling frequency is specified either at '${sample_frequency_path}' with attribute '{sample_frequency_key}', or as a fallback, '{sample_rate_path}' with attribute '{sample_rate_key}'"
+
+
+        return sampling_rate
+
+path = "/Users/dna/Developer/MISLA/poredata/luis_20180615_FAH62458_MN21390_sequencing_run_06_15_18_run02_b.fast5"
+BulkFile(path)
+
+class SegmentedFile:
+    pass

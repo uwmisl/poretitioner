@@ -12,8 +12,9 @@ from shutil import copyfile
 
 import h5py
 import pytest
-
-from poretitioner.utils import classify, raw_signal_utils
+from poretitioner.fast5s import CaptureFile
+from poretitioner.utils import classify
+from poretitioner.utils.fast5adapter import get_fractional_blockage_for_read
 from poretitioner.utils.NTERs_trained_cnn_05152019 import load_cnn
 
 
@@ -75,12 +76,14 @@ def predict_class_test():
 
     # Load raw data & classify
     f5_fname = "tests/data/reads_fast5_dummy_9captures.fast5"
+    # with CaptureFile(f5_fname) as capture:
+
     with h5py.File(f5_fname, "r") as f5:
         for grp in f5.get("/"):
             if "read" in str(grp):
                 read_id = re.findall(r"read_(.*)", str(grp))[0]
 
-                raw = raw_signal_utils.get_fractional_blockage_for_read(f5, read_id)
+                raw = get_fractional_blockage_for_read(f5, read_id)
                 pred_label, pred_prob = classify.predict_class(
                     clf_name, classifier, raw[100:], class_labels=None
                 )
@@ -141,12 +144,7 @@ def write_classifier_result_test():
     passed = True
     with h5py.File(test_f5_fname, "r+") as f5:
         classify.write_classifier_result(
-            f5,
-            results_path,
-            "c87905e6-fd62-4ac6-bcbd-c7f17ff4af14",
-            pred_class,
-            prob,
-            passed,
+            f5, results_path, "c87905e6-fd62-4ac6-bcbd-c7f17ff4af14", pred_class, prob, passed
         )
 
     # Read back the expected info
@@ -332,10 +330,7 @@ def filter_and_classify_test():
     # Define config dict that contains filter info
     config = {
         "compute": {"n_workers": 4},
-        "filters": {
-            "base filter": {"length": (100, None)},
-            "test filter": {"min": (100, None)},
-        },
+        "filters": {"base filter": {"length": (100, None)}, "test filter": {"min": (100, None)}},
         "output": {"capture_f5_dir": "tests/", "captures_per_f5": 1000},
         "classify": {
             "classifier": "NTER_cnn",

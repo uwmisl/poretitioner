@@ -13,6 +13,8 @@ import re
 import h5py
 import numpy as np
 
+__all__ = ["judge_channels"]
+
 
 def natkey(string_):
     """Natural sorting key -- sort strings containing numerics so numerical
@@ -96,11 +98,7 @@ def get_fractional_blockage(
 
 
 def get_local_fractional_blockage(
-    f5,
-    open_channel_guess=220,
-    open_channel_bound=15,
-    channel=None,
-    local_window_sz=1000,
+    f5, open_channel_guess=220, open_channel_bound=15, channel=None, local_window_sz=1000
 ):
     """Retrieve the scaled raw signal for the channel, compute the open pore
     current, and return the fractional blockage for that channel."""
@@ -356,158 +354,6 @@ def get_raw_signal(f5, channel_no, start=None, end=None):
     return raw
 
 
-def get_scale_metadata(f5, channel_no):
-    """Retrieve scaling values for bulk fast5 file.
-
-    Note: using UK sp. of digitization for consistency w/ file format
-
-    Parameters
-    ----------
-    f5 : h5py.File
-        Fast5 file, open for reading using h5py.File.
-    channel_no : int
-        Channel number for which to retrieve raw signal.
-
-    Returns
-    -------
-    Tuple
-        Offset, range, and digitisation values.
-
-    Raises
-    ------
-    ValueError
-        Raised if f5 is not an h5py.File object.
-    """
-    if type(f5) is not h5py._hl.files.File:
-        raise ValueError("f5 must be an open h5py.File object.")
-    meta_path = f"/Raw/Channel_{channel_no}/Meta"
-    attrs = f5.get(meta_path).attrs
-    offset = attrs.get("offset")
-    rng = attrs.get("range")
-    digi = attrs.get("digitisation")
-    return offset, rng, digi
-
-
-def get_scaled_raw_for_channel(f5, channel_no, start=None, end=None):
-    """Retrieve raw signal from open fast5 file, scaled to pA units.
-
-    Note: using UK sp. of digitization for consistency w/ file format
-
-    Optionally, specify the start and end time points in the time series. If no
-    values are given for start and/or end, the default is to include data
-    starting at the beginning and/or end of the array.
-
-    Parameters
-    ----------
-    f5 : h5py.File
-        Fast5 file, open for reading using h5py.File.
-    channel_no : int
-        Channel number for which to retrieve raw signal.
-    start : int, optional
-        Retrieve a slice of current starting at this time point, by default None
-        None will retrieve data starting from the beginning of available data.
-    end : int, optional
-        Retrieve a slice of current starting at this time point, by default None
-        None will retrieve all data at the end of the array.
-
-    Returns
-    -------
-    Numpy array
-        Array representing sampled nanopore current, scaled to pA.
-
-    Raises
-    ------
-    ValueError
-        Raised if f5 is not an h5py.File object.
-    """
-    if type(f5) is not h5py._hl.files.File:
-        raise ValueError("f5 must be an open h5py.File object.")
-    raw = get_raw_signal(f5, channel_no, start=start, end=end)
-    offset, rng, digi = get_scale_metadata(f5, channel_no)
-    return scale_raw_current(raw, offset, rng, digi)
-
-
-def scale_raw_current(raw, offset, rng, digitisation):
-    """Scale the raw current to pA units.
-
-    Note: using UK sp. of digitization for consistency w/ file format
-
-    Parameters
-    ----------
-    raw : Numpy array of numerics
-        Array representing directly sampled nanopore current.
-    offset : numeric
-        Offset value specified in bulk fast5.
-    rng : numeric
-        Range value specified in bulk fast5.
-    digitisation : numeric
-        Digitisation value specified in bulk fast5.
-
-    Returns
-    -------
-    Numpy array of floats
-        Raw current scaled to pA.
-    """
-    return (raw + offset) * (rng / digitisation)
-
-
-def digitize_raw_current(raw_pA, offset, rng, digitisation):
-    """Reverse the scaling from pA to raw current.
-
-    Note: using UK sp. of digitization for consistency w/ file format
-
-    Parameters
-    ----------
-    raw : Numpy array of numerics
-        Array representing nanopore current in units of pA.
-    offset : numeric
-        Offset value specified in bulk fast5.
-    rng : numeric
-        Range value specified in bulk fast5.
-    digitisation : numeric
-        Digitisation value specified in bulk fast5.
-
-    Returns
-    -------
-    Numpy array of floats
-        Raw current digitized.
-    """
-    return np.array((raw_pA * digitisation / rng) - offset, dtype=np.int16)
-
-
-def find_open_channel_current(raw, open_channel_guess, bound=None):
-    """Compute the median open channel current in the given raw data.
-
-    Inputs presumed to already be in units of pA.
-
-    Parameters
-    ----------
-    raw : Numpy array
-        Array representing sampled nanopore current, scaled to pA.
-    open_channel_guess : numeric
-        Approximate estimate of the open channel current value.
-    bound : numeric, optional
-        Approximate estimate of the variance in open channel current value from
-        channel to channel (AKA the range to search). If no bound is specified,
-        the default is to use 10% of the open_channel guess.
-
-    Returns
-    -------
-    float
-        Median open channel.
-    """
-    if bound is None:
-        bound = 0.1 * open_channel_guess
-    upper_bound = open_channel_guess + bound
-    lower_bound = open_channel_guess - bound
-    ix_in_range = np.where(np.logical_and(raw <= upper_bound, raw > lower_bound))[0]
-    if len(ix_in_range) == 0:
-        open_channel = None
-    else:
-        open_channel = np.median(raw[ix_in_range])
-    return open_channel
-
-
 def find_signal_off_regions(raw, window_sz=200, slide=100, current_range=50):
     """Helper function for judge_channels(). Finds regions of current where the
     channel is likely off.
@@ -553,32 +399,6 @@ def find_signal_off_regions(raw, window_sz=200, slide=100, current_range=50):
         return []
 
 
-def find_segments_below_threshold(time_series, threshold):
-    """
-    Find regions where the time series data points drop at or below the
-    specified threshold.
-
-    Parameters
-    ----------
-    time_series : np.array
-        Array containing time series data points.
-    threshold : numeric
-        Find regions where the time series drops at or below this value
-
-    Returns
-    -------
-    list of tuples (start, end)
-        Each item in the list represents the (start, end) points of regions
-        where the input array drops at or below the threshold.
-    """
-    diff_points = np.where(np.abs(np.diff(np.where(time_series <= threshold, 1, 0))) == 1)[0]
-    if time_series[0] <= threshold:
-        diff_points = np.hstack([[0], diff_points])
-    if time_series[-1] <= threshold:
-        diff_points = np.hstack([diff_points, [len(time_series)]])
-    return list(zip(diff_points[::2], diff_points[1::2]))
-
-
 def sec_to_obs(time_in_sec, sample_rate_hz):
     """Convert time in seconds to number of observations.
 
@@ -611,7 +431,7 @@ def judge_channels(bulk_f5_fname, expected_open_channel=235):
     Returns
     -------
     list of ints
-        List of good channels.
+        List of good channels. NOTE: Channels are 1-indexed, The first channel will be 1, not 0.
     """
     f5 = h5py.File(name=bulk_f5_fname)
     channels = list(f5.get("Raw").keys())

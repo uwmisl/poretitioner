@@ -39,6 +39,9 @@ class ARG:
     OUTPUT = "output"
     VERBOSE = "verbose"
 
+    # Segmenter
+    OUTPUT_DIRECTORY = "output_dir"  # Argument on the command line has a dash, but the attribute.
+
 
 def get_args(commandline_args: List = None) -> Namespace:
     """Gets the command line arguments passed to the application.
@@ -135,7 +138,11 @@ def get_args(commandline_args: List = None) -> Namespace:
     # Creates subparsers for each poretitioner command (e.g.`poretitioner segment`).
     # By default, if no command is provided, all steps will be run.
     subparser = parser.add_subparsers(dest="command")
+
+    # Segmenter
     parser_segment = subparser.add_parser(COMMAND.SEGMENT, description="Segment captures")
+    add_output_directory_option_to_parser(parser_segment)
+
     parser_filter = subparser.add_parser(COMMAND.FILTER, description="Filter captures")
     parser_classify = subparser.add_parser(COMMAND.CLASSIFY, description="Classify captures")
     parser_quantify = subparser.add_parser(COMMAND.QUANTIFY, description="Quantify captures")
@@ -150,3 +157,20 @@ def get_args(commandline_args: List = None) -> Namespace:
 
     args = parser.parse_args(commandline_args)
     return args
+
+
+# Segmenter
+
+
+def add_output_directory_option_to_parser(parser: ArgumentParser):
+    """Adds output directory option to a parser.
+
+    Parameters
+    ----------
+    parser : ArgumentParser
+        Parser to give an output directory option. This is where capture files will be saved.
+    """
+    arg = ARG.OUTPUT_DIRECTORY.replace("_", "-")
+    parser.add_argument(
+        f"--{arg}", action="store", help="Where to store the segmented capture fast5 files."
+    )
