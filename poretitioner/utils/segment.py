@@ -630,7 +630,11 @@ def parallel_find_captures(
             write_capture_to_fast5(capture_f5_filepath, raw_signal, capture_metadata)
 
             write_capture_to_fast5(
+<<<<<<< HEAD
                 Path(save_location, f"{run_id}_{file_no}.fast5"), raw_signal, capture_metadata
+=======
+                Path(save_location, f"{run_id}_{file_no}.hdf"), raw_signal, capture_metadata
+>>>>>>> This is so large.
             )
             local_logger.debug(f"\tWritten!")
 

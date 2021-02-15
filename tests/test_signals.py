@@ -13,6 +13,7 @@ from poretitioner.signals import (
     RawSignal,
     VoltageSignal,
     compute_fractional_blockage,
+    digitize_current,
 )
 
 # This calibration would take the raw current and just muliply it by 2.
@@ -39,10 +40,10 @@ class TestBaseSignal:
         signal = np.array([1, 2, 3])
         base = BaseSignal(signal)
 
-        assert np.median(raw) == 2
-        assert np.mean(raw) == 2
-        assert np.max(raw) == 3
-        assert np.min(raw) == 1
+        assert np.median(base) == 2
+        assert np.mean(base) == 2
+        assert np.max(base) == 3
+        assert np.min(base) == 1
 
         assert (
             np.max(np.multiply(base, 10)) == 30
@@ -74,11 +75,6 @@ class TestBaseSignal:
     def can_serialize_test(self):
         signal = np.array([1, 2, 3])
         base = BaseSignal(signal)
-
-class RawSignalTest:
-    def __init__(self):
-        self.calibration = CALIBRATION
-        self.channel_number = 1
 
 
 class TestCurrentSignal:
@@ -138,7 +134,9 @@ class TestRawSignal:
 
     def signal_converts_to_fractionalized_test(self):
         signal = [1, 2, 3]
-        raw = RawSignal(signal, self.channel_number, self.calibration)
+        channel_number = 2  # Arbitrary
+        calibration = CALIBRATION
+        raw = RawSignal(signal, channel_number, calibration)
         pico = raw.to_picoamperes()
         open_channel_pA = np.median(pico)
 
@@ -183,7 +181,7 @@ class TestPicoampereSignal:
         median = np.median(pico)
 
         expected = compute_fractional_blockage(pico, median)
-        frac = raw.to_fractionalized()
+        frac = pico.to_fractionalized(open_channel_guess=OPEN_CHANNEL_GUESS, open_channel_bound=OPEN_CHANNEL_BOUND)
         assert np.isclose(frac, expected), "Fractionalized current should match expected."
 
 
@@ -245,13 +243,11 @@ class ChannelTest:
 
 
 class HelpersTest:
-    def unscale_raw_current_test():
+    def unscale_raw_current_test(self):
         """Test ability to convert back & forth between digital data & pA."""
-        bulk_f5_fname = "tests/data/bulk_fast5_dummy.fast5"
         channel_number = 1
-        signal = [220, 100, 4, 77, 90, 39, 1729, 369]
-        raw_orig = RawSignal(signal, channel_number, CALIBRATION)
-        pico = PicoampereSignal(raw_orig)
-        raw_digi = digitize_raw_current(pico, offset, rng, digi)
-        for x, y in zip(raw_orig, raw_digi):
-            assert abs(x - y) <= 1  # allow for slight rounding errors
+        signal_pico = [220, 100, 4, 77, 90, 39, 1729, 369]
+        pico = PicoampereSignal(signal_pico, channel_number, CALIBRATION)
+        digitized_result = pico.digitize()
+        raw_digi = digitize_current(signal_pico, CALIBRATION)
+        assert np.isclose(digitized_result, raw_digi)
