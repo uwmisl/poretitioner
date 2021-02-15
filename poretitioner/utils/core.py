@@ -17,6 +17,7 @@ __all__ = ["NumpyArrayLike", "Filepath", "Window"]
 # Generic wrapper type for array-like data. Normally we'd use numpy's arraylike type, but that won't be available until
 # Numpy 1.21: https://stackoverflow.com/questions/40378427/numpy-formal-definition-of-array-like-objects
 NumpyArrayLike = NewType("NumpyArrayLike", np.ndarray)
+
 # Generic path location, like a string or a pathlib.Path object.
 Filepath = NewType("Filepath", Union[str, pathlib.os.PathLike])
 

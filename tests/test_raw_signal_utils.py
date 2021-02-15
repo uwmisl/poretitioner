@@ -42,3 +42,13 @@ def unscale_raw_current_test():
     raw_digi = raw_signal_utils.digitize_raw_current(raw_pA, offset, rng, digi)
     for x, y in zip(raw_orig, raw_digi):
         assert abs(x - y) <= 1  # allow for slight rounding errors
+
+
+def get_overlapping_regions_test():
+    window = (10, 100)
+    excl_regions = [(0, 9), (9, 10), (100, 101), (1000, 1001)]
+    overlap = raw_signal_utils.get_overlapping_regions(window, excl_regions)
+    assert len(overlap) == 0
+    incl_regions = [(9, 11), (20, 40), (99, 100), (99, 1000)]
+    overlap = raw_signal_utils.get_overlapping_regions(window, incl_regions)
+    assert len(overlap) == len(incl_regions)

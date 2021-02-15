@@ -28,7 +28,6 @@ __all__ = [
     "DEFAULT_OPEN_CHANNEL_BOUND",
 ]
 
-
 DEFAULT_OPEN_CHANNEL_GUESS = 220  # In picoAmperes (pA).
 DEFAULT_OPEN_CHANNEL_BOUND = 15  # In picoAmperes (pA).
 
@@ -696,7 +695,7 @@ def digitize_current(
 def compute_fractional_blockage(picoamperes, open_channel) -> NumpyArrayLike:
     """Converts a nanopore signal (in units of pA) to fractionalized current
     in the range (0, 1).
-
+    
     Note that this creates a new buffer.
 
     A value of 0 means the pore is fully blocked, and 1 is fully open.

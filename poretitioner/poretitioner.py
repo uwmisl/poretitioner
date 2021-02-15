@@ -1,6 +1,18 @@
-from . import logger
-from .getargs import COMMAND, get_args
-from .utils import raw_signal_utils
+import numpy as np
+from getargs import COMMAND, get_args
+from signals import (
+    BaseSignal,
+    Capture,
+    Channel,
+    ChannelCalibration,
+    FractionalizedSignal,
+    PicoampereSignal,
+    RawSignal,
+    compute_fractional_blockage,
+)
+
+CALIBRATION = ChannelCalibration(0, 2, 1)
+CHANNEL_NUMBER = 1
 
 
 def main():
@@ -30,4 +42,18 @@ def main():
 
 
 if __name__ == "__main__":
+    signal = [1, 2, 3]
+    raw = RawSignal(signal, CHANNEL_NUMBER, CALIBRATION)
+    pico = raw.to_picoamperes()
+    median = np.median(pico)
+
+    raw = RawSignal(raw, CHANNEL_NUMBER, CALIBRATION)
+    pico = PicoampereSignal(raw.to_picoamperes(), CHANNEL_NUMBER, CALIBRATION)
+    open_channel_pA = np.median(pico)
+
+    frac = FractionalizedSignal(pico, CHANNEL_NUMBER, CALIBRATION, open_channel_pA)
+    converted_frac = pico.to_fractionalized(
+        open_channel_guess=1, open_channel_bound=None, default=2
+    )
+
     main()

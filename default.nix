@@ -16,11 +16,11 @@
 , cudaSupport ? false
 , python ? (pkgs.callPackage ./nix/python.nix) { inherit pkgs; }
 }:
-
 with pkgs;
 let
   appInfo = builtins.fromJSON (builtins.readFile ./poretitioner/APPLICATION_INFO.json);
   name = appInfo.name;
+  version = appInfo.version;
 
   ############################################################
   #
@@ -29,23 +29,30 @@ let
   ############################################################
   dependencies = callPackage ./nix/dependencies.nix { inherit python cudaSupport; };
   run_pkgs = dependencies.run;
+  all_pkgs = dependencies.all;
   test_pkgs = dependencies.test;
+  run_tests = "coverage run -m pytest -c ./pytest.ini";
+  src = ./.;
 
+  # How to develop/release python packages with Nix:
+  # https://github.com/NixOS/nixpkgs/blob/master/doc/languages-frameworks/python.section.md
+  #
   # doCheck - Whether to run the test suite as part of the build, defaults to true.
-  # To understand how `buildPythonApplication` works, check out https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/interpreters/python/mk-python-derivation.nix
-  poretitioner = {doCheck ? true } : python.pkgs.buildPythonApplication {
+  # To understand how `buildPythonPackage` works, check out https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/interpreters/python/mk-python-derivation.nix
+  poretitioner = {doCheck ? true } : python.pkgs.buildPythonPackage {
     pname = name;
-    version = appInfo.version;
+    version = version;
 
-    src = ./.;
-
+    src = src;
     checkInputs = test_pkgs;
     inherit doCheck;
-    checkPhase = "pytest tests";
+    checkPhase = run_tests;
 
     # Run-time dependencies
-    propagatedBuildInputs = run_pkgs;
+    propagatedBuildInputs = run_pkgs ++ [ src ];
   };
+
+  app = {doCheck ? true }: python.pkgs.toPythonApplication (poretitioner { inherit doCheck; });
 
   ####################################################################
   #
@@ -59,8 +66,9 @@ let
     poretitioner.pname
   ];
 
-  dockerImage = dockerTools.buildImage {
-    name = name;
+  # Currently can't build docker images on Mac OS (Darwin): https://github.com/NixOS/nixpkgs/blob/f5a90a7aab126857e9cac4f048930ddabc720c55/pkgs/build-support/docker/default.nix#L620
+  dockerImage = lib.optionals (!stdenv.isDarwin) (dockerTools.buildImage {
+    name = "${name}_v${version}";
     tag = "latest";
 
     # Setting 'created' to 'now' will correctly set the file's creation date
@@ -70,10 +78,13 @@ let
       # Runs 'poretitioner' by default.
       Cmd = [ "${binPath}" ];
     };
-  };
+  });
 
 in {
-  app-no-test = poretitioner { doCheck = false; };
-  app = poretitioner;
+  app-no-test = app { doCheck = false; };
+  test = poretitioner { doCheck = true; };
+  app = app { doCheck = true; };
+  lib = poretitioner { doCheck = true; };
   docker = dockerImage;
+  shell = mkShell { buildInputs = [ (poretitioner  { doCheck = false; }) ] ++ all_pkgs ; };
 }
