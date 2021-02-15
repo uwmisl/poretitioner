@@ -1,4 +1,4 @@
-###########################################################################################
+# ##########################################################################################
 #
 # default.nix
 #
@@ -10,15 +10,18 @@
 #       To build without testing (only recommended for local builds and rapid-prototyping)
 #   - To see how this application is packaged for Docker, see the `Docker` section.
 #
+# Nix Resources:
+#   - https://nix.dev/tutorials/
+#
 ###########################################################################################
 
 { pkgs ? import <nixpkgs> { config = (import ./nix/config.nix); }
 , cudaSupport ? false
-, python ? (pkgs.callPackage ./nix/python.nix) { inherit pkgs; }
-}:
+, python ? (pkgs.callPackage ./nix/python.nix) { inherit pkgs; } }:
 with pkgs;
 let
-  appInfo = builtins.fromJSON (builtins.readFile ./poretitioner/APPLICATION_INFO.json);
+  appInfo =
+    builtins.fromJSON (builtins.readFile ./poretitioner/APPLICATION_INFO.json);
   name = appInfo.name;
   version = appInfo.version;
 
@@ -27,11 +30,17 @@ let
   # App - Builds the actual poretitioner application.
   #
   ############################################################
-  dependencies = callPackage ./nix/dependencies.nix { inherit python cudaSupport; };
+  dependencies =
+    callPackage ./nix/dependencies.nix { inherit python cudaSupport; };
+  tests = callPackage ./nix/test.nix {
+    coverage = python.pkgs.coverage;
+    pytest = python.pkgs.pytest;
+  };
   run_pkgs = dependencies.run;
   all_pkgs = dependencies.all;
   test_pkgs = dependencies.test;
-  run_tests = "coverage run -m pytest -c ./pytest.ini";
+  run_tests_and_coverage = "echo Running tests:	${tests.coverage};"
+    + tests.coverage;
   src = ./.;
 
   # How to develop/release python packages with Nix:
@@ -39,20 +48,22 @@ let
   #
   # doCheck - Whether to run the test suite as part of the build, defaults to true.
   # To understand how `buildPythonPackage` works, check out https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/interpreters/python/mk-python-derivation.nix
-  poretitioner = {doCheck ? true } : python.pkgs.buildPythonPackage {
-    pname = name;
-    version = version;
+  poretitioner = { doCheck ? true }:
+    python.pkgs.buildPythonPackage {
+      pname = name;
+      version = version;
 
-    src = src;
-    checkInputs = test_pkgs;
-    inherit doCheck;
-    checkPhase = run_tests;
+      src = src;
+      checkInputs = test_pkgs;
+      inherit doCheck;
+      checkPhase = run_tests_and_coverage;
 
-    # Run-time dependencies
-    propagatedBuildInputs = run_pkgs ++ [ src ];
-  };
+      # Run-time dependencies
+      propagatedBuildInputs = run_pkgs ++ [ src ];
+    };
 
-  app = {doCheck ? true }: python.pkgs.toPythonApplication (poretitioner { inherit doCheck; });
+  app = { doCheck ? true }:
+    python.pkgs.toPythonApplication (poretitioner { inherit doCheck; });
 
   ####################################################################
   #
@@ -86,5 +97,9 @@ in {
   app = app { doCheck = true; };
   lib = poretitioner { doCheck = true; };
   docker = dockerImage;
-  shell = mkShell { buildInputs = [ (poretitioner  { doCheck = false; }) ] ++ all_pkgs ; };
+  # Note: Shell can only be run by using "nix-shell" (i.e. "nix-shell -A shell ./default.nix").
+  # Here's an awesome, easy-to-read overview of nix shells: https://ghedam.at/15978/an-introduction-to-nix-shell
+  shell = mkShell {
+    buildInputs = [ (poretitioner { doCheck = false; }) ] ++ all_pkgs;
+  };
 }

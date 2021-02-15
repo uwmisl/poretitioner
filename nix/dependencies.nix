@@ -1,4 +1,4 @@
-###########################################################################################
+# ##########################################################################################
 #
 # dependencies.nix
 #
@@ -17,8 +17,13 @@
 #
 ###########################################################################################
 
-{ pkgs, python, lib ? pkgs.lib, stdenv ? pkgs.stdenv, cudaSupport ? false }:
-let precommit = (import ./pkgs/pre-commit/pre-commit.nix) { inherit python; };
+{ pkgs ? import <nixpkgs> { config = (import ./config.nix); }
+, python ? (pkgs.callPackage ./python.nix) { inherit pkgs; }, lib ? pkgs.lib
+, stdenv ? pkgs.stdenv, cudaSupport ? false }:
+with pkgs;
+let
+  precommit = (import ./pkgs/pre-commit/pre-commit.nix) { inherit python; };
+  ont_fast5_api = (callPackage ./pkgs/ont_fast5_api) { inherit python; };
 in with python.pkgs; rec {
 
   ###########################################################################################
@@ -70,7 +75,7 @@ in with python.pkgs; rec {
     flake8
     # Docstring static analyzer
     pydocstyle
-    # Nix-file formatter
+    # Nix file style enforcer
     pkgs.nixfmt
   ];
 

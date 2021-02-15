@@ -216,7 +216,7 @@ install_nix () {
     if [ -x "$(command -v nix)" ]
     then
         # Nix is already installed!
-        bold "Nix is already installed. Skipping."
+        bold "Nix is already installed. Skipping installation."
         return 0
     fi
 
@@ -233,10 +233,32 @@ install_nix () {
     green "Nix installed."
 }
 
+install_cachix () {
+    # Nix must be installed first before installing cachix.
+
+    # Installs cachix, a system that caches our dependencies so we don't have to rebuild (e.g.) pytorch from binaries all the time or when we switch machines).
+    # MISL's cachix repo is stored at https://app.cachix.org/cache/uwmisl (access through the MISL github group).
+    if [ ! -x "$(command -v cachix)" ] &&  [[ ! $(nix-env -q | grep cachix) ]]
+    then
+        yellow "Cachix not installed, installing Cachix..."
+        nix-env -iA cachix -f https://cachix.org/api/v1/install
+        # Cachix is already installed.
+        green "Cachix installed!"
+    else
+        bold "Cachix is already installed. Skipping installation."
+    fi
+
+    cachix use uwmisl
+}
+
 install_misl_env () {
 
     bold "Installing MISL env..."
     # Installs poretitioner developer dependencies
+    # PYTHONENV=$(nix-store --dump-db | grep ".*$( nix-env -q | grep 'python.*env')" -m 1 || nix-env -q | grep 'python.*env -m' 1)
+
+    # nix-env --set-flag priority 4 "$PYTHONENV/bin/f2py"
+    # --install --file $(pathToNixEnv) --show-trace
     nix-env --install --file $(pathToNixEnv) --show-trace
 
     # Configures pre-commit, if it's installed via Nix.
@@ -261,6 +283,7 @@ main () {
         # with Mac OS Catalina and above.
         create_root_nix_if_necessaary
         install_nix
+        install_cachix
         install_misl_env
         green "All done!"
 
