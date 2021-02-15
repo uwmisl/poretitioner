@@ -15,8 +15,6 @@ from typing import List
 import h5py
 import numpy as np
 
-from .core import Channel, ChannelCalibration, Window
-
 __all__ = ["judge_channels"]
 
 
@@ -51,7 +49,7 @@ def judge_channels(bulk_f5_fname, expected_open_channel=235):
     Returns
     -------
     list of ints
-        List of good channels.
+        List of good channels. NOTE: Channels are 1-indexed, The first channel will be 1, not 0.
     """
     f5 = h5py.File(name=bulk_f5_fname)
     channels = list(f5.get("Raw").keys())

@@ -6,6 +6,7 @@ signals.py
 This module encapsulates data related to nanopore signals and the channels that generate them.
 
 """
+from __future__ import annotations
 
 from collections import namedtuple
 from dataclasses import dataclass
@@ -20,9 +21,11 @@ __all__ = [
     "find_open_channel_current",
     "find_segments_below_threshold",
     "Capture",
+    "ChannelCalibration",
     "FractionalizedSignal",
     "PicoampereSignal",
     "RawSignal",
+    "VoltageSignal",
     "SignalMetadata",
     "DEFAULT_OPEN_CHANNEL_GUESS",
     "DEFAULT_OPEN_CHANNEL_BOUND",
@@ -75,7 +78,7 @@ class ChannelCalibration:
 
 
 class SignalMetadata(namedtuple("SignalMetadata", ["channel_number", "window", "calibration"])):
-    """[summary]
+    """Metadata around a signal.
     """
 
 
@@ -83,14 +86,23 @@ class SignalMetadata(namedtuple("SignalMetadata", ["channel_number", "window", "
 class BaseSignalSerializationInfo:
     """Extra  (i.e. non ndarray) data that we want to preserve during serialization.
     To understand why this is necessary, please read: https://stackoverflow.com/questions/26598109/preserve-custom-attributes-when-pickling-subclass-of-numpy-array
+
+    Fields
+     ----------
+    channel_number : int
+        Which nanopore channel generated the data. Must be 1 or greater.
+    calibration: ChannelCalibration
+        How to convert the nanopore device's analog-to-digital converter (ADC) raw signal to picoAmperes of current.
+    read_id : str, optional
+        ReadID that generated this signal, by default None
     """
 
-    read_id: Optional[str]
     channel_number: int
     calibration: ChannelCalibration
+    read_id: Optional[str]
 
 
-class BaseSignal(np.ndarray):
+class BaseSignal(NumpyArrayLike):
     """Base class for signals (time series data generated from a nanopore channel).
         Do not use this class directly, instead subclass it.
 
@@ -133,50 +145,34 @@ class BaseSignal(np.ndarray):
         ```
     """
 
-    # ReadId that generated this signal, optional.
-    read_id: Optional[str]
-
-    # Index of the channel that generated this signal.
-    channel_number: int
-
-    # Device calibration.
-    calibration: ChannelCalibration
-
-    def __new__(
-        cls,
-        signal: NumpyArrayLike,
-        channel_number: int,
-        calibration: ChannelCalibration,
-        read_id=None,
-    ):
-        if channel_number < 1:
-            raise ValueError(
-                f"Channel number '{channel_number}' is invalid. Channel indicies are 1-based, as opposed to 0-based. Please make sure the channel index is greater than zero."
-            )
-        obj = np.asarray(signal).view(cls)
-        # If the signal already has channel info, just use that instead of the passed in values.
-        obj.channel_number = channel_number
-        obj.calibration = calibration
-        obj.read_id = read_id
+    def __new__(cls, signal: NumpyArrayLike):
+        obj = np.copy(signal).view(
+            cls
+        )  # Optimization: Consider not making a copy, this is more error prone though: np.asarray(signal).view(cls)
         return obj
 
-    def __array_finalize__(self, obj):
-        if obj is None:
-            return
-        self.channel_number = getattr(obj, "channel_number", None)
-        self.calibration = getattr(obj, "calibration", None)
-        self.read_id = getattr(obj, "read_id", None)
+    def serialize_info(self, **kwargs) -> Dict:
+        """Creates a dictionary describing the signal and its attributes.
 
-    def serialize_info(self, **kwargs):
-        info = {
-            "channel_number": self.channel_number,
-            "calibration": self.calibration,
-            "read_id": self.read_id,
-            **kwargs,
-        }
-        return info
+        Returns
+        -------
+        Dict
+            A serialized set of attributes.
+        """
+        # When serializing, copy over any existing attributes already in self, and
+        # any that don't exist in self get taken from kwargs.
+        existing_info = self.__dict__
+        info = {key: getattr(self, key, kwargs.get(key)) for key in kwargs.keys()}
+        return {**info, **existing_info}
 
     def deserialize_from_info(self, info: Dict):
+        """Sets attributes on an object from a serialized dict.
+
+        Parameters
+        ----------
+        info : Dict
+            Dictionary of attributes to set after deserialization.
+        """
         for name, value in info.items():
             setattr(self, name, value)
 
@@ -209,7 +205,69 @@ class BaseSignal(np.ndarray):
         return len(self)
 
 
-class FractionalizedSignal(BaseSignal):
+class VoltageSignal(BaseSignal):
+    pass
+
+
+class CurrentSignal(BaseSignal):
+    """Base class for electrical current signals (i.e. time series data generated from a nanopore channel).
+    Do not use this class directly, instead subclass it.
+
+    Fields
+    ----------
+    signal : NumpyArrayLike
+        Numpy array of the signal.
+    channel_number : int
+        Which nanopore channel generated the data. Must be 1 or greater.
+    calibration: ChannelCalibration
+        How to convert the nanopore device's analog-to-digital converter (ADC) raw signal to picoAmperes of current.
+    read_id : str, optional
+        ReadID that generated this signal, by default None
+
+    Returns
+    -------
+    [CurrentSignal]
+        CurrentSignal instance.
+    """
+
+    # ReadId that generated this signal, optional.
+    read_id: Optional[str]
+
+    # Index of the channel that generated this signal.
+    channel_number: int
+
+    # Device calibration.
+    calibration: ChannelCalibration
+
+    def __new__(
+        cls,
+        signal: NumpyArrayLike,
+        channel_number: int,
+        calibration: ChannelCalibration,
+        read_id=None,
+    ):
+        if channel_number < 1:
+            raise ValueError(
+                f"Channel number '{channel_number}' is invalid. Channel indicies are 1-based, as opposed to 0-based. Please make sure the channel index is greater than zero."
+            )
+        obj = np.copy(signal).view(
+            cls
+        )  # Optimization: Consider not making a copy, this is more error prone though: np.asarray(signal).view(cls)
+        # If the signal already has channel info, just use that instead of the passed in values.
+        obj.channel_number = channel_number
+        obj.calibration = calibration
+        obj.read_id = read_id
+        return obj
+
+    def __array_finalize__(self, obj):
+        if obj is None:
+            return
+        self.channel_number = getattr(obj, "channel_number", None)
+        self.calibration = getattr(obj, "calibration", None)
+        self.read_id = getattr(obj, "read_id", None)
+
+
+class FractionalizedSignal(CurrentSignal):
     """A scaled signal that is guaranteed to be between 0 and 1.0.
 
     Converts a nanopore signal (in units of pA) to fractionalized current
@@ -217,8 +275,7 @@ class FractionalizedSignal(BaseSignal):
 
     A value of 0 means the pore is fully blocked, and 1 is fully open.
 
-
-    Parameters
+    Fields
     ----------
     signal : NumpyArrayLike
         Numpy array of the fractionalized signal.
@@ -230,6 +287,9 @@ class FractionalizedSignal(BaseSignal):
         Median signal value when no capture is in the pore.
     read_id : str, optional
         ReadID that generated this signal, by default None
+    do_conversion: bool, optional
+        Whether to interpret the input signal as a RawSignal that needs to be fractionalized, otherwise assume the input
+        has already been fractionalized.
 
     Returns
     -------
@@ -243,8 +303,15 @@ class FractionalizedSignal(BaseSignal):
         channel_number: int,
         calibration: ChannelCalibration,
         open_channel_pA: float,
-        read_id=None,
+        read_id: str = None,
+        do_conversion: bool = False,
     ):
+        if do_conversion:
+            pico = calculate_raw_in_picoamperes(signal, calibration)
+            frac = compute_fractional_blockage(pico, open_channel_pA)
+            # Now use the fractionalized version as the signal.
+            signal = frac
+
         obj = super().__new__(cls, signal, channel_number, calibration, read_id=read_id)
         obj.open_channel_pA = open_channel_pA
         return obj
@@ -269,7 +336,7 @@ class FractionalizedSignal(BaseSignal):
         # Call the parent's __setstate__ with the other tuple elements.
         super(FractionalizedSignal, self).__setstate__(state[0:-1])
 
-    def to_picoamperes(self, *args, **kwargs):
+    def to_picoamperes(self) -> PicoampereSignal:
         """Converts this raw signal to the equivalent signal measured in picoamperes.
 
         Returns
@@ -284,11 +351,11 @@ class FractionalizedSignal(BaseSignal):
         return picoamperes
 
 
-class RawSignal(BaseSignal):
+class RawSignal(CurrentSignal):
     """Raw signals straight from the device's analog to digital converter (ADC).
     You can instances of this class exactly like numpy arrays.
 
-    Parameters
+    Fields
     ----------
     signal : NumpyArrayLike
         Numpy array of the signal.
@@ -305,7 +372,7 @@ class RawSignal(BaseSignal):
         RawSignal instance.
     """
 
-    def to_picoamperes(self, *args, **kwargs):
+    def to_picoamperes(self) -> PicoampereSignal:
         """Converts this raw signal to the equivalent signal measured in picoamperes.
 
         Returns
@@ -323,7 +390,7 @@ class RawSignal(BaseSignal):
         return self.to_picoamperes(*args, **kwargs).to_fractionalized(*args, **kwargs)
 
 
-class PicoampereSignal(BaseSignal):
+class PicoampereSignal(CurrentSignal):
     """Signal as converted to picoamperes.
     You can instances of this class exactly like numpy arrays.
 
@@ -335,7 +402,7 @@ class PicoampereSignal(BaseSignal):
     picoamperes: PicoampereSignal = raw_sig.to_picoamperes()
     ```
 
-    Parameters
+    Fields
     ----------
     signal : NumpyArrayLike
         Numpy array of the picoampere signal.
@@ -357,7 +424,7 @@ class PicoampereSignal(BaseSignal):
         open_channel_guess=DEFAULT_OPEN_CHANNEL_GUESS,
         open_channel_bound=None,
         default=DEFAULT_OPEN_CHANNEL_GUESS,
-    ):
+    ) -> PicoampereSignal:
         """Creates a channel summary via the signal.
 
         Parameters
@@ -598,7 +665,7 @@ class CaptureMetadata:
     start_time_local: int
     duration: int
     ejected: bool
-    voltage_threshold: float
+    voltage_threshold: int
     open_channel_pA: float
     channel_number: int
     calibration: ChannelCalibration
@@ -609,7 +676,7 @@ class CaptureMetadata:
 class Capture:
     """Represents a nanopore capture within some window.
 
-    Parameters
+    Fields
     ----------
 
     signal: PicoampereSignal
@@ -695,8 +762,6 @@ def digitize_current(
 def compute_fractional_blockage(picoamperes, open_channel) -> NumpyArrayLike:
     """Converts a nanopore signal (in units of pA) to fractionalized current
     in the range (0, 1).
-    
-    Note that this creates a new buffer.
 
     A value of 0 means the pore is fully blocked, and 1 is fully open.
 
@@ -745,11 +810,11 @@ def compute_picoamperes_from_fractional_blockage(
 
 def find_open_channel_current(
     picoamperes: PicoampereSignal,
-    open_channel_guess=DEFAULT_OPEN_CHANNEL_GUESS,
-    open_channel_bound=None,
-    default=DEFAULT_OPEN_CHANNEL_GUESS,
-    log=logger.getLogger(),
-) -> float:
+    open_channel_guess: float = DEFAULT_OPEN_CHANNEL_GUESS,
+    open_channel_bound: float = None,
+    default: float = DEFAULT_OPEN_CHANNEL_GUESS,
+    log: Logger = logger.getLogger(),
+) -> PicoampereSignal:
     """Compute the median open channel current in the given picoamperes data.
 
     Inputs presumed to already be in units of pA.
@@ -770,7 +835,7 @@ def find_open_channel_current(
         Logger to use, defaults to singleton logger.
     Returns
     -------
-    float
+    PicoampereSignal
         Median open channel, or DEFAULT_OPEN_CHANNEL_GUESS if no signals were within the bounds and no default was provided.
     """
     if open_channel_bound is None:

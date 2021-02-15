@@ -11,9 +11,8 @@ import re
 import h5py
 import numpy as np
 
-from poretitioner import logger
-
-from . import raw_signal_utils
+from .. import logger
+from ..fast5s import BulkFile
 
 
 def apply_feature_filters(signal, filters):
@@ -133,7 +132,7 @@ def apply_filters_to_read(config, f5, read_id, filter_name):
         only_use_ejected_captures = False  # could skip this, leaving to help read logic
 
     # Apply all the filters
-    signal = raw_signal_utils.get_fractional_blockage_for_read(f5, read_id)
+    signal = get_fractional_blockage_for_read(f5, read_id)
     # print(config["filters"][filter_name])
     # print(f"min = {np.min(signal)}")
     passed_filters = apply_feature_filters(signal, config["filters"][filter_name])
@@ -149,10 +148,11 @@ def filter_and_store_result(config, fast5_files, filter_name, overwrite=False):
     # save all filter parameters in the filter_name path
     filter_path = f"/Filter/{filter_name}"
 
-    # TODO: parallelize this (embarassingly parallel structure)
+    # TODO: parallelize this (embarassingly parallel structure): https://github.com/uwmisl/poretitioner/issues/67
     for fast5_file in fast5_files:
-        with h5py.File(fast5_file, "a") as f5:
-            if overwrite is False and filter_path in f5:
+        with BulkFile(fast5_file) as bulk:
+            # with h5py.File(fast5_file, "a") as f5:
+            if overwrite is False and filter_path in bulk.f5:
                 continue
             passed_read_ids = []
             for read_h5group_name in f5.get("/"):
