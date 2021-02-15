@@ -6,7 +6,6 @@ fast5.py
 Classes for reading, writing and validating fast5 files.
 """
 
-from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path, PurePosixPath
 from typing import List, NewType, Optional, Union
@@ -21,6 +20,7 @@ from .signals import (
     RawSignal,
     VoltageSignal,
 )
+
 from .utils.classify import (
     NULL_CLASSIFICATION_RESULT,
     ClassificationResult,
@@ -28,7 +28,6 @@ from .utils.classify import (
     ClassifierDetails,
     NullClassificationResult,
 )
-from .utils.core import NumpyArrayLike
 
 __all__ = ["BulkFile", "CaptureFile", "channel_path_for_read_id", "signal_path_for_read_id"]
 
@@ -66,17 +65,17 @@ class BaseFile:
 
         Parameters
         ----------
-        filepath : PathLike
-            Path to the fast5 file to interface with.
+        filepath : [type]
+            [description]
         logger : Logger, optional
-            Logger to use, by default getLogger()
+            [description], by default getLogger()
 
         Raises
         ------
         OSError
-            File couldn't be opened (e.g. didn't exist, OS 'Resource temporarily unavailable'). Details in message.
+            Bulk file couldn't be opened (e.g. didn't exist, OS 'Resource temporarily unavailable'). Details in message.
         ValueError
-            File had validation errors, details in message.
+            Bulk file had validation errors, details in message.
         """
 
         self.filepath = Path(filepath).expanduser().resolve()
@@ -154,7 +153,7 @@ class BulkFile(BaseFile):
         Parameters
         ----------
         bulk_filepath : PathLike
-            File path to the bulk fast 5 file.
+            Absolute path to the bulk fast 5 file.
         logger : Logger, optional
             Logger to use, by default getLogger()
 
@@ -232,6 +231,11 @@ class BulkFile(BaseFile):
         Also referred to as the sample rate, sample frequency, or sampling
         frequency.
 
+        Parameters
+        ----------
+        f5 : h5py.File
+            Fast5 file, open for reading using h5py.File.
+
         Returns
         -------
         int
@@ -303,6 +307,9 @@ class BulkFile(BaseFile):
 
         Parameters
         ----------
+        f5 : h5py.File
+            Fast5 file, open for reading using h5py.File.
+
         channel_number : int
             Channel number for which to retrieve raw signal.
         start : Optional[int], optional
@@ -340,7 +347,7 @@ class BulkFile(BaseFile):
 
         Returns
         -------
-        NumpyArrayLike[int]
+        VoltageSignal[int]
             Voltage(s) in millivolts (mV).
         """
         bias_voltage_multiplier = 5  # Signal changes in increments of 5 mV.
@@ -358,7 +365,7 @@ class CaptureFile(BaseFile):
         capture_filepath : PathLike
             Path to the capture file. Capture files are the result of running `poretitioner segment` on a bulk file.
         logger : Logger, optional
-            Logger to use, by default getLogger()
+            [description], by default getLogger()
 
         Raises
         ------
@@ -369,7 +376,7 @@ class CaptureFile(BaseFile):
         """
         super().__init__(capture_filepath, logger=logger)
         if not self.filepath.exists():
-            error_msg = f"Capture fast5 file does not exist at path: {self.filepath}. Make sure the capture file is in this location."
+            error_msg = f"Capture fast5 file does not exist at path: {self.filepath}. Make sure the bulk file is in this location."
             raise OSError(error_msg)
         self.validate(self.filepath, logger)
 
@@ -456,6 +463,8 @@ class CaptureFile(BaseFile):
 
         Parameters
         ----------
+        f5 : h5py.File
+            Fast5 file, open for reading using h5py.File.
         read_id : str
             Read id to retrieve raw signal. Can be formatted as a path ("read_xxx...")
             or just the read id ("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx").
@@ -470,18 +479,6 @@ class CaptureFile(BaseFile):
         return calibration
 
     def get_capture_metadata_for_read(self, read_id: str) -> CaptureMetadata:
-        """Retrieve the capture metadata for given read.
-
-        Parameters
-        ----------
-        read_id : str
-            Which read to fetch the metadata for.
-
-        Returns
-        -------
-        CaptureMetadata
-            Metadata around the captures in this read.
-        """
         channel_path = channel_path_for_read_id(read_id)
         signal_path = signal_path_for_read_id(read_id)
 
