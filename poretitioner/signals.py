@@ -17,8 +17,8 @@ from . import logger
 from .utils.core import NumpyArrayLike, Window
 
 __all__ = [
-    "compute_fractional_blockage",
     "find_open_channel_current",
+    "find_segments_below_threshold",
     "Capture",
     "FractionalizedSignal",
     "PicoampereSignal",
@@ -27,8 +27,6 @@ __all__ = [
     "DEFAULT_OPEN_CHANNEL_GUESS",
     "DEFAULT_OPEN_CHANNEL_BOUND",
 ]
-
-Logger = logger.Logger  # Logger type
 
 DEFAULT_OPEN_CHANNEL_GUESS = 220  # In picoAmperes (pA).
 DEFAULT_OPEN_CHANNEL_BOUND = 15  # In picoAmperes (pA).
@@ -96,8 +94,6 @@ class BaseSignal(np.ndarray):
     """Base class for signals (time series data generated from a nanopore channel).
         Do not use this class directly, instead subclass it.
 
-        Creates a view of an underlying numpy array.
-
         Subclasses must implement:
         `def __array_finalize__(self, obj):` and `def __reduce__(self):`. See `FractionalizedSignal` for an example.
 
@@ -157,9 +153,7 @@ class BaseSignal(np.ndarray):
             raise ValueError(
                 f"Channel number '{channel_number}' is invalid. Channel indicies are 1-based, as opposed to 0-based. Please make sure the channel index is greater than zero."
             )
-        obj = np.copy(signal).view(
-            cls
-        )  # Optimization: Consider not making a copy, this is more error prone though: np.asarray(signal).view(cls)
+        obj = np.asarray(signal).view(cls)
         # If the signal already has channel info, just use that instead of the passed in values.
         obj.channel_number = channel_number
         obj.calibration = calibration
@@ -275,7 +269,7 @@ class FractionalizedSignal(BaseSignal):
         # Call the parent's __setstate__ with the other tuple elements.
         super(FractionalizedSignal, self).__setstate__(state[0:-1])
 
-    def to_picoamperes(self):
+    def to_picoamperes(self, *args, **kwargs):
         """Converts this raw signal to the equivalent signal measured in picoamperes.
 
         Returns
@@ -285,7 +279,7 @@ class FractionalizedSignal(BaseSignal):
         """
         picoamps = compute_picoamperes_from_fractional_blockage(self)
         picoamperes = PicoampereSignal(
-            picoamps, self.channel_number, self.calibration, read_id=self.read_id
+            picoamps, self.channel_number, self.calibration, read_id=self.read_id, *args, **kwargs
         )
         return picoamperes
 
@@ -311,7 +305,7 @@ class RawSignal(BaseSignal):
         RawSignal instance.
     """
 
-    def to_picoamperes(self):
+    def to_picoamperes(self, *args, **kwargs):
         """Converts this raw signal to the equivalent signal measured in picoamperes.
 
         Returns
@@ -321,21 +315,12 @@ class RawSignal(BaseSignal):
         """
         picoamps = calculate_raw_in_picoamperes(self, self.calibration)
         picoamperes = PicoampereSignal(
-            picoamps, self.channel_number, self.calibration, read_id=self.read_id
+            picoamps, self.channel_number, self.calibration, read_id=self.read_id, *args, **kwargs
         )
         return picoamperes
 
-    def to_fractionalized(
-        self,
-        open_channel_guess=DEFAULT_OPEN_CHANNEL_GUESS,
-        open_channel_bound=None,
-        default=DEFAULT_OPEN_CHANNEL_GUESS,
-    ) -> FractionalizedSignal:
-        return self.to_picoamperes().to_fractionalized(
-            open_channel_guess=open_channel_guess,
-            open_channel_bound=open_channel_bound,
-            default=default,
-        )
+    def to_fractionalized(self, *args, **kwargs) -> FractionalizedSignal:
+        return self.to_picoamperes(*args, **kwargs).to_fractionalized(*args, **kwargs)
 
 
 class PicoampereSignal(BaseSignal):
@@ -707,13 +692,10 @@ def digitize_current(
     )
 
 
-def compute_fractional_blockage(
-    picoamperes: NumpyArrayLike, open_channel: float
-) -> NumpyArrayLike:
+def compute_fractional_blockage(picoamperes, open_channel) -> NumpyArrayLike:
     """Converts a nanopore signal (in units of pA) to fractionalized current
     in the range (0, 1).
-
-    TODO Katie Q: I notice the documentation statese that this creates a new buffer, this led to a tricky bug!
+    
     Note that this creates a new buffer.
 
     A value of 0 means the pore is fully blocked, and 1 is fully open.
@@ -730,8 +712,9 @@ def compute_fractional_blockage(
     [NumpyArrayLike]
         Array of fractionalized nanopore current in the range [0, 1]
     """
-
-    frac = np.clip(picoamperes / open_channel, a_min=0.0, a_max=1.0)
+    pico = np.frombuffer(picoamperes, dtype=float)
+    pico /= open_channel
+    frac = np.clip(pico, a_max=1.0, a_min=0.0)
     return frac
 
 
@@ -756,16 +739,16 @@ def compute_picoamperes_from_fractional_blockage(
         Array of fractionalized nanopore current in the range [0, 1]
     """
 
-    pico = fractional * fractional.open_channel_pA
+    pico = np.frombuffer(fractional * fractional.open_channel_pA, dtype=float)
     return pico
 
 
 def find_open_channel_current(
     picoamperes: PicoampereSignal,
-    open_channel_guess: float = DEFAULT_OPEN_CHANNEL_GUESS,
-    open_channel_bound: float = None,
-    default: float = DEFAULT_OPEN_CHANNEL_GUESS,
-    log: Logger = logger.getLogger(),
+    open_channel_guess=DEFAULT_OPEN_CHANNEL_GUESS,
+    open_channel_bound=None,
+    default=DEFAULT_OPEN_CHANNEL_GUESS,
+    log=logger.getLogger(),
 ) -> float:
     """Compute the median open channel current in the given picoamperes data.
 
@@ -775,15 +758,15 @@ def find_open_channel_current(
     ----------
     picoamperes : NumpyArrayLike
         Array representing sampled nanopore current, scaled to pA.
-    open_channel_guess : float, optional
+    open_channel_guess : numeric, optional
         Approximate estimate of the open channel current value, by default DEFAULT_OPEN_CHANNEL_GUESS.
-    bound : float, optional
+    bound : numeric, optional
         Approximate estimate of the variance in open channel current value from
         channel to channel (AKA the range to search). If no bound is specified,
         the default is to use 10% of the open_channel guess.
-    default : float, optional
+    default : numeric, optional
         Default open channel current value to use if one could not be calculated, by default DEFAULT_OPEN_CHANNEL_GUESS.
-    log: logger: Logger, optional
+    log: logger, optional
         Logger to use, defaults to singleton logger.
     Returns
     -------
@@ -792,10 +775,9 @@ def find_open_channel_current(
     """
     if open_channel_bound is None:
         open_channel_bound = 0.1 * open_channel_guess
-
-    lower_bound = open_channel_guess - open_channel_bound
     upper_bound = open_channel_guess + open_channel_bound
-    ix_in_range = np.where(np.logical_and(lower_bound < picoamperes, picoamperes <= upper_bound))[
+    lower_bound = open_channel_guess - open_channel_bound
+    ix_in_range = np.where(np.logical_and(picoamperes <= upper_bound, picoamperes > lower_bound))[
         0
     ]
     if len(ix_in_range) == 0:
@@ -807,3 +789,80 @@ def find_open_channel_current(
     else:
         open_channel = np.median(picoamperes[ix_in_range])[()]
     return open_channel
+
+
+def find_signal_off_regions(
+    picoamperes: PicoampereSignal, window_sz=200, slide=100, current_range=50
+) -> List[Window]:
+    """Helper function for judge_channels(). Finds regions of current where the
+    channel is likely off.
+
+    Parameters
+    ----------
+    picoamperes : PicoampereSignal
+        Nanopore current (in units of pA).
+    window_sz : int, optional
+        Sliding window width, by default 200
+    slide : int, optional
+        How much to slide the window by, by default 100
+    current_range : int, optional
+        How much the current is allowed to deviate, by default 50
+
+    Returns
+    -------
+    List[Window]
+        List of Windows (start, end).
+        Start and end points for where the channel is likely off.
+    """
+    off = []
+    for start in range(0, len(picoamperes), slide):
+        window_mean = np.mean(picoamperes[start : start + window_sz])
+        if -np.abs(current_range) < window_mean and window_mean < np.abs(current_range):
+            off.append(True)
+        else:
+            off.append(False)
+    off_locs = np.multiply(np.where(off)[0], slide)
+    loc = None
+    if len(off_locs) > 0:
+        last_loc = off_locs[0]
+        start = last_loc
+        regions = []
+        for loc in off_locs[1:]:
+            if loc - last_loc != slide:
+                regions.append((start, last_loc))
+                start = loc
+            last_loc = loc
+        if loc is not None:
+            regions.append((start, loc))
+        return regions
+    else:
+        return []
+
+
+def find_segments_below_threshold(time_series, threshold) -> List[Window]:
+    """
+    Find regions where the time series data points drop at or below the
+    specified threshold.
+
+    Parameters
+    ----------
+    time_series : np.array
+        Array containing time series data points.
+    threshold : numeric
+        Find regions where the time series drops at or below this value
+
+    Returns
+    -------
+    List[Window]
+        List of capture windows (start, end).
+        Each window in the list represents the (start, end) points of regions
+        where the input array drops at or below the threshold.
+    """
+    diff_points = np.where(np.abs(np.diff(np.where(time_series <= threshold, 1, 0))) == 1)[0]
+    if time_series[0] <= threshold:
+        diff_points = np.hstack([[0], diff_points])
+    if time_series[-1] <= threshold:
+        diff_points = np.hstack([diff_points, [len(time_series)]])
+
+    windows = [Window(start, end) for start, end in zip(diff_points[::2], diff_points[1::2])]
+    return windows
