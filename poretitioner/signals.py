@@ -18,6 +18,7 @@ from . import logger
 from .utils.core import NumpyArrayLike, Window
 
 __all__ = [
+    "digitize_current",
     "find_open_channel_current",
     "find_segments_below_threshold",
     "Capture",
