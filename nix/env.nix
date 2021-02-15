@@ -1,4 +1,4 @@
-###########################################################################################
+# ##########################################################################################
 #
 # env.nix
 #
@@ -16,7 +16,9 @@
 with pkgs;
 let
   python = callPackage ./python.nix { inherit pkgs; };
+  # Install main dependencies so they're cached
   dependencies = callPackage ./dependencies.nix { inherit python cudaSupport; };
   dev_pkgs = dependencies.build;
   testing_pkgs = dependencies.test;
-in [ python ] ++ dev_pkgs ++ testing_pkgs
+  run_pkgs = dependencies.run;
+in dev_pkgs ++ testing_pkgs ++ run_pkgs ++ [ python ]
