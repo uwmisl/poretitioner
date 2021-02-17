@@ -82,7 +82,7 @@ def getLogger() -> Logger:
     Use this method the same way you'd use the Python standard library logging module.
     (e.g. getLogger().warning("This is a warning")).
 
-    Make sure the root logger is configured before using this method.
+    Make sure the root logger is configured via `configure_root_logger` before using this method.
 
     Returns
     -------

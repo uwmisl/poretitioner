@@ -7,12 +7,17 @@ This module contains tests for segment.py functionality.
 
 """
 import os
+from logging import debug
 
 import h5py
 import numpy as np
-import poretitioner.utils.segment as segment
 import pytest
+from poretitioner.logger import configure_root_logger, getLogger, verbosity_to_log_level
 from poretitioner.signals import CaptureMetadata, ChannelCalibration, PicoampereSignal, RawSignal
+from poretitioner.utils import segment
+
+configure_root_logger(verbosity_to_log_level(100), debug=True)
+log = getLogger()
 
 
 def create_capture_fast5_test():
@@ -187,6 +192,7 @@ def find_captures_0_single_capture_test():
         delay=delay,
         end_tol=end_tol,
     )
+
     assert len(captures) == len(actual_captures)
     for test_capture in captures:
         assert test_capture in actual_captures
@@ -211,6 +217,7 @@ def find_captures_0_single_capture_terminal_test():
         delay=delay,
         end_tol=end_tol,
     )
+
     assert len(captures) == len(actual_captures)
     for test_capture in captures:
         assert test_capture in actual_captures
@@ -391,10 +398,19 @@ def find_captures_5_unfolded_terminal_test():
         end_tol=end_tol,
     )
     assert len(captures) == 1
+    open_channel_pA = np.array([capture.open_channel_pA_calculated for capture in captures])
+    low_expected_open_channel_pA = 228.5
+    high_expected_open_channel_pA = 230
     # Rough check; should be ~229.05 & anything close is okay.
     # The function is nondeterministic & should return this exact value, but if
     # future changes are made, some tolerance can be allowed.
-    assert open_channel_pA > 228.5 and open_channel_pA < 230
+    all_currents_within_bounds = all(
+        (open_channel_pA > low_expected_open_channel_pA)
+        & (open_channel_pA < high_expected_open_channel_pA)
+    )
+    assert (
+        all_currents_within_bounds
+    ), f"Expect all capture open channel currents to be between '{low_expected_open_channel_pA}' and '{high_expected_open_channel_pA}'."
 
 
 def find_captures_6_clog_no_open_channel_test():
@@ -421,10 +437,15 @@ def find_captures_6_clog_no_open_channel_test():
         end_tol=end_tol,
     )
     assert len(captures) == 1
+    open_channel_pA = np.array([capture.open_channel_pA_calculated for capture in captures])
+    expected_open_channel_pA = 230
+    all_currents_within_bounds = all((np.close(open_channel_pA, expected_open_channel_pA)))
     # Rough check; should be ~229.05 & anything close is okay.
     # The function is nondeterministic & should return this exact value, but if
     # future changes are made, some tolerance can be allowed.
-    assert open_channel_pA == 230
+    assert (
+        all_currents_within_bounds
+    ), f"All calculated open channel currents should be close to {expected_open_channel_pA}"
 
 
 def find_captures_7_capture_no_open_channel_test():
@@ -454,7 +475,16 @@ def find_captures_7_capture_no_open_channel_test():
     # Rough check; should be ~229.05 & anything close is okay.
     # The function is nondeterministic & should return this exact value, but if
     # future changes are made, some tolerance can be allowed.
-    assert open_channel_pA == 230
+    # TODO: Katie Q: How much tolerance?
+    expected_open_channel_pA = 230
+
+    open_channel_pA = np.array([capture.open_channel_pA_calculated for capture in captures])
+    expected_open_channel_pA = 230
+    all_currents_within_bounds = all((np.close(open_channel_pA, expected_open_channel_pA)))
+
+    assert (
+        all_currents_within_bounds
+    ), f"All captures should have calculated an open channel current close to {expected_open_channel_pA}."
 
 
 def find_captures_8_capture_no_open_channel_test():
@@ -526,84 +556,4 @@ def parallel_find_captures_test():
             assert voltage == config["segment"]["voltage_threshold"]
 
     assert n_captures == actual_n_captures
-    os.remove(capture_f5_fname)
-
-
-def sort_capture_windows_by_channel_test():
-    signal_metadata = np.array(
-        [
-            # channel_no, capture_window, offset, rng, digi
-            [1, (0, 20000), 0, 0, 0],
-            [2, (100_001, 200_001), 0, 0, 0],
-            [1, (100_000, 200_000), 0, 0, 0],
-            [1, (50000, 80000), 0, 0, 0],
-            [3, (1234, 10000), 0, 0, 0],
-            [2, (1111, 20000), 0, 0, 0],
-        ],
-        dtype=object,
-    )
-    sorted = segment.sort_capture_windows_by_channel(signal_metadata)
-    valid_channels = [1, 2, 3]
-    valid_counts = [3, 2, 1]
-    for channel, count in zip(valid_channels, valid_counts):
-        meta = sorted.get(channel)
-        assert len(meta) == count
-        last_window = meta[0]
-        for window in meta[1:]:
-            assert window[0] >= last_window[0]
-            last_window = window
-
-
-def write_capture_windows_to_fast5_test():
-    capture_f5_fname = "tests/write_windows_test_dummy.fast5"
-    if os.path.exists(capture_f5_fname):
-        os.remove(capture_f5_fname)
-    signal_metadata = np.array(
-        [
-            # channel_no, capture_window, offset, rng, digi
-            [1, (0, 20000), 0, 0, 0],
-            [2, (100_001, 200_001), 0, 0, 0],
-            [1, (100_000, 200_000), 0, 0, 0],
-            [1, (50000, 80000), 0, 0, 0],
-            [3, (1234, 10000), 0, 0, 0],
-            [2, (1111, 20000), 0, 0, 0],
-        ],
-        dtype=object,
-    )
-    segment.write_capture_windows_to_fast5(capture_f5_fname, signal_metadata)
-    assert os.path.exists(capture_f5_fname)
-    os.remove(capture_f5_fname)
-
-
-def write_capture_to_fast5_test(tmpdir):
-    capture_f5_fname = "tests/write_test_dummy.fast5"
-    if os.path.exists(capture_f5_fname):
-        os.remove(capture_f5_fname)
-    read_id = "1405caa5-74fd-4478-8fac-1d0b5d6ead8e"
-    signal_pA = np.random.rand(5000)
-    start_time_bulk = 10000
-    start_time_local = 0
-    duration = 8000
-    voltage_threshold = -180
-    open_channel_pA = 229.1
-    ejected = True
-    channel_number = 3
-    calibration = ChannelCalibration(-21.0, 3013, 8192)
-    sampling_rate = 10000
-
-    metadata = CaptureMetadata(
-        read_id,
-        start_time_bulk,
-        start_time_local,
-        duration,
-        ejected,
-        voltage_threshold,
-        open_channel_pA,
-        channel_number,
-        calibration,
-        sampling_rate,
-    )
-    segment.write_capture_to_fast5(capture_f5_fname, signal_pA, metadata)
-    assert os.path.exists(capture_f5_fname)
-    # TODO further validation, incl. contents of file
     os.remove(capture_f5_fname)

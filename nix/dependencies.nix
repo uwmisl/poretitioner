@@ -21,10 +21,11 @@
 , python ? (pkgs.callPackage ./python.nix) { inherit pkgs; }, lib ? pkgs.lib
 , stdenv ? pkgs.stdenv, cudaSupport ? false }:
 with pkgs;
+with python.pkgs;
 let
   precommit = (import ./pkgs/pre-commit/pre-commit.nix) { inherit python; };
-  ont_fast5_api = (callPackage ./pkgs/ont_fast5_api) { inherit python; };
-in with python.pkgs; rec {
+  debugpy = (callPackage ./pkgs/debugpy) { inherit lib buildPythonPackage fetchFromGitHub; };
+in rec {
 
   ###########################################################################################
   #
@@ -93,6 +94,8 @@ in with python.pkgs; rec {
     pytestrunner
     # Test code coverage generator
     pytestcov
+    # Debugpy (Used for debugging in VSCode: https://code.visualstudio.com/docs/python/debugging#_command-line-debugging)
+    debugpy
   ];
 
   ###########################################################################################

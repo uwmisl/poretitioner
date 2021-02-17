@@ -6,6 +6,7 @@ fast5.py
 Classes for reading, writing and validating fast5 files.
 """
 
+from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path, PurePosixPath
 from typing import List, NewType, Optional, Union
@@ -20,44 +21,55 @@ from .signals import (
     RawSignal,
     VoltageSignal,
 )
-
-
-from .utils.classify import (
-    NULL_CLASSIFICATION_RESULT,
-    ClassificationResult,
-    ClassifierConfiguration,
-    ClassifierDetails,
-    NullClassificationResult,
-)
-from .utils.core import NumpyArrayLike
+from .utils.core import NumpyArrayLike, PathLikeOrString
 
 __all__ = ["BulkFile", "CaptureFile", "channel_path_for_read_id", "signal_path_for_read_id"]
 
+# The name of the root of a HDF file. Also attainable from h5py.File.name: https://docs.h5py.org/en/latest/high/file.html#reference
 FAST5_ROOT = "/"
-CHANNEL_ID_KEY = "channel_id"
 
-def add_signal_to_path(base: PathLike) -> PathLike:
-    # We're using PurePosixPath, instead of Path, to guarantee that the path separator will be "/" (instead of using the operating system default)
-    path_with_signal = PurePosixPath(base, "Signal")
+
+@dataclass(frozen=True)
+class KEY:
+    """Group and attribute IDs used in Fast5 files.
+    """
+
+    # Key name for where channel info is stored in Fast5 files.
+    CHANNEL_ID = "channel_id"
+    # Key name for where Signal info is stored in Fast5 files.
+    SIGNAL = "Signal"
+
+    META = "Meta"
+    SEGMENTATION = "Segmentation"
+    OPEN_CHANNEL_PA = "open_channel_pA"
+
+
+def add_signal_to_path(base: PathLikeOrString) -> PathLike:
+    """Adds the Signal Group key to a path.
+
+    Parameters
+    ----------
+    base : str | PathLike
+        Path to add the Signal path to.
+
+    Returns
+    -------
+    PathLike
+        A HDF5-friendly path that contains the signal group.
+    """
+    # We're using PurePosixPath, instead of Path, to guarantee that the path separator will be '/' (i.e. FAST5_ROOT) (instead of using the operating system default)
+    path_with_signal = PurePosixPath(base, KEY.SIGNAL)
     return path_with_signal
 
 
-def add_channel_id_to_path(base: PathLike) -> PathLike:
-    # We're using PurePosixPath, instead of Path, to guarantee that the path separator will be "/" (instead of using the operating system default)
-    path_with_channel_id = PurePosixPath(base, "channel_id")
+def add_channel_id_to_path(base: PathLikeOrString) -> PathLike:
+    # We're using PurePosixPath, instead of Path, to guarantee that the path separator will be '/' (i.e. FAST5_ROOT) (instead of using the operating system default)
+    path_with_channel_id = PurePosixPath(base, KEY.CHANNEL_ID)
     return path_with_channel_id
 
 
-def is_read(f5: h5py.File, path: str) -> bool:
-    # Reads should have Signal and channelId groups.
-    # If a path has both of theses, we consider the group a signal
-    channel_path = str(add_channel_id_to_path(path))
-    signal_path = str(add_signal_to_path(path))
-    return f5.get(channel_path) and f5.get(signal_path)
-
-
 class BaseFile:
-    def __init__(self, filepath: Union[str, PathLike], logger: Logger = getLogger()):
+    def __init__(self, filepath: PathLikeOrString, mode: str = "r", logger: Logger = getLogger()):
         """Base class for interfacing with Fast5 files. This class should not be instantiated directly, instead it should be subclassed.
         Most of the time, nanopore devices/software write data in an HDFS [1] file format called Fast5.
         We expect a certain format for these files, and write our own.
@@ -68,6 +80,15 @@ class BaseFile:
         ----------
         filepath : PathLike
             Path to the fast5 file to interface with.
+
+        mode : str, optional
+            File mode, valid modes are:
+            - "r" 	Readonly, file must exist (default)
+            - "r+" 	Read/write, file must exist
+            - "w" 	Create file, truncate if exists
+            - "w-" or "x" 	Create file, fail if exists
+            - "a" 	Read/write if exists, create otherwise
+
         logger : Logger, optional
             Logger to use, by default getLogger()
 
@@ -80,22 +101,24 @@ class BaseFile:
         """
 
         self.filepath = Path(filepath).expanduser().resolve()
-        self.f5 = h5py.File(self.filepath, "r")
+        self.f5 = h5py.File(self.filepath, mode)
         self.filename = self.f5.filename
         self.log = logger
+        self.ROOT = self.f5.name  # '/' by default
 
     def __enter__(self):
-        return self.f5.__enter__()
+        self.f5.__enter__()
+        return self
 
-    def __exit__(self):
-        self.f5.__exit__()
+    def __exit__(self, exception_type, exception_value, traceback):
+        self.f5.__exit__(exception_type, exception_value, traceback)
 
-    def get_channel_calibration_for_path(self, path: str) -> ChannelCalibration:
+    def get_channel_calibration_for_path(self, path: PathLikeOrString) -> ChannelCalibration:
         """Gets the channel calibration
 
         Parameters
         ----------
-        path : str
+        path : PathLikeOrString
             Group path where the channel calibration data is stored.
 
         Returns
@@ -148,13 +171,24 @@ class BaseFile:
 class BulkFile(BaseFile):
     # TODO: Katie Q: Work with Katie to determine how we want to handle validation.
 
-    def __init__(self, bulk_filepath: PathLike, logger: Logger = getLogger()):
+    def __init__(
+        self, bulk_filepath: PathLikeOrString, mode: str = "r", logger: Logger = getLogger()
+    ):
         """Interfaces with Bulk fast5 files. The Bulk fast5 refers to the file format generated by Oxford Nanopore MinKnow devices.
 
         Parameters
         ----------
-        bulk_filepath : PathLike
+        bulk_filepath : PathLikeOrString
             File path to the bulk fast 5 file.
+
+        mode : str, optional
+            File mode, valid modes are:
+            - "r" 	Readonly, file must exist (default)
+            - "r+" 	Read/write, file must exist
+            - "w" 	Create file, truncate if exists
+            - "w-" or "x" 	Create file, fail if exists
+            - "a" 	Read/write if exists, create otherwise
+
         logger : Logger, optional
             Logger to use, by default getLogger()
 
@@ -165,7 +199,7 @@ class BulkFile(BaseFile):
         ValueError
             Bulk file had validation errors, details in message.
         """
-        super().__init__(bulk_filepath, logger=logger)
+        super().__init__(bulk_filepath, mode, logger=logger)
         if not self.filepath.exists():
             raise OSError(
                 f"Bulk fast5 file does not exist at path: {bulk_filepath}. Make sure the bulk file is in this location."
@@ -216,7 +250,7 @@ class BulkFile(BaseFile):
             raise ValueError(error_message)
 
         try:
-            # TODO: Katie Q: Why the [2:-1] at the end?
+            # The [2: -1] gets rid of the '0b' prepended to the run_id string.
             run_id = str(tracking_id.attrs["run_id"])[2:-1]
         except KeyError:
             error_message = f"Attribute 'run_id' missing from path:{path} in bulk file '{self.f5.filename}'. Double check that the bulk file includes this field at that path."
@@ -350,12 +384,14 @@ class BulkFile(BaseFile):
 
 
 class CaptureFile(BaseFile):
-    def __init__(self, capture_filepath: PathLike, logger: Logger = getLogger()):
+    def __init__(
+        self, capture_filepath: PathLikeOrString, mode: str = "r", logger: Logger = getLogger()
+    ):
         """Capture file.
 
         Parameters
         ----------
-        capture_filepath : PathLike
+        capture_filepath : PathLikeOrString
             Path to the capture file. Capture files are the result of running `poretitioner segment` on a bulk file.
         logger : Logger, optional
             Logger to use, by default getLogger()
@@ -367,13 +403,14 @@ class CaptureFile(BaseFile):
         ValueError
             Capture file had validation errors, details in message.
         """
-        super().__init__(capture_filepath, logger=logger)
+        super().__init__(capture_filepath, mode, logger=logger)
         if not self.filepath.exists():
             error_msg = f"Capture fast5 file does not exist at path: {self.filepath}. Make sure the capture file is in this location."
             raise OSError(error_msg)
+
         self.validate(self.filepath, logger)
 
-    def validate(self, capture_filepath: PathLike, log: Logger = getLogger()):
+    def validate(self, capture_filepath: PathLikeOrString, log: Logger = getLogger()):
         """Make sure this represents a valid capture/segmented poretitioner file.
 
         Raises
@@ -405,47 +442,83 @@ class CaptureFile(BaseFile):
         try:
             sample_frequency = int(self.f5[context_tag_path].attrs[sample_frequency_key])
         except KeyError:
-            pass  # Try checking the Meta group as a fallback.
+            # Try checking the Meta group as a fallback.
+            try:
+                sample_rate = int(self.f5[sample_rate_path].attrs[sample_rate_key])
+                sample_frequency = sample_rate
+            except KeyError:
+                error_msg = f"Sampling rate not present in bulk file '{self.f5.filename}'. Make sure a sampling frequency is specified either at '{sample_rate_path}' with attribute '{sample_frequency_key}', or as a fallback, '{sample_rate_path}' with attribute '{sample_rate_key}'"
+                self.log.error(error_msg)
+                raise ValueError(error_msg)
 
-        try:
-            sample_rate = int(self.f5[sample_rate_path].attrs[sample_rate_key])
-        except KeyError:
-            error_msg = f"Sampling rate not present in bulk file '{self.f5.filename}'. Make sure a sampling frequency is specified either at '${sample_frequency_path}' with attribute '{sample_frequency_key}', or as a fallback, '{sample_rate_path}' with attribute '{sample_rate_key}'"
-            self.log.error(error_msg)
-            raise ValueError(error_msg)
-
-        rate = sample_frequency if sample_frequency else sample_rate
+        rate = sample_frequency
         return rate
 
     @property
     def reads(self, root: str = FAST5_ROOT) -> List[str]:
-        potential_read = [] if not self.f5.get(root) else self.f5.get(root).keys()
-        reads = [read for read in potential_read if is_read(self.f5, read)]
+        root_group = self.f5.get(root)
+        potential_reads = [] if not root_group else root_group.keys()
+        reads = [read for read in potential_reads if self.is_read(read)]
         return reads
 
     @property
     def filtered_reads(self):
         # TODO: Implement filtering here  to only return reads that pass a filter. https://github.com/uwmisl/poretitioner/issues/67
-        self.reads
+        return self.reads
 
-    def fractionalized_read(
+    def is_read(self, path: PathLikeOrString) -> bool:
+        """Whether this path points to a capture read.
+
+        Parameters
+        ----------
+        path : PathLikeOrString
+            Path that may point to a read.
+
+        Returns
+        -------
+        bool
+            True if and only if the path represents a read.
+        """
+        # Reads should have Signal and channelId groups.
+        # If a path has both of theses, we consider the group a signal
+        channel_path = str(add_channel_id_to_path(path))
+        signal_path = str(add_signal_to_path(path))
+        return self.f5.get(channel_path) and self.f5.get(signal_path)
+
+    def get_fractionalized_read(
         self, read_id: str, start: Optional[int] = None, end: Optional[int] = None
-    ):
+    ) -> FractionalizedSignal:
+        """Gets the fractionalized signal from this read.
+
+        Parameters
+        ----------
+        read_id : str
+            Read to get the fractionalized signal from.
+        start : Optional[int], optional
+            Where to start the read, by default None
+        end : Optional[int], optional
+            Where to end the read, by default None
+
+        Returns
+        -------
+        FractionalizedSignal
+            Fractionalized signal from times `start` to `end`.
+        """
         signal_path = signal_path_for_read_id(read_id)
         channel_path = channel_path_for_read_id(read_id)
-        open_channel_pA = self.f5[signal_path].attrs["open_channel_pA"]
+        open_channel_pA = self.f5[signal_path].attrs[KEY.OPEN_CHANNEL_PA]
         calibration = self.get_channel_calibration_for_read(read_id)
-        raw_signal = self.f5.get(signal_path)[start:end]
+        raw_signal: RawSignal = self.f5.get(signal_path)[start:end]
         channel_number = self.f5.get(channel_path).attrs["channel_number"]
-
         fractionalized = FractionalizedSignal(
             raw_signal,
             channel_number,
             calibration,
             open_channel_pA,
-            do_conversion=True,
             read_id=read_id,
+            do_conversion=True,
         )
+
         return fractionalized
 
     def get_channel_calibration_for_read(self, read_id: str) -> ChannelCalibration:
@@ -465,7 +538,7 @@ class CaptureFile(BaseFile):
         ChannelCalibration
             Channel calibration Offset, range, and digitisation values.
         """
-        channel_path = str(channel_path_for_read_id(read_id))
+        channel_path = channel_path_for_read_id(read_id)
         calibration = self.get_channel_calibration_for_path(channel_path)
         return calibration
 
@@ -494,7 +567,7 @@ class CaptureFile(BaseFile):
         duration = self.f5[signal_path].attrs["duration"]
         ejected = self.f5[signal_path].attrs["ejected"]
         voltage_threshold = self.f5[signal_path].attrs["voltage"]
-        open_channel_pA = self.f5[signal_path].attrs["open_channel_pA"]
+        open_channel_pA = self.f5[signal_path].attrs[KEY.OPEN_CHANNEL_PA]
 
         cap = CaptureMetadata(
             read_id,
@@ -510,28 +583,20 @@ class CaptureFile(BaseFile):
         )
         return cap
 
-    def write_capture(
-        self, capture_f5_filepath: PathLike, raw_signal: RawSignal, metadata: CaptureMetadata
-    ):
+    def write_capture(self, raw_signal: RawSignal, metadata: CaptureMetadata):
         """Write a single capture to the specified capture fast5 file (which has
         already been created via create_capture_fast5()).
 
         Parameters
         ----------
-        capture_f5_filepath : PathLike
-            Filename of the capture fast5 file to be augmented.
         raw_signal : RawSignal
             Time series of nanopore current values (in units of pA).
         metadata: CaptureMetadata
             Details about this capture.
         """
-        path = Path(capture_f5_filepath)
-        save_directory = Path(path.parent)
-        if not save_directory.exists():
-            raise IOError(f"Path to capture file location does not exist: {save_directory}")
         read_id = metadata.read_id
         f5 = self.f5
-        signal_path = f"read_{read_id}/Signal"
+        signal_path = signal_path_for_read_id(read_id)
         f5[signal_path] = raw_signal
         f5[signal_path].attrs["read_id"] = read_id
         f5[signal_path].attrs["start_time_bulk"] = metadata.start_time_bulk
@@ -539,7 +604,7 @@ class CaptureFile(BaseFile):
         f5[signal_path].attrs["duration"] = metadata.duration
         f5[signal_path].attrs["ejected"] = metadata.ejected
         f5[signal_path].attrs["voltage"] = metadata.voltage_threshold
-        f5[signal_path].attrs["open_channel_pA"] = metadata.open_channel_pA
+        f5[signal_path].attrs[KEY.OPEN_CHANNEL_PA] = metadata.open_channel_pA
 
         channel_path = channel_path_for_read_id(read_id)
         f5.create_group(channel_path)
@@ -548,94 +613,10 @@ class CaptureFile(BaseFile):
         f5[channel_path].attrs["range"] = metadata.calibration.rng
         f5[channel_path].attrs["offset"] = metadata.calibration.offset
         f5[channel_path].attrs["sampling_rate"] = metadata.sampling_rate
-        f5[channel_path].attrs["open_channel_pA"] = metadata.open_channel_pA
+        f5[channel_path].attrs[KEY.OPEN_CHANNEL_PA] = metadata.open_channel_pA
 
 
-class ClassifierFile(CaptureFile):
-    def __init__(
-        self,
-        capture_filepath: PathLike,
-        classifier_details: ClassifierDetails,
-        logger: Logger = getLogger(),
-    ):
-        super().__init__(capture_filepath, logger=logger)
-
-        self.classifier_path = PurePosixPath("/", "Classification", classifier_details.model)
-        # self.results_path = str(PurePosixPath("/", "Classification", classifier_run_name, read_id))
-        f5 = self.f5
-
-        if self.classifier_path not in self.f5:
-            self.f5.create_group(self.classifier_path)
-        self.f5[self.classifier_path].attrs["model"] = classifier_details.model
-        self.f5[self.classifier_path].attrs["model_version"] = classifier_details.model_version
-        self.f5[self.classifier_path].attrs["model_file"] = classifier_details.model_file
-        self.f5[self.classifier_path].attrs[
-            "classification_threshold"
-        ] = classifier_details.classification_threshold
-
-    def result_for_read(self, read_id: str) -> ClassificationResult:
-        result_path = str(PurePosixPath(self.classifier_path, read_id))
-        f5 = self.f5
-        result = NULL_CLASSIFICATION_RESULT
-        if result_path not in f5:
-            self.log.info(
-                f"Read {read_id} has not been classified yet, or result"
-                f"is not stored at {result_path} in file {f5.filename}."
-            )
-            return result
-        predict_class = f5[result_path].attrs["best_class"]
-        probability = f5[result_path].attrs["best_score"]
-        assigned_class = f5[result_path].attrs["assigned_class"]
-        result = ClassificationResult(predict_class, probability, assigned_class)
-        return result
-
-    def __get_results_path__(self, read_id: str):
-        results_path = PurePosixPath(self.classifier_path, read_id)
-        return results_path
-
-    def add_model_results(self,):
-        pass
-
-    def write_details(self, classifier_details: ClassifierDetails):
-        """Write metadata about the classifier that doesn't need to be repeated for
-        each read.
-
-        Parameters
-        ----------
-        f5 : h5py.File
-            Opened fast5 file in a writable mode.
-        classifier_config : dict
-            Subset of the configuration parameters that belong to the classifier.
-        results_path : str
-            Where the classification results will be stored in the f5 file.
-        """
-        results_path = self.classifier_path
-        if results_path not in self.f5:
-            self.f5.create_group(results_path)
-        self.f5[results_path].attrs["model"] = classifier_details.model
-        self.f5[results_path].attrs["model_version"] = classifier_details.model_version
-        self.f5[results_path].attrs["model_file"] = classifier_details.model_file
-        self.f5[results_path].attrs[
-            "classification_threshold"
-        ] = classifier_details.classification_threshold
-
-    def write_result(self, read_id: str, result: ClassificationResult):
-        results_path = str(PurePosixPath(self.classifier_path, read_id))
-        if results_path not in self.f5:
-            self.f5.create_group(results_path)
-        self.f5[results_path].attrs["best_class"] = result.predicted
-        self.f5[results_path].attrs["best_score"] = result.probability
-        self.f5[results_path].attrs["assigned_class"] = (
-            result.assigned_class if result.passed_classification else -1
-        )
-
-
-class ClassifiedCapture:
-    def __init__(self) -> None:
-        pass
-
-
-def channel_path_for_read_id(read_id: str) -> PathLike:
+def channel_path_for_read_id(read_id: str) -> PathLikeOrString:
     """Generates an HDFS group path for a read_id's channel.
 
     Parameters
@@ -651,18 +632,17 @@ def channel_path_for_read_id(read_id: str) -> PathLike:
     read_id = (
         read_id if "read" in read_id else f"read_{read_id}"
     )  # Conditionally adds the "read_" prefix, for backwards compatibility with capture files that didn't use this prefix.
-    read_id_path = PurePosixPath("/", read_id)
+    read_id_path = PurePosixPath(FAST5_ROOT, read_id)
     channel_path = add_channel_id_to_path(read_id_path)
 
     if "read" in read_id:
-        channel_path = PurePosixPath("/", read_id, CHANNEL_ID_KEY)
+        channel_path = PurePosixPath(FAST5_ROOT, read_id, KEY.CHANNEL_ID)
     else:
-        channel_path = PurePosixPath("/", f"read_{read_id}", CHANNEL_ID_KEY)
-    # channel_path = str(channel_path)
+        channel_path = PurePosixPath(FAST5_ROOT, f"read_{read_id}", KEY.CHANNEL_ID)
     return channel_path
 
 
-def signal_path_for_read_id(read_id: str) -> PathLike:
+def signal_path_for_read_id(read_id: str) -> PathLikeOrString:
     """Generates an HDFS group path for a read_id's signal.
 
     Parameters
@@ -676,8 +656,8 @@ def signal_path_for_read_id(read_id: str) -> PathLike:
         Correctly formatted signal path.
     """
     if "read" in read_id:
-        signal_path = PurePosixPath("/", read_id, "Signal")
+        signal_path = PurePosixPath(FAST5_ROOT, read_id, KEY.SIGNAL)
     else:
-        signal_path = PurePosixPath("/", f"read_{read_id}", "Signal")
-    # signal_path = str(signal_path)
+        signal_path = PurePosixPath(FAST5_ROOT, f"read_{read_id}", KEY.SIGNAL)
+
     return signal_path

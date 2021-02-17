@@ -8,13 +8,85 @@ This module contains functionality for quantifying nanopore captures.
 
 """
 import re
+from pathlib import PurePosixPath
 from typing import List, Optional
 
 import h5py
 import numpy as np
 from poretitioner.fast5s import CaptureFile
-from poretitioner.utils import classify
-from poretitioner.utils.core import Window, WindowsByChannel
+from poretitioner.logger import Logger, getLogger
+from poretitioner.utils.classify import ClassifierFile
+from poretitioner.utils.core import PathLikeOrString, Window, WindowsByChannel
+
+
+class QuantifyCaptureFile(ClassifierFile):
+    def __init__(self, capture_filepath: PathLikeOrString, logger: Logger = getLogger()):
+        super().__init__(capture_filepath, logger=logger)
+        # self.classifier_path = PurePosixPath(self.ROOT, "Classification", classifier_details.model)
+
+    def get_capture_details(self, read_path=None, classification_model=None):
+        """Get capture times & channel info for all reads in the fast5 at read_path.
+        If a classification_path is specified, get the label for each read too.
+
+        Parameters
+        ----------
+        read_path : str, optional
+            Location of the reads to retrieve, by default None (if None, defaults
+            to "/" for the read location.)
+        classification_model : str, optional
+            Name of the classifier to use the labels of, by default None (if None, no
+            labels are returned)
+
+        Returns
+        -------
+        np.array
+            Array containing read_id, capture/read start & end, channel number, and
+            the classification label (if applicable). Shape is (5 x n_reads).
+        """
+        f5 = self.f5
+
+        read_path = read_path if read_path is not None else self.ROOT
+        read_h5group_names = f5.get(read_path)
+
+        captures_in_f5 = []
+        for read_id in self.reads:
+            capture_metadata = self.get_capture_metadata_for_read(read_id)
+            capture_start = capture_metadata.start_time_local
+            capture_end = capture_start + capture_metadata.duration
+            channel_number = capture_metadata.channel_number
+            self.get_classification_for_read(classification_model, read_id)
+            # classify.get_classification_for_read(f5, read_id, classification_path)
+
+        if read_h5group_names is None:
+            return None
+
+        for grp_name in read_h5group_names:
+            if "read" not in grp_name:
+                continue
+            read_id = re.findall(r"read_(.*)", grp_name)[0]
+            grp = f5.get(grp_name)
+            a = grp["Signal"].attrs
+            capture_start = capture_metadata.start_time_local
+            capture_end = capture_start + capture_metadata.duration
+
+            a = grp["channel_id"].attrs
+            channel_number = capture_metadata.channel_number
+
+            if classification_path:
+                (
+                    pred_class,
+                    prob,
+                    assigned_class,
+                    passed_classification,
+                ) = self.get_classification_for_read(read_id, classification_path)
+            else:
+                assigned_class = None
+
+            captures_in_f5.append(
+                (read_id, capture_start, capture_end, channel_number, assigned_class)
+            )
+
+        return np.array(captures_in_f5)
 
 
 def quantify_files(
@@ -87,7 +159,9 @@ def quantify_files(
         with CaptureFile(capture_file) as capture:
             sampling_rate = capture.sampling_rate
 
-            capture_array = get_capture_details_in_f5(f5, read_path, classification_path)
+            capture_array = get_capture_details_in_f5(
+                capture, read_path=read_path, classification_path=classification_path
+            )
             if len(capture_array) > 0:
                 if classified_only:
                     ix = np.where(capture_array[:, 4] != "-1")[0]
@@ -98,7 +172,9 @@ def quantify_files(
             if read_path == blockage_path:
                 blockage_array = capture_array
             else:
-                blockage_array = get_capture_details_in_f5(f5, read_path, classification_path)
+                blockage_array = get_capture_details_in_f5(
+                    capture, read_path=read_path, classification_path=classification_path
+                )
             if len(blockage_array) > 0:
                 blockage_arrays.append(blockage_array)
 
@@ -226,7 +302,7 @@ def get_capture_details_in_f5(capture: CaptureFile, read_path=None, classificati
         Array containing read_id, capture/read start & end, channel number, and
         the classification label (if applicable). Shape is (5 x n_reads).
     """
-
+    f5 = capture.f5
     read_path = read_path if read_path is not None else "/"
     read_h5group_names = f5.get(read_path)
 
@@ -266,6 +342,7 @@ def get_capture_details_in_f5(capture: CaptureFile, read_path=None, classificati
     return np.array(captures_in_f5)
 
 
+# TODO: Katie Q: I could be wrong, this feels more general than 'quantify', might this method be appropriate for "core.py"?
 def calc_time_until_capture(
     open_pore_windows: List[Window],
     captures: List[Window],
@@ -339,6 +416,7 @@ def calc_time_until_capture(
     return all_capture_times
 
 
+# TODO: Katie Q: I could be wrong, this feels more general than 'quantify', might this method be appropriate for "core.py"?
 def calc_time_until_capture_intervals(
     capture_windows: List[Window],
     captures_by_channel: WindowsByChannel,
@@ -399,6 +477,7 @@ def calc_time_until_capture_intervals(
     return capture_times
 
 
+# TODO: Katie Q: I could be wrong, this feels more general than 'quantify', might this method be appropriate for "core.py"?
 def calc_capture_freq(capture_windows, captures):
     """Calculate the capture frequency -- the number of captures per unit of time.
 
@@ -432,6 +511,9 @@ def calc_capture_freq(capture_windows, captures):
         captures_in_window = capture_window.overlaps(captures)
         n_captures += len(captures_in_window)
     return n_captures
+
+
+# TODO: Katie Q: I could be wrong, this feels more general than 'quantify', might this method be appropriate for "core.py"?
 
 
 def calc_capture_freq_intervals(
@@ -517,7 +599,7 @@ def calc_capture_freq_intervals(
 #         capture_times.append(np.mean(interval_capture_times))
 #     return capture_times
 
-
+# TODO: Katie Q: Is this still used anywhere? Will it be?
 def NTER_time_fit(time):
     """Convert time_between_captures to concentration per the NTER paper.
 
@@ -541,6 +623,7 @@ def NTER_time_fit(time):
     return conc
 
 
+# TODO: Katie Q: Is this still used anywhere? Will it be?
 def NTER_freq_fit(freq):
     """Convert capture_freq to concentration per the NTER paper.
 

@@ -172,5 +172,7 @@ def add_output_directory_option_to_parser(parser: ArgumentParser):
     """
     arg = ARG.OUTPUT_DIRECTORY.replace("_", "-")
     parser.add_argument(
-        f"--{arg}", action="store", help="Where to store the segmented capture fast5 files."
+        f"--{arg}",
+        action="store",
+        help="Which directory to store the segmented capture fast5 files.",
     )
