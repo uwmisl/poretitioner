@@ -28,6 +28,7 @@ let
 in
 {
     # Command to run tests and generate coverage
-    coverage = "${coverage_command} run --source='./poretitioner/' -m ${run_pytest_command} ; ${generate_html_report}";
+    #coverage = "${coverage_command} run --source='./poretitioner/' ${run_pytest_command} ; ${generate_html_report}";
+    coverage = "${coverage_command} run --source='./poretitioner/' -m ${run_pytest_command}; ${generate_html_report}";
     tests = run_pytest_command;
 }

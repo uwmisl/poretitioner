@@ -11,8 +11,7 @@ import re
 import h5py
 import numpy as np
 
-from .. import logger
-from ..fast5s import BulkFile
+from .. import fast5s, logger
 
 
 def apply_feature_filters(signal, filters):
@@ -150,7 +149,7 @@ def filter_and_store_result(config, fast5_files, filter_name, overwrite=False):
 
     # TODO: parallelize this (embarassingly parallel structure): https://github.com/uwmisl/poretitioner/issues/67
     for fast5_file in fast5_files:
-        with BulkFile(fast5_file) as bulk:
+        with fast5s.BulkFile(fast5_file) as bulk:
             # with h5py.File(fast5_file, "a") as f5:
             if overwrite is False and filter_path in bulk.f5:
                 continue

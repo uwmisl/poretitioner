@@ -347,7 +347,7 @@ class FractionalizedSignal(CurrentSignal):
         """
         picoamps = compute_picoamperes_from_fractional_blockage(self)
         picoamperes = PicoampereSignal(
-            picoamps, self.channel_number, self.calibration, read_id=self.read_id, *args, **kwargs
+            picoamps, self.channel_number, self.calibration, read_id=self.read_id
         )
         return picoamperes
 
@@ -383,12 +383,21 @@ class RawSignal(CurrentSignal):
         """
         picoamps = calculate_raw_in_picoamperes(self, self.calibration)
         picoamperes = PicoampereSignal(
-            picoamps, self.channel_number, self.calibration, read_id=self.read_id, *args, **kwargs
+            picoamps, self.channel_number, self.calibration, read_id=self.read_id
         )
         return picoamperes
 
-    def to_fractionalized(self, *args, **kwargs) -> FractionalizedSignal:
-        return self.to_picoamperes(*args, **kwargs).to_fractionalized(*args, **kwargs)
+    def to_fractionalized_from_guess(
+        self,
+        open_channel_guess=DEFAULT_OPEN_CHANNEL_GUESS,
+        open_channel_bound=None,
+        default=DEFAULT_OPEN_CHANNEL_GUESS,
+    ) -> FractionalizedSignal:
+        return self.to_picoamperes().to_fractionalized_from_guess(
+            open_channel_guess=open_channel_guess,
+            open_channel_bound=open_channel_bound,
+            default=default,
+        )
 
 
 class PicoampereSignal(CurrentSignal):
@@ -425,14 +434,14 @@ class PicoampereSignal(CurrentSignal):
         open_channel_guess=DEFAULT_OPEN_CHANNEL_GUESS,
         open_channel_bound=None,
         default=DEFAULT_OPEN_CHANNEL_GUESS,
-    ) -> PicoampereSignal:
+    ) -> float:
         """Creates a channel summary via the signal.
 
         Parameters
         ----------
-        open_channel_guess : float
+        open_channel_guess : float, optional
             Approximate estimate of the "open channel current", which is the median current that flows when the channel is completely open (i.e. unblocked). Measured in picoamperes, by default DEFAULT_OPEN_CHANNEL_GUESS.
-        open_channel_bound : float
+        open_channel_bound : float, optional
             Approximate estimate of the variance in open channel current value from
             channel to channel (AKA the range to search), by default DEFAULT_OPEN_CHANNEL_BOUND.
         open_channel_default : Optional[float], optional
@@ -478,7 +487,28 @@ class PicoampereSignal(CurrentSignal):
         """
         return self.to_raw()
 
-    def to_fractionalized(
+    def to_fractionalized(self, open_channel_pA: float) -> FractionalizedSignal:
+        """Gets the fractionalized signal from a known open channel current.
+
+        Parameters
+        ----------
+        open_channel_pA : float
+            Open channel current in picoamperes.
+
+        Returns
+        -------
+        FractionalizedSignal
+            Fractionalized signal from the picoampere signal.
+        """
+        calibration = self.calibration
+        channel_number = self.channel_number
+        frac = compute_fractional_blockage(self, open_channel_pA)
+        fractionalized = FractionalizedSignal(
+            frac, channel_number, calibration, open_channel_pA, read_id=self.read_id
+        )
+        return fractionalized
+
+    def to_fractionalized_from_guess(
         self,
         open_channel_guess=DEFAULT_OPEN_CHANNEL_GUESS,
         open_channel_bound=None,
@@ -691,7 +721,7 @@ class Capture:
         current). (Captures are <= the threshold.).
 
     open_channel_pA_calculated : float
-        Calculated estimate of the open channel current value.
+        Calculated open channel current value.
     """
 
     signal: PicoampereSignal
@@ -707,6 +737,10 @@ class Capture:
     @property
     def duration(self):
         return self.window.duration
+
+    def __str__(self):
+        string = f""
+        return string
 
 
 ###############
@@ -760,7 +794,9 @@ def digitize_current(
     )
 
 
-def compute_fractional_blockage(picoamperes, open_channel) -> NumpyArrayLike:
+def compute_fractional_blockage(
+    picoamperes: NumpyArrayLike, open_channel: float
+) -> NumpyArrayLike:
     """Converts a nanopore signal (in units of pA) to fractionalized current
     in the range (0, 1).
 
@@ -768,7 +804,7 @@ def compute_fractional_blockage(picoamperes, open_channel) -> NumpyArrayLike:
 
     Parameters
     ----------
-    picoamperes : array
+    picoamperes : NumpyArrayLike
         Array of nanopore current values in units of pA.
     open_channel : float
         Open channel current value (pA).
@@ -814,8 +850,8 @@ def find_open_channel_current(
     open_channel_guess: float = DEFAULT_OPEN_CHANNEL_GUESS,
     open_channel_bound: float = None,
     default: float = DEFAULT_OPEN_CHANNEL_GUESS,
-    log: Logger = logger.getLogger(),
-) -> PicoampereSignal:
+    log: logger.Logger = logger.getLogger(),
+) -> float:
     """Compute the median open channel current in the given picoamperes data.
 
     Inputs presumed to already be in units of pA.
@@ -832,7 +868,7 @@ def find_open_channel_current(
         the default is to use 10% of the open_channel guess.
     default : numeric, optional
         Default open channel current value to use if one could not be calculated, by default DEFAULT_OPEN_CHANNEL_GUESS.
-    log: logger, optional
+    log: logger.Logger, optional
         Logger to use, defaults to singleton logger.
     Returns
     -------
@@ -854,7 +890,7 @@ def find_open_channel_current(
         open_channel = default
     else:
         open_channel = np.median(picoamperes[ix_in_range])[()]
-    return open_channel
+    return float(open_channel)
 
 
 def find_signal_off_regions(
@@ -905,16 +941,16 @@ def find_signal_off_regions(
         return []
 
 
-def find_segments_below_threshold(time_series, threshold) -> List[Window]:
+def find_segments_below_threshold(time_series: NumpyArrayLike, threshold: float) -> List[Window]:
     """
     Find regions where the time series data points drop at or below the
     specified threshold.
 
     Parameters
     ----------
-    time_series : np.array
+    time_series : NumpyArrayLike
         Array containing time series data points.
-    threshold : numeric
+    threshold : float
         Find regions where the time series drops at or below this value
 
     Returns

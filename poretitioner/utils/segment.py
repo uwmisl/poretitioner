@@ -20,7 +20,7 @@ import h5py
 import numpy as np
 from dask.diagnostics import ProgressBar
 
-from .. import application_info, fast5adapter, logger
+from .. import application_info, logger
 from ..fast5s import BulkFile, CaptureFile
 from ..signals import (
     Capture,
@@ -46,11 +46,25 @@ __name__ = app_info.name
 __all__ = ["segment"]
 
 
+def generate_read_id(*args, **kwargs) -> str:
+    """Generate a read ID. There's a lot of freedom in how we define these (e.g.
+    UUID, a deterministic seed)
+
+    Returns
+    -------
+    str
+        A unique identifier for a read.
+    """
+    read_id = str(uuid.uuid4())
+    return read_id
+
+
 def find_captures(
     signal_pA: PicoampereSignal,
     signal_threshold_frac: float,
     open_channel_pA_calculated: float,
     terminal_capture_only: bool = False,
+    # TODO: Katie Q: DANGER! Mutable obj reference as default
     filters={},
     delay=50,
     end_tol=0,
@@ -97,7 +111,7 @@ def find_captures(
     """
 
     # Convert to frac current
-    frac_current = signal_pA.to_fractionalized()
+    frac_current = signal_pA.to_fractionalized(open_channel_pA_calculated)
     del signal_pA
     # Apply signal threshold & get list of captures
     capture_windows = find_windows_below_threshold(
@@ -120,7 +134,6 @@ def find_captures(
         else:
             captures = []
 
-    last_capture = captures[-1]
     if delay > 0:
         for i, capture in enumerate(captures):
             capture_start, capture_end = capture.window
@@ -135,15 +148,17 @@ def find_captures(
 
     # Apply filters to remaining capture(s)
     filtered_captures = []
-    capture_start, capture_end = last_capture.window
-    # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-    # filtered = [capture for capture in captures if filter.apply_feature_filters(frac_current[capture_start:capture_end], filters)]
-    filtered = [
-        capture
-        for capture in captures
-        if filter.apply_feature_filters(frac_current[capture_start:capture_end], filters)
-    ]
-    return filtered
+    if len(captures) > 0:
+        last_capture = captures[-1]
+        capture_start, capture_end = last_capture.window
+        # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
+        # filtered = [capture for capture in captures if filter.apply_feature_filters(frac_current[capture_start:capture_end], filters)]
+        filtered_captures = [
+            capture
+            for capture in captures
+            if True  # filter.apply_feature_filters(frac_current[capture_start:capture_end], filters)
+        ]
+    return filtered_captures
 
 
 def find_captures_dask_wrapper(
@@ -446,7 +461,12 @@ def segment(
 
 
 def parallel_find_captures(
-    bulk_f5_fname, config, save_location=None, f5_subsection_start=None, f5_subsection_end=None
+    bulk_f5_fname,
+    config,
+    save_location=None,
+    f5_subsection_start=None,
+    f5_subsection_end=None,
+    overwrite=False,
 ):
     """Identify captures within the bulk fast5 file in the specified range
     (from f5_subsection_start to f5_subsection_end.)
@@ -541,10 +561,6 @@ def parallel_find_captures(
     n_in_file = 0
     file_no = 1
     capture_metadata = []
-    # for (
-    #     i,
-    #     ((captures_in_window, open_channel_pA), window_context, (window_raw, _, _)),
-    # ) in enumerate(zip(captures, context, raw_signals)):
 
     def get_capture_metadata(
         read_id: str,
@@ -603,14 +619,14 @@ def parallel_find_captures(
         return capture_metadata
 
     for capture, metadata in zip(captures, context):
-        for capture in capture:
-            read_id = str(uuid.uuid4())
-            start, end = capture.window.start, capture.window.end
+        for cap in capture:
+            read_id = generate_read_id()
+            start, end = cap.window.start, cap.window.end
             capture_metadata = get_capture_metadata(
                 read_id,
                 sampling_rate,
                 voltage_threshold,
-                capture,
+                cap,
                 metadata,
                 f5_subsection_start=f5_subsection_start,
             )
@@ -624,103 +640,13 @@ def parallel_find_captures(
 
             picoamperes: PicoampereSignal = capture.signal.to_picoamperes()
             raw_signal = picoamperes.to_raw()[start:end]
-            local_logger.debug(f"Length of raw signal : {len(picoamperes)}")
+            local_logger.debug(f"\tLength of raw signal : {len(picoamperes)}")
 
-            local_logger.debug(f"Writing to file: {capture_f5_filepath}")
-            write_capture_to_fast5(capture_f5_filepath, raw_signal, capture_metadata)
+            local_logger.debug(f"\tWriting to file: {capture_f5_filepath}...")
 
-            write_capture_to_fast5(
-<<<<<<< HEAD
-                Path(save_location, f"{run_id}_{file_no}.fast5"), raw_signal, capture_metadata
-=======
-                Path(save_location, f"{run_id}_{file_no}.hdf"), raw_signal, capture_metadata
->>>>>>> This is so large.
-            )
+            capture_file = CaptureFile(capture_f5_filepath)
+            capture_file.write_capture(raw_signal, capture_metadata)
+
             local_logger.debug(f"\tWritten!")
 
     return capture_metadata
-
-
-def sort_capture_windows_by_channel(signal_metadata):
-    # Initialize dictionary of {channel: [windows]}
-    try:
-        channels = np.unique(signal_metadata[:, 0])
-    except TypeError:
-        raise TypeError("signal_metadata must be an array.")
-    windows_by_channel = {}
-    for channel in channels:
-        windows_by_channel[channel] = []
-
-    # Populate dictionary values
-    for row in signal_metadata:
-        channel = row[0]
-        windows_by_channel[channel].append(row)
-
-    # Sort the windows within each channel by time
-    for channel, captures in windows_by_channel.items():
-        captures = np.array(captures)
-        windows_by_channel[channel] = captures[captures[:, 1].argsort()]
-    return windows_by_channel
-
-
-def write_capture_windows_to_fast5(capture_f5_fname, signal_metadata):
-    # Check to make sure the path exists
-    path, fname = os.path.split(capture_f5_fname)
-    if not os.path.exists(path):
-        raise IOError(f"Path to capture file location does not exist: {path}")
-
-    with h5py.File(capture_f5_fname, "a") as f5:
-        base_path = "/Meta/Segmentation/capture_windows"
-        # Sort the windows by channel and write to file
-        # signal_metadata = [[channel_no, capture_window, offset, rng, digi], ...]
-        signal_metadata = np.array(signal_metadata, dtype=object)
-        windows_by_channel = sort_capture_windows_by_channel(signal_metadata)
-        for channel, signal_meta in windows_by_channel.items():
-            path = f"{base_path}/Channel_{channel}"
-            capture_windows = []
-            for meta in signal_meta:
-                channel_no, capture_window, offset, rng, digi = meta
-                capture_windows.append(capture_window)
-            f5[path] = capture_windows
-
-
-def write_capture_to_fast5(
-    capture_f5_fname: str, raw_signal: RawSignal, metadata: CaptureMetadata
-):
-    """Write a single capture to the specified capture fast5 file (which has
-    already been created via create_capture_fast5()).
-
-    Parameters
-    ----------
-    filename : str
-        Filename of the capture fast5 file to be augmented.
-    raw_signal : RawSignal
-        Time series of nanopore current values (in units of pA).
-    metadata: CaptureMetadata
-        Details about this capture.
-    """
-    path = Path(capture_f5_fname)
-    save_directory = Path(path.parent)
-    if not save_directory.exists():
-        raise IOError(f"Path to capture file location does not exist: {save_directory}")
-        CaptureMetadata
-    read_id = metadata.read_id
-    with h5py.File(capture_f5_fname, "a") as f5:
-        signal_path = f"read_{read_id}/Signal"
-        f5[signal_path] = raw_signal
-        f5[signal_path].attrs["read_id"] = read_id
-        f5[signal_path].attrs["start_time_bulk"] = metadata.start_time_bulk
-        f5[signal_path].attrs["start_time_local"] = metadata.start_time_local
-        f5[signal_path].attrs["duration"] = metadata.duration
-        f5[signal_path].attrs["ejected"] = metadata.ejected
-        f5[signal_path].attrs["voltage"] = metadata.voltage_threshold
-        f5[signal_path].attrs["open_channel_pA"] = metadata.open_channel_pA
-
-        channel_path = f"read_{read_id}/channel_id"
-        f5.create_group(channel_path)
-        f5[channel_path].attrs["channel_number"] = metadata.channel_number
-        f5[channel_path].attrs["digitisation"] = metadata.calibration.digitisation
-        f5[channel_path].attrs["range"] = metadata.calibration.rng
-        f5[channel_path].attrs["offset"] = metadata.calibration.offset
-        f5[channel_path].attrs["sampling_rate"] = metadata.sampling_rate
-        f5[channel_path].attrs["open_channel_pA"] = metadata.open_channel_pA

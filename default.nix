@@ -59,7 +59,7 @@ let
       checkPhase = run_tests_and_coverage;
 
       # Run-time dependencies
-      propagatedBuildInputs = run_pkgs ++ [ src ];
+      propagatedBuildInputs = run_pkgs;
     };
 
   app = { doCheck ? true }:
