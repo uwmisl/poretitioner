@@ -23,9 +23,12 @@ __all__ = [
     "WindowsByChannel",
 ]
 
-# Generic wrapper type for array-like data. Normally we'd use numpy's arraylike type, but that won't be available until
-# Numpy 1.21: https://stackoverflow.com/questions/40378427/numpy-formal-definition-of-array-like-objects
-NumpyArrayLike = np.ndarray
+
+class NumpyArrayLike(np.ndarray):
+    # Generic wrapper type for array-like data. Normally we'd use numpy's arraylike type, but that won't be available until
+    # Numpy 1.21: https://stackoverflow.com/questions/40378427/numpy-formal-definition-of-array-like-objects
+    pass
+
 
 # Represent a path or a string representing a path.
 PathLikeOrString = Union[str, PathLike]

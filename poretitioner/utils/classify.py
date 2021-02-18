@@ -23,7 +23,7 @@ from ..logger import Logger, getLogger
 from ..signals import FractionalizedSignal, RawSignal
 # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
 from . import NTERs_trained_cnn_05152019 as pretrained_model
-from . import filter
+from . import filtering
 from .configuration import ClassifierConfiguration
 from .core import PathLikeOrString
 
@@ -138,16 +138,19 @@ class ClassifierDetails:
 
 # TODO: Finish writing Classifier plugin architecture: https://github.com/uwmisl/poretitioner/issues/91
 class ClassifierPlugin(metaclass=ABCMeta):
+    @property
     @abstractmethod
-    def get_model_name(self) -> str:
+    def model_name(self) -> str:
         pass
 
+    @property
     @abstractmethod
-    def get_model_version(self) -> str:
+    def model_version(self) -> str:
         pass
 
+    @property
     @abstractmethod
-    def get_model_file(self) -> str:
+    def model_file(self) -> str:
         pass
 
     @abstractmethod

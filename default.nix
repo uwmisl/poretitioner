@@ -59,7 +59,7 @@ let
       checkPhase = run_tests_and_coverage;
 
       # Run-time dependencies
-      propagatedBuildInputs = run_pkgs;
+      propagatedBuildInputs = run_pkgs ++ [src];
     };
 
   app = { doCheck ? true }:
@@ -95,7 +95,7 @@ in {
   app-no-test = app { doCheck = false; };
   test = poretitioner { doCheck = true; };
   app = app { doCheck = true; };
-  lib = poretitioner { doCheck = true; };
+  lib = poretitioner { doCheck = false; };
   docker = dockerImage;
   # Note: Shell can only be run by using "nix-shell" (i.e. "nix-shell -A shell ./default.nix").
   # Here's an awesome, easy-to-read overview of nix shells: https://ghedam.at/15978/an-introduction-to-nix-shell

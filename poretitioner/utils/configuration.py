@@ -16,7 +16,7 @@ from configparser import ConfigParser
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
-from typing import Dict, Union
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 
@@ -141,20 +141,20 @@ class GeneralConfiguration(BaseConfiguration):
 class SegmentConfiguration(BaseConfiguration):
     bulkfast5: str
     segmentedfast5: str
-    voltage_threshold: float
+    voltage_threshold: int
     signal_threshold_frac: float
     translocation_delay: float
-    alt_open_channel_pA: float
     terminal_capture_only: bool
     delay: int
     end_tol: float
-    signal_threshold_frac: float
+    good_channels: List[int]
+    open_channel_prior_mean: int
+    open_channel_prior_stdv: int
     alt_open_channel_pA: int
     terminal_capture_only: bool
     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
     filters: Dict
     delay: int
-    end_tol: int
 
     def __init__(self, command_line_args: Dict = None, config: Dict = None) -> None:
         """[summary]
@@ -178,7 +178,20 @@ class SegmentConfiguration(BaseConfiguration):
 
 
 @dataclass(frozen=True)
+class FilterConfig:
+    name: str
+    attributes: Dict[str, Any]
+    filepath: Optional[str]
+
+
+@dataclass(frozen=True)
 class FilterConfiguration(BaseConfiguration):
+    """Configuration for the filtering step.
+    """
+
+    """Whether to only consider captures that were in the pore until the voltage was reversed.
+    """
+    only_use_ejected: bool
     # Filters to apply to the data.
     # Valid filters take the form:
     # "name": "value"
@@ -230,7 +243,6 @@ class QuantifierConfiguration(BaseConfiguration):
         raise NotImplementedError("Not implemented configuration")
 
 
-# TODO: Katie Q: Is there ever a circumstance where we'll want to use more than one classifier in the same run?
 @dataclass(frozen=True)
 class ClassifierConfiguration(BaseConfiguration):
     classifier: str
