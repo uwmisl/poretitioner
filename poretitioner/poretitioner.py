@@ -1,11 +1,23 @@
+# from .fast5s import BulkFile, CaptureFile
+import pprint
 from pathlib import Path
+from typing import List
+
+import numpy as np
 
 from . import logger
 from .getargs import ARG, COMMAND, get_args
 from .utils import segment
-
-# from .fast5s import BulkFile, CaptureFile
-
+from .utils.configuration import SegmentConfiguration
+from .utils.filtering import (
+    LengthFilter,
+    MaximumFilter,
+    MeanFilter,
+    MedianFilter,
+    MinimumFilter,
+    RangeFilter,
+    StandardDeviationFilter,
+)
 
 # def test_fast5():
 
@@ -31,11 +43,20 @@ def main(args):
         save_location = Path(getattr(args, ARG.OUTPUT_DIRECTORY)).resolve()
 
         # TODO: Update with actual segmentation config. https://github.com/uwmisl/poretitioner/issues/73
+        filters: List[RangeFilter] = [
+            # MeanFilter(),
+            # StandardDeviationFilter(),
+            # MedianFilter(),
+            # MinimumFilter,
+            # MaximumFilter(),
+            LengthFilter(100, np.inf)
+        ]
+
         config = {
             "compute": {"n_workers": 4},
             "segment": {
                 "voltage_threshold": -180,
-                "signal_threshold": 0.7,
+                "signal_threshold_frac": 0.7,
                 "translocation_delay": 10,
                 "open_channel_prior_mean": 230,
                 "open_channel_prior_stdv": 25,
@@ -43,16 +64,24 @@ def main(args):
                 "end_tol": 0,
                 "terminal_capture_only": False,
             },
-            "filters": {"base filter": {"length": (100, None)}},
+            # "filters": {"base filter": {"length": (100, None)}},
             "output": {"capture_f5_dir": f"{save_location}", "captures_per_f5": 1000},
         }
-        segment.segment(
+
+        seg_config = SegmentConfiguration(config=config["segment"])
+
+        capture_metadata = segment.segment(
             bulk_f5_filepath,
             save_location,
             config,
-            f5_subsection_start=None,
+            seg_config,
+            filters=filters,
+            f5_subsection_start=0,
             f5_subsection_end=None,
         )
+
+        segment_results = pprint.pformat(capture_metadata)
+        log.debug(f"All done segmenting: \n{segment_results}")
         return
     elif args.command == COMMAND.FILTER:
         # TODO: Perform filter step.
@@ -66,22 +95,3 @@ def main(args):
     else:
         # TODO: Perform all steps.
         return
-
-
-if __name__ == "__main__":
-    # To test the application with pre-configured command line arguments,
-    # set `use_fake_command_line` to True and/or modify the `command_line` list
-    # with whatever arguments you'd like:
-    use_fake_command_line = False
-    if use_fake_command_line:
-        command_line = [
-            "segment",
-            "--file=./tests/data/bulk_fast5_dummy.fast5",
-            "--output-dir=./tests/data/",
-            "-vvvvv",
-        ]
-        args = get_args(command_line)
-    else:
-        args = get_args()
-    # test_fast5()
-    main(args)

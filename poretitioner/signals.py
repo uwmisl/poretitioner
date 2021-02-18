@@ -738,8 +738,13 @@ class Capture:
     def duration(self):
         return self.window.duration
 
-    def __str__(self):
-        string = f""
+    @property
+    def fractionalized(self, start=None, end=None) -> FractionalizedSignal:
+        frac = self.signal[start:end].to_fractionalized(self.open_channel_pA_calculated)
+        return frac
+
+    def __repr__(self):
+        string = f"duration: {self.signal.duration} window:{self.window!s} open_channel_pA:{self.open_channel_pA_calculated}"
         return string
 
 

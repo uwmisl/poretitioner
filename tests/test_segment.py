@@ -7,7 +7,9 @@ This module contains tests for segment.py functionality.
 
 """
 import os
+import pdb
 from logging import debug
+from pathlib import Path
 
 import h5py
 import numpy as np
@@ -15,12 +17,19 @@ import pytest
 from poretitioner.logger import configure_root_logger, getLogger, verbosity_to_log_level
 from poretitioner.signals import CaptureMetadata, ChannelCalibration, PicoampereSignal, RawSignal
 from poretitioner.utils import segment
+from pytest import fixture
 
-configure_root_logger(verbosity_to_log_level(100), debug=True)
-log = getLogger()
+configure_root_logger(verbosity=1, debug=False)
 
 
-def create_capture_fast5_test():
+@fixture
+def get_data(tmp_path, request):
+    test_dir = tmp_path
+    data_dir = Path(test_dir, "data")
+    print(f"\n\n\nTEST DATA DIR: {data_dir!s}\n\n\n")
+
+
+def create_capture_fast5_test(get_data):
     """Test valid capture fast5 produced. Conditions:
     * Valid bulk fast5 input
     * Valid capture fast5 path
@@ -29,6 +38,7 @@ def create_capture_fast5_test():
     """
     bulk_f5_fname = "tests/data/bulk_fast5_dummy.fast5"
     capture_f5_fname = "tests/data/capture_fast5_dummy.fast5"
+    pdb.set_trace()
     segment_config = {
         "voltage_threshold": -140,
         "signal_threshold": 0.7,
@@ -54,7 +64,7 @@ def create_capture_fast5_test():
     os.remove(capture_f5_fname)
 
 
-def create_capture_fast5_overwrite_test():
+def create_capture_fast5_overwrite_test(get_data):
     """Test overwriting capture fast5. Conditions:
     * Valid bulk fast5 input
     * Valid capture fast5 path (which exists)
@@ -159,7 +169,7 @@ def picoampere_signal_from_data_file(
         Path to a signal file.
     channel_number : int, optional
         Channel index, by default 1
-    calibration : ChannelCalibration, optional
+    calibration : ChannelCalibraticlearon, optional
         How to convert this raw signal to picoamperes, by default ChannelCalibration(0, 1, 1) (i.e. the identity calibration: just multiplies everything 1)
 
     Returns
@@ -439,7 +449,7 @@ def find_captures_6_clog_no_open_channel_test():
     assert len(captures) == 1
     open_channel_pA = np.array([capture.open_channel_pA_calculated for capture in captures])
     expected_open_channel_pA = 230
-    all_currents_within_bounds = all((np.close(open_channel_pA, expected_open_channel_pA)))
+    all_currents_within_bounds = all((np.isclose(open_channel_pA, expected_open_channel_pA)))
     # Rough check; should be ~229.05 & anything close is okay.
     # The function is nondeterministic & should return this exact value, but if
     # future changes are made, some tolerance can be allowed.
@@ -480,7 +490,7 @@ def find_captures_7_capture_no_open_channel_test():
 
     open_channel_pA = np.array([capture.open_channel_pA_calculated for capture in captures])
     expected_open_channel_pA = 230
-    all_currents_within_bounds = all((np.close(open_channel_pA, expected_open_channel_pA)))
+    all_currents_within_bounds = all((np.isclose(open_channel_pA, expected_open_channel_pA)))
 
     assert (
         all_currents_within_bounds
@@ -517,43 +527,44 @@ def find_captures_8_capture_no_open_channel_test():
         assert test_capture in actual_captures
 
 
-def parallel_find_captures_test():
-    bulk_f5_fname = "tests/data/bulk_fast5_dummy.fast5"
-    segment_config = {
-        "voltage_threshold": -180,
-        "signal_threshold": 0.7,
-        "translocation_delay": 20,
-        "open_channel_prior_mean": 220,
-        "good_channels": [1, 2, 3],
-        "end_tol": 50,
-        "terminal_capture_only": False,
-        "filter": {"length": (100, None)},
-    }
-    compute_config = {"n_workers": 2}
-    output_config = {"capture_f5_dir": "tests", "captures_per_f5": 4000}
-    config = {"compute": compute_config, "segment": segment_config, "output": output_config}
-    segment.parallel_find_captures(bulk_f5_fname, config, overwrite=True)
-    run_id = "d0befb838f5a9a966e3c559dc3a75a6612745849"
-    actual_n_captures = 9
-    n_captures = 0
-    capture_f5_fname = f"tests/{run_id}_1.fast5"
-    with h5py.File(capture_f5_fname, "r") as f5:
-        for grp in f5.get("/"):
-            if "read" not in grp:
-                continue
-            n_captures += 1
-            d = f5[grp]
-            a = d["Signal"].attrs
-            start_time_local = a.get("start_time_local")
-            start_time_bulk = a.get("start_time_bulk")
-            assert start_time_local == start_time_bulk  # No offset here
+class TestParallelFindCaptures:
+    def parallel_find_captures_test(self):
+        bulk_f5_fname = "tests/data/bulk_fast5_dummy.fast5"
+        segment_config = {
+            "voltage_threshold": -180,
+            "signal_threshold": 0.7,
+            "translocation_delay": 20,
+            "open_channel_prior_mean": 220,
+            "good_channels": [1, 2, 3],
+            "end_tol": 50,
+            "terminal_capture_only": False,
+            "filter": {"length": (100, None)},
+        }
+        compute_config = {"n_workers": 2}
+        output_config = {"capture_f5_dir": "tests", "captures_per_f5": 4000}
+        config = {"compute": compute_config, "segment": segment_config, "output": output_config}
+        segment.parallel_find_captures(bulk_f5_fname, config, overwrite=True)
+        run_id = "d0befb838f5a9a966e3c559dc3a75a6612745849"
+        actual_n_captures = 9
+        n_captures = 0
+        capture_f5_fname = f"tests/{run_id}_1.fast5"
+        with h5py.File(capture_f5_fname, "r") as f5:
+            for grp in f5.get("/"):
+                if "read" not in grp:
+                    continue
+                n_captures += 1
+                d = f5[grp]
+                a = d["Signal"].attrs
+                start_time_local = a.get("start_time_local")
+                start_time_bulk = a.get("start_time_bulk")
+                assert start_time_local == start_time_bulk  # No offset here
 
-            duration = a.get("duration")
-            len_signal = len(d["Signal"][()])
-            assert len_signal == duration
+                duration = a.get("duration")
+                len_signal = len(d["Signal"][()])
+                assert len_signal == duration
 
-            voltage = a.get("voltage")
-            assert voltage == config["segment"]["voltage_threshold"]
+                voltage = a.get("voltage")
+                assert voltage == config["segment"]["voltage_threshold"]
 
-    assert n_captures == actual_n_captures
-    os.remove(capture_f5_fname)
+        assert n_captures == actual_n_captures
+        os.remove(capture_f5_fname)

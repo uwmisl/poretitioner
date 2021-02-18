@@ -21,7 +21,7 @@ let
   coverage_command = "${coverage.pname}";
   pytest_command = "${pytest.pname}";
   pytest_config_filepath = "./pytest.ini";
-  run_pytest_command = "${pytest_command} -c ${pytest_config_filepath}";
+  run_pytest_command = "${pytest_command} -c ${pytest_config_filepath} -s";
   # Where to store the output of the coverage.
   coverage_directory = "tests/coverage/";
   generate_html_report = "${coverage_command} html --directory=${coverage_directory}";

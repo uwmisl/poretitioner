@@ -89,16 +89,16 @@ import pytest
 #     assert not pass_filters
 
 
-# def check_capture_ejection_by_read_test():
-#     f5_fail = "tests/data/bulk_fast5_dummy.fast5"
-#     assert os.path.exists(f5_fail)
-#     bad_read_id = "akejwoeirjo;ewijr"
-#     with h5py.File(f5_fail, "r") as f5:
-#         with pytest.raises(ValueError) as e:
-#             # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#             True  # filter.check_capture_ejection_by_read(f5, bad_read_id)
-#             assert "does not exist in the fast5 file" in e
-#     # TODO implement fast5 writing to file
+def check_capture_ejection_by_read_test():
+    f5_fail = "tests/data/bulk_fast5_dummy.fast5"
+    assert os.path.exists(f5_fail)
+    bad_read_id = "akejwoeirjo;ewijr"
+    with h5py.File(f5_fail, "r") as f5:
+        with pytest.raises(ValueError) as e:
+            # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
+            True  # filter.check_capture_ejection_by_read(f5, bad_read_id)
+            assert "does not exist in the fast5 file" in e
+    # TODO implement fast5 writing to file
 
 
 # def check_capture_ejection_test():

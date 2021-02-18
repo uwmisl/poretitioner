@@ -24,7 +24,7 @@ with pkgs;
 with python.pkgs;
 let
   precommit = (import ./pkgs/pre-commit/pre-commit.nix) { inherit python; };
-  debugpy = (callPackage ./pkgs/debugpy) { inherit lib buildPythonPackage fetchFromGitHub; };
+  debugpy = (callPackage ./pkgs/debugpy/debugpy.nix) { inherit python; };
 in rec {
 
   ###########################################################################################
@@ -78,6 +78,7 @@ in rec {
     pydocstyle
     # Nix file style enforcer
     pkgs.nixfmt
+    pip
   ];
 
   ###########################################################################################

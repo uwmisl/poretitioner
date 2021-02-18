@@ -5,14 +5,18 @@ fast5.py
 
 Classes for reading, writing and validating fast5 files.
 """
-
+import json
+from collections import namedtuple
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path, PurePosixPath
-from typing import List, NewType, Optional, Union
+from typing import Dict, List, NewType, Optional, Union
 
 import h5py
+from poretitioner.utils.filtering import PATH as FILTER_PATH
+from poretitioner.utils.filtering import FilterPlugin, RangeFilter
 
+from .application_info import get_application_info
 from .logger import Logger, getLogger
 from .signals import (
     CaptureMetadata,
@@ -21,6 +25,7 @@ from .signals import (
     RawSignal,
     VoltageSignal,
 )
+from .utils.configuration import FilterConfig, SegmentConfiguration
 from .utils.core import NumpyArrayLike, PathLikeOrString
 
 __all__ = ["BulkFile", "CaptureFile", "channel_path_for_read_id", "signal_path_for_read_id"]
@@ -42,6 +47,88 @@ class KEY:
     META = "Meta"
     SEGMENTATION = "Segmentation"
     OPEN_CHANNEL_PA = "open_channel_pA"
+
+
+@dataclass(frozen=True)
+class BULK_PATH:
+    UNIQUE_GLOBAL_KEY = "/UniqueGlobalKey"
+    CONTEXT_TAGS = "/UniqueGlobalKey/context_tags"
+    TRACKING_ID = "/UniqueGlobalKey/tracking_id"
+
+
+@dataclass(frozen=True)
+class CAPTURE_PATH:
+    CONTEXT_TAGS = "/Meta/context_tags"
+    TRACKING_ID = "/Meta/tracking_id"
+    SEGMENTATION = "/Meta/Segmentation"
+    CAPTURE_WINDOWS = "/Meta/Segmentation/capture_windows"
+    CONTEXT_ID = "/Meta/Segmentation/context_id"
+    FILTERS = "/Meta/Segmentation/filters"
+
+
+class SubRun(namedtuple("SubRun", ["id", "offset", "duration"])):
+    """ If the bulk fast5 contains multiple runs (shorter sub-runs throughout
+    the data collection process), this can be used to record additional
+    context about the sub run: (id : str, offset : int, and
+    duration : int). `id` is the identifier for the sub run,
+    `offset` is the time the sub run starts in the bulk fast5,
+    measured in #/time series points.
+    """
+
+    id: str
+    offset: int
+    duration: int
+
+
+def format_read_id(read_id: str):
+    return read_id if "read" in read_id else f"read_{read_id}"
+
+
+def channel_path_for_read_id(read_id: str, root: str = FAST5_ROOT) -> PathLikeOrString:
+    """Generates an HDFS group path for a read_id's channel.
+
+    Parameters
+    ----------
+    read_id : str, optional.
+        Read ID of the channel read. None by default.
+
+    Returns
+    -------
+    str
+        Correctly formatted channel path.
+    """
+    read_id = (
+        read_id if "read" in read_id else f"read_{read_id}"
+    )  # Conditionally adds the "read_" prefix, for backwards compatibility with capture files that didn't use this prefix.
+    read_id_path = PurePosixPath(root, read_id)
+    channel_path = add_channel_id_to_path(read_id_path)
+
+    if "read" in read_id:
+        channel_path = PurePosixPath(root, read_id, KEY.CHANNEL_ID)
+    else:
+        channel_path = PurePosixPath(root, f"read_{read_id}", KEY.CHANNEL_ID)
+    return channel_path
+
+
+def signal_path_for_read_id(read_id: str, root: str = FAST5_ROOT) -> PathLikeOrString:
+    """Generates an HDFS group path for a read_id's signal.
+
+    Parameters
+    ----------
+    read_id : str
+        Read ID of the signal read.
+
+    Returns
+    -------
+    str
+        Correctly formatted signal path.
+    """
+    if "read" in read_id:
+        signal_path = PurePosixPath(root, read_id, KEY.SIGNAL)
+    else:
+        signal_path = PurePosixPath(root, f"read_{read_id}", KEY.SIGNAL)
+
+    return signal_path
 
 
 def add_signal_to_path(base: PathLikeOrString) -> PathLike:
@@ -199,7 +286,7 @@ class BulkFile(BaseFile):
         ValueError
             Bulk file had validation errors, details in message.
         """
-        super().__init__(bulk_filepath, mode, logger=logger)
+        super().__init__(bulk_filepath, mode=mode, logger=logger)
         if not self.filepath.exists():
             raise OSError(
                 f"Bulk fast5 file does not exist at path: {bulk_filepath}. Make sure the bulk file is in this location."
@@ -248,10 +335,8 @@ class BulkFile(BaseFile):
             validation_errors.append(error_message)
             self.log.error(error_message)
             raise ValueError(error_message)
-
         try:
-            # The [2: -1] gets rid of the '0b' prepended to the run_id string.
-            run_id = str(tracking_id.attrs["run_id"])[2:-1]
+            run_id = self.tracking_id["run_id"].decode("utf-8")
         except KeyError:
             error_message = f"Attribute 'run_id' missing from path:{path} in bulk file '{self.f5.filename}'. Double check that the bulk file includes this field at that path."
             validation_errors.append(error_message)
@@ -382,6 +467,18 @@ class BulkFile(BaseFile):
         voltages = VoltageSignal(metadata["bias_voltage"][start:end] * bias_voltage_multiplier)
         return voltages
 
+    @property
+    def context_tags(self) -> Dict:
+        context_tags = self.f5.get(BULK_PATH.CONTEXT_TAGS)
+        result = {} if context_tags is None else dict(context_tags.attrs)
+        return result
+
+    @property
+    def tracking_id(self) -> Dict:
+        tracking_id = self.f5.get(BULK_PATH.TRACKING_ID)
+        result = {} if tracking_id is None else dict(tracking_id.attrs)
+        return result
+
 
 class CaptureFile(BaseFile):
     def __init__(
@@ -393,6 +490,13 @@ class CaptureFile(BaseFile):
         ----------
         capture_filepath : PathLikeOrString
             Path to the capture file. Capture files are the result of running `poretitioner segment` on a bulk file.
+        mode : str, optional
+            File mode, valid modes are:
+            - "r" 	Readonly, file must exist (default)
+            - "r+" 	Read/write, file must exist
+            - "w" 	Create file, truncate if exists
+            - "w-" or "x" 	Create file, fail if exists
+            - "a" 	Read/write if exists, create otherwise
         logger : Logger, optional
             Logger to use, by default getLogger()
 
@@ -403,12 +507,97 @@ class CaptureFile(BaseFile):
         ValueError
             Capture file had validation errors, details in message.
         """
-        super().__init__(capture_filepath, mode, logger=logger)
+        super().__init__(capture_filepath, mode=mode, logger=logger)
         if not self.filepath.exists():
             error_msg = f"Capture fast5 file does not exist at path: {self.filepath}. Make sure the capture file is in this location."
             raise OSError(error_msg)
 
-        self.validate(self.filepath, logger)
+    def initialize_from_bulk(
+        self,
+        bulk_f5: BulkFile,
+        filters: List[RangeFilter],
+        segment_config: SegmentConfiguration,
+        sub_run: Optional[SubRun] = None,
+    ):
+        # Only supporting range filters for now (MVP). This should be expanded to all FilterPlugins: https://github.com/uwmisl/poretitioner/issues/67
+
+        # Referencing spec v0.1.1
+
+        # /Meta/context_tags
+        capture_context_tags_group = self.f5.create_group(CAPTURE_PATH.CONTEXT_TAGS)
+        for key, value in bulk_f5.context_tags.items():
+            capture_context_tags_group.attrs.create(key, value)
+
+        bulk_f5_fname = bulk_f5.filename
+
+        filename_length = len(bulk_f5_fname)
+        dtype = f"S{filename_length}"  # Need to save the length of the string.
+        capture_context_tags_group.attrs.create("bulk_filename", bulk_f5_fname, dtype=dtype)
+
+        sampling_frequency = bulk_f5.sampling_rate
+        capture_context_tags_group.attrs.create("sample_frequency", sampling_frequency)
+
+        # /Meta/tracking_id
+        capture_tracking_id_group = self.f5.create_group(CAPTURE_PATH.TRACKING_ID)
+        for key, value in bulk_f5.tracking_id.items():
+            capture_tracking_id_group.attrs.create(key, value)
+
+        if sub_run is not None:
+            id = sub_run.id
+            offset = sub_run.offset
+            duration = sub_run.duration
+            if id is not None:
+                capture_tracking_id_group.attrs.create("sub_run_id", id, dtype=f"S{len(id)}")
+            if offset is not None:
+                capture_tracking_id_group.attrs.create("sub_run_offset", offset)
+            if duration is not None:
+                capture_tracking_id_group.attrs.create("sub_run_duration", duration)
+
+        # /Meta/Segmentation
+        # TODO: define config param structure : https://github.com/uwmisl/poretitioner/issues/27
+        # config = {"param": "value",
+        #           "filters": {"f1": (min, max), "f2: (min, max)"}}
+        capture_segmentation_group = self.f5.create_group(CAPTURE_PATH.SEGMENTATION)
+        # print(__name__)
+        version = get_application_info().version
+        segmenter_name = __name__
+        capture_segmentation_group.attrs.create(
+            "segmenter", __name__, dtype=f"S{len(segmenter_name)}"
+        )
+        capture_segmentation_group.attrs.create(
+            "segmenter_version", version, dtype=f"S{len(version)}"
+        )
+        filter_group = self.f5.create_group(CAPTURE_PATH.FILTERS)
+        context_id_group = self.f5.create_group(CAPTURE_PATH.CONTEXT_ID)
+        capture_windows_group = self.f5.create_group(CAPTURE_PATH.CAPTURE_WINDOWS)
+
+        # KATIE Q: Is it same to assume that whatever filter configuration is defined in the
+        # filter section will be used in subsequent steps?
+        # Only supporting range filters for now (MVP): https://github.com/uwmisl/poretitioner/issues/67
+        if segment_config is None:
+            raise ValueError("No segment configuration provided.")
+        else:
+            for key, value in segment_config.items():
+                save_value = json.dumps(value)
+                context_id_group.create_dataset(key, data=save_value)
+
+        for filter_plugin in filters:
+            name = filter_plugin.name()
+
+            # `isinstance` is an anti-pattern, pls don't use in production.
+            if isinstance(filter_plugin, RangeFilter):
+                maximum = filter_plugin.maximum
+                minimum = filter_plugin.minimum
+
+                self.log.debug(f"Filtering for {name}: ({minimum}, {maximum})")
+                if minimum is None:
+                    minimum = -1
+                if maximum is None:
+                    maximum = -1
+                if minimum == -1 and maximum == -1:
+                    continue
+                filter_group.create_dataset(name, data=(minimum, maximum))
+            # Based on the example code, it doesn't seem like we write anything for ejected filter?
 
     def validate(self, capture_filepath: PathLikeOrString, log: Logger = getLogger()):
         """Make sure this represents a valid capture/segmented poretitioner file.
@@ -596,7 +785,7 @@ class CaptureFile(BaseFile):
         """
         read_id = metadata.read_id
         f5 = self.f5
-        signal_path = signal_path_for_read_id(read_id)
+        signal_path = str(signal_path_for_read_id(read_id))
         f5[signal_path] = raw_signal
         f5[signal_path].attrs["read_id"] = read_id
         f5[signal_path].attrs["start_time_bulk"] = metadata.start_time_bulk
@@ -606,7 +795,7 @@ class CaptureFile(BaseFile):
         f5[signal_path].attrs["voltage"] = metadata.voltage_threshold
         f5[signal_path].attrs[KEY.OPEN_CHANNEL_PA] = metadata.open_channel_pA
 
-        channel_path = channel_path_for_read_id(read_id)
+        channel_path = str(channel_path_for_read_id(read_id))
         f5.create_group(channel_path)
         f5[channel_path].attrs["channel_number"] = metadata.channel_number
         f5[channel_path].attrs["digitisation"] = metadata.calibration.digitisation
@@ -615,49 +804,16 @@ class CaptureFile(BaseFile):
         f5[channel_path].attrs["sampling_rate"] = metadata.sampling_rate
         f5[channel_path].attrs[KEY.OPEN_CHANNEL_PA] = metadata.open_channel_pA
 
-
-def channel_path_for_read_id(read_id: str) -> PathLikeOrString:
-    """Generates an HDFS group path for a read_id's channel.
-
-    Parameters
-    ----------
-    read_id : str, optional.
-        Read ID of the channel read. None by default.
-
-    Returns
-    -------
-    str
-        Correctly formatted channel path.
-    """
-    read_id = (
-        read_id if "read" in read_id else f"read_{read_id}"
-    )  # Conditionally adds the "read_" prefix, for backwards compatibility with capture files that didn't use this prefix.
-    read_id_path = PurePosixPath(FAST5_ROOT, read_id)
-    channel_path = add_channel_id_to_path(read_id_path)
-
-    if "read" in read_id:
-        channel_path = PurePosixPath(FAST5_ROOT, read_id, KEY.CHANNEL_ID)
-    else:
-        channel_path = PurePosixPath(FAST5_ROOT, f"read_{read_id}", KEY.CHANNEL_ID)
-    return channel_path
-
-
-def signal_path_for_read_id(read_id: str) -> PathLikeOrString:
-    """Generates an HDFS group path for a read_id's signal.
-
-    Parameters
-    ----------
-    read_id : str
-        Read ID of the signal read.
-
-    Returns
-    -------
-    str
-        Correctly formatted signal path.
-    """
-    if "read" in read_id:
-        signal_path = PurePosixPath(FAST5_ROOT, read_id, KEY.SIGNAL)
-    else:
-        signal_path = PurePosixPath(FAST5_ROOT, f"read_{read_id}", KEY.SIGNAL)
-
-    return signal_path
+    def write_filter_results(self, read_ids: List[str]):
+        # For all read_ids that passed the filter (AKA reads that were passed in),
+        # create a hard link in the filter_path to the actual read's location in
+        # the fast5 file.
+        set_matching_read_ids = set(self.reads)
+        passing_read_ids = [read_id for read_id in read_ids if read_id in set_matching_read_ids]
+        for read_id in passing_read_ids:
+            read_path = format_read_id(read_id)
+            read_grp = self.f5.get(read_path)
+            self.log.debug(read_grp)
+            filter_read_path = FILTER_PATH.filter_pass_path_for_read_id(read_id)
+            # Create a hard link from the filter read path to the actual read path
+            self.f5[filter_read_path] = read_grp
