@@ -35,6 +35,8 @@ in rec {
   ###########################################################################################
 
   run = [
+    # Reading/writing TOML documents.
+    toml
     # Numerical computation library
     numpy
     # Data manipulation and analysis
@@ -78,7 +80,6 @@ in rec {
     pydocstyle
     # Nix file style enforcer
     pkgs.nixfmt
-    pip
   ];
 
   ###########################################################################################

@@ -21,7 +21,7 @@
 with pkgs;
 let
   appInfo =
-    builtins.fromJSON (builtins.readFile ./poretitioner/APPLICATION_INFO.json);
+    builtins.fromJSON (builtins.readFile ./src/poretitioner/APPLICATION_INFO.json);
   name = appInfo.name;
   version = appInfo.version;
 
@@ -52,18 +52,18 @@ let
     python.pkgs.buildPythonPackage {
       pname = name;
       version = version;
-
+      format = "pyproject";
       src = src;
       checkInputs = test_pkgs;
       inherit doCheck;
       checkPhase = run_tests_and_coverage;
-
+  
       # Run-time dependencies
-      propagatedBuildInputs = run_pkgs ++ [src];
+      propagatedBuildInputs = run_pkgs; # ++ [src];
     };
 
-  app = { doCheck ? true }:
-    python.pkgs.toPythonApplication (poretitioner { inherit doCheck; });
+  app = { doCheck ? true }: python.pkgs.toPythonApplication (poretitioner { inherit doCheck; });
+  #python.pkgs.toPythonApplication (poretitioner { inherit doCheck; });
 
   ####################################################################
   #
@@ -71,15 +71,12 @@ let
   #
   ####################################################################
 
-  binPath = builtins.concatStringsSep "/" [
-    poretitioner.outPath
-    "bin"
-    poretitioner.pname
-  ];
+  #outBinPath = "${poretitioner.outPath}/bin/${poretitioner.pname}";
 
   # Currently can't build docker images on Mac OS (Darwin): https://github.com/NixOS/nixpkgs/blob/f5a90a7aab126857e9cac4f048930ddabc720c55/pkgs/build-support/docker/default.nix#L620
-  dockerImage = lib.optionals (!stdenv.isDarwin) (dockerTools.buildImage {
-    name = "${name}_v${version}";
+  dockerImage = {app} : dockerTools.buildImage {
+  #dockerImage = lib.optionals (!stdenv.isDarwin) (dockerTools.buildImage {
+    name = "${name}";
     tag = "latest";
 
     # Setting 'created' to 'now' will correctly set the file's creation date
@@ -87,19 +84,24 @@ let
     created = "now";
     config = {
       # Runs 'poretitioner' by default.
-      Cmd = [ "${binPath}" ];
+      #Cmd = [ "${app.outPath}/bin/${app.pname}" ];
+      Entrypoint = [ "${app.outPath}/bin/${app.pname}" ];
     };
-  });
+  };
 
 in {
   app-no-test = app { doCheck = false; };
   test = poretitioner { doCheck = true; };
   app = app { doCheck = true; };
   lib = poretitioner { doCheck = false; };
-  docker = dockerImage;
+  docker = dockerImage {app=(app { doCheck = false; });};
   # Note: Shell can only be run by using "nix-shell" (i.e. "nix-shell -A shell ./default.nix").
   # Here's an awesome, easy-to-read overview of nix shells: https://ghedam.at/15978/an-introduction-to-nix-shell
   shell = mkShell {
-    buildInputs = [ (poretitioner { doCheck = false; }) ] ++ all_pkgs;
+    #  [ (poretitioner { doCheck = false; }) ] ++
+    shellHook = ''
+    PYTHONPATH="./src/poretitioner:$PYTHONPATH"
+    '';
+    propagatedBuildInputs = all_pkgs;
   };
 }
