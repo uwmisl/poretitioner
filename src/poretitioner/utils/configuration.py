@@ -183,7 +183,6 @@ class SegmentConfiguration(BaseConfiguration):
     signal_threshold_frac: float
     translocation_delay: float
     terminal_capture_only: bool
-    delay: int
     end_tolerance: float
     good_channels: List[int]
     open_channel_prior_mean: int
@@ -191,7 +190,6 @@ class SegmentConfiguration(BaseConfiguration):
     terminal_capture_only: bool
     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
     filters: Dict
-    delay: int
 
     def __init__(self, command_line_args: Dict = None, config: Dict = None, filters: Dict = None, log: Logger = getLogger()) -> None:
         """[summary]
