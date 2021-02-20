@@ -29,20 +29,37 @@ add_poretitioner_to_path()
 
 import pprint
 import numpy as np
+import toml
+
+from abc import ABCMeta, abstractmethod
+from dataclasses import dataclass
+from os import PathLike
+from typing import Any, Dict, List, Optional, Union
+
 from poretitioner.signals import *
 from poretitioner.fast5s import *
 from poretitioner.utils import *
 from poretitioner.application_info import *
 from poretitioner.getargs import *
-from poretitioner.logger import *
+import poretitioner.logger as logger
 from poretitioner.utils.classify import ClassifierFile
-from poretitioner.utils.configuration import GeneralConfiguration, SegmentConfiguration
+from poretitioner.utils.configuration import GeneralConfiguration, SegmentConfiguration, readconfig
+
+
+LOG_VERBOSITY = 3
+logger.configure_root_logger(verbosity=LOG_VERBOSITY, debug=True)
+
+log = logger.getLogger()
+log.debug(f"=============~ Poretitioner ~============")
+
+
 
 CALIBRATION = ChannelCalibration(0, 2, 1)
 CHANNEL_NUMBER = 1
 OPEN_CHANNEL_GUESS = 45
 OPEN_CHANNEL_BOUND = 10
 RANDOM_SIGNAL = np.random.random_integers(-200, high=800, size=30)
+PORETITIONER_CONFIG_FILE = f"{PROJECT_DIR_LOCATION}/poretitioner_config.toml"
 BULK_FAST5_FILE = f"{PROJECT_DIR_LOCATION}/src/tests/data/bulk_fast5_dummy.fast5"
 CAPTURE_FAST5_FILE = f"{PROJECT_DIR_LOCATION}/src/tests/data/reads_fast5_dummy_9captures.fast5"
 CLASSIFIED_FAST5_FILE = f"{PROJECT_DIR_LOCATION}/src/tests/data/classified_9captures.fast5"

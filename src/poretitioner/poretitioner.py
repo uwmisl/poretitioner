@@ -20,27 +20,31 @@ from .utils.filtering import (
     StandardDeviationFilter,
 )
 
-    
 
 def run(args):
     # Configures the root application logger.
-    # After this line, it's safe to log using poretitioner.logger.getLogger() throughout the application.
+    # After these line, it's safe to log using poretitioner.logger.getLogger() throughout the application.
     logger.configure_root_logger(verbosity=args.verbose, debug=args.debug)
     log = logger.getLogger()
     log.debug(f"Starting poretitioner with arguments: {vars(args)!s}")
 
+    # Get the command line args as a dictionary.
+    command_line_args = vars(args)
+    if "capture_directory" not in command_line_args and getattr(args, ARG.OUTPUT_DIRECTORY, False):
+        command_line_args["capture_directory"] = command_line_args[ARG.OUTPUT_DIRECTORY]
+
     # Read configuration file, if it exists.
     try:
-        configuration_path = Path(getattr(args, ARG.CONFIG)).resolve()
-        print(f"\n\n\config path: {configuration_path!s}")
-        configuration = readconfig(configuration_path)
-        print(str(configuration))
-    except AttributeError:
+        configuration_path = Path(command_line_args[ARG.CONFIG]).resolve()
+    except KeyError as e:
         log.info(f"No config file found from arg: {ARG.CONFIG}.")
+        raise e
+    print(f"\n\nconfiguration path: {configuration_path!s}")
+    configuration = readconfig(configuration_path, command_line_args=command_line_args, log=log)
+    print(str(configuration))
 
     if args.command == COMMAND.SEGMENT:
-        bulk_f5_filepath = Path(getattr(args, ARG.FILE)).resolve()
-        
+        bulk_f5_filepath = Path(command_line_args[ARG.BULK_FAST5]).resolve()
 
         # TODO: Update with actual segmentation config. https://github.com/uwmisl/poretitioner/issues/73
         filters: List[RangeFilter] = [
@@ -52,21 +56,6 @@ def run(args):
             LengthFilter(10, np.inf)
         ]
 
-        # config = {
-        #     "compute": {"n_workers": 30},
-        #     "segment": {
-        #         "voltage_threshold": -180,
-        #         "signal_threshold_frac": 0.7,
-        #         "translocation_delay": 10,
-        #         "open_channel_prior_mean": 230,
-        #         "open_channel_prior_stdv": 25,
-        #         "good_channels": [1],
-        #         "end_tol": 10,
-        #         "terminal_capture_only": False,
-        #     }}
-        log.warning("")
-
-        
         seg_config = configuration[CONFIG.SEGMENTATION]
         config = configuration[CONFIG.GENERAL]
 
@@ -115,8 +104,15 @@ def main():
     if use_fake_command_line:
         command_line = [
             "segment",
-            "--file=./src/tests/data/bulk_fast5_dummy.fast5",
-            "--output-dir=./out/data/",
+            "--bulkfast5",
+            "./src/tests/data/bulk_fast5_dummy.fast5",
+            "--output-dir",
+            "./out/data/",
+            "--bulkfast5",
+            "./src/tests/data/bulk_fast5_dummy.fast5",
+            "--config",
+            "./poretitioner_config.toml"
+            " ",
             "-vvvvv",
         ]
         args = get_args(command_line)

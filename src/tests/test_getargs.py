@@ -4,7 +4,7 @@ from poretitioner.getargs import ARG, COMMAND, get_args
 
 VERBOSE = ARG.VERBOSE
 DEBUG = ARG.DEBUG
-FILE = ARG.FILE
+BULK_FAST5_FILE = ARG.BULK_FAST5
 
 
 def args_from_str(string) -> Sequence[str]:
@@ -56,7 +56,7 @@ def get_args_verbose_3_test():
 
 def get_args_file_test():
     test_filepath = "/User/foo/bar/rah.fast5"
-    command = args_from_str(f"{COMMAND.QUANTIFY} --{VERBOSE} --{FILE} {test_filepath}")
+    command = args_from_str(f"{COMMAND.QUANTIFY} --{VERBOSE} --{BULK_FAST5_FILE} {test_filepath}")
     args = get_args(commandline_args=command)
 
     assert (
