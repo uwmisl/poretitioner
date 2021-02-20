@@ -578,8 +578,13 @@ class CaptureFile(BaseFile):
         if segment_config is None:
             raise ValueError("No segment configuration provided.")
         else:
+            self.log.warning(f"\n\n Saving Segment config: {segment_config!s}")
             for key, value in vars(segment_config).items():
-                save_value = json.dumps(value)
+                try:
+                    save_value = json.dumps(value)
+                except TypeError:
+                        # In case the object isn't easily serializable
+                    save_value = json.dumps({k: v.__dict__ for k, v in value.items()})    
                 context_id_group.create_dataset(key, data=save_value)
 
         for filter_plugin in filters:
