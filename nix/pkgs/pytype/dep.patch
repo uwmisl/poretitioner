@@ -1,0 +1,14 @@
+diff --git a/setup.cfg b/setup.cfg
+index ca28e7d9..a1014818 100644
+--- a/setup.cfg
++++ b/setup.cfg
+@@ -30,9 +30,7 @@ python_requires = >=3.6, <3.9
+ packages =
+     find:
+ install_requires =
+-    attrs
+     dataclasses; python_version < '3.7'
+-    importlab>=0.6.1
+     ninja>=1.10.0.post2
+     pyyaml>=3.11
+     six

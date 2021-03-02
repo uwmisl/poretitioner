@@ -1,6 +1,6 @@
 from typing import Sequence
 
-from poretitioner.getargs import ARG, COMMAND, get_args
+from src.poretitioner.getargs import ARG, COMMAND, get_args
 
 VERBOSE = ARG.VERBOSE
 DEBUG = ARG.DEBUG

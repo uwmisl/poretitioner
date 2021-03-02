@@ -11,7 +11,7 @@ import re
 from shutil import copyfile
 
 import h5py
-import poretitioner.utils.filtering as filtering
+import src.poretitioner.utils.filtering as filtering
 import pytest
 
 # TODO: Restore Filter unit tests: https://github.com/uwmisl/poretitioner/issues/88

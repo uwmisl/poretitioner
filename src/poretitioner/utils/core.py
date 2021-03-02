@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections import namedtuple
 from dataclasses import dataclass
 from os import PathLike
-from typing import Dict, List, TypeVar, Union
+from typing import Dict, List, Optional, TypeVar, Union, Sequence
 
 import numpy as np
 
@@ -159,3 +159,26 @@ class WindowsByChannel:
 
     def keys(self):
         return self.by_channel.keys()
+
+
+def stripped_by_keys(dictionary: Optional[Dict], keys_to_keep: Sequence) -> Dict:
+    """Returns a dictionary containing keys and values from dictionary,
+    but only keeping the keys in `keys_to_keep`.
+
+    Returns empty dict if `dictionary` is None.
+
+    Parameters
+    ----------
+    dictionary : Optional[Dict]
+        Dictionary to strip down by keys.
+    keys_to_keep : Sequence
+        Which keys of the dictionary to keep.
+
+    Returns
+    -------
+    Dict
+        Dictionary containing only keys from `keys_to_keep`.
+    """
+    dictionary = {} if dictionary is None else dictionary
+    dictionary = { key: value for key, value in dictionary.items() if key in keys_to_keep }
+    return dictionary

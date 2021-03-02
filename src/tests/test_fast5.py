@@ -4,13 +4,13 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
-from poretitioner.fast5s import (
+from src.poretitioner.fast5s import (
     BulkFile,
     CaptureFile,
     channel_path_for_read_id,
     signal_path_for_read_id,
 )
-from poretitioner.signals import CaptureMetadata, ChannelCalibration, RawSignal
+from src.poretitioner.signals import CaptureMetadata, ChannelCalibration, RawSignal
 
 test_bulk_fas5_filepath = "src/tests/data/bulk_fast5_dummy.fast5"
 

@@ -8,8 +8,8 @@ This module contains tests for quantify.py functionality.
 """
 import h5py
 import numpy as np
-import poretitioner.utils.quantify as quantify
-from poretitioner.utils.core import Window
+import src.poretitioner.utils.quantify as quantify
+from src.poretitioner.utils.core import Window
 
 
 def calc_time_until_capture_test():

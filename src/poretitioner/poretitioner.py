@@ -5,12 +5,12 @@ from typing import List
 
 import numpy as np
 
-
 from . import logger
 from .getargs import ARG, COMMAND, get_args
 from .utils import segment
 from .utils.configuration import CONFIG, readconfig, SegmentConfiguration, GeneralConfiguration
 from .utils.filtering import (
+    get_plugins,
     LengthFilter,
     MaximumFilter,
     MeanFilter,
@@ -23,7 +23,7 @@ from .utils.filtering import (
 
 def run(args):
     # Configures the root application logger.
-    # After these line, it's safe to log using poretitioner.logger.getLogger() throughout the application.
+    # After these line, it's safe to log using src.poretitioner.logger.getLogger() throughout the application.
     logger.configure_root_logger(verbosity=args.verbose, debug=args.debug)
     log = logger.getLogger()
     log.debug(f"Starting poretitioner with arguments: {vars(args)!s}")
@@ -56,8 +56,13 @@ def run(args):
             LengthFilter(10, np.inf)
         ]
 
+        
+
         seg_config = configuration[CONFIG.SEGMENTATION]
+        filter_config = configuration[CONFIG.FILTER]
         config = configuration[CONFIG.GENERAL]
+
+        filters = get_plugins(filter_configs)
 
         save_location = Path(getattr(args, ARG.OUTPUT_DIRECTORY)).resolve()
         
@@ -100,7 +105,7 @@ def main():
     # To test the application with pre-configured command line arguments,
     # set `use_fake_command_line` to True and/or modify the `command_line` list
     # with whatever arguments you'd like:
-    use_fake_command_line = False
+    use_fake_command_line = True
     if use_fake_command_line:
         command_line = [
             "segment",
@@ -108,8 +113,6 @@ def main():
             "./src/tests/data/bulk_fast5_dummy.fast5",
             "--output-dir",
             "./out/data/",
-            "--bulkfast5",
-            "./src/tests/data/bulk_fast5_dummy.fast5",
             "--config",
             "./poretitioner_config.toml"
             " ",

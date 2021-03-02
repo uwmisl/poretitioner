@@ -2,8 +2,8 @@ import pickle
 
 import numpy as np
 import pytest
-from poretitioner.fast5s import BulkFile
-from poretitioner.signals import (
+from src.poretitioner.fast5s import BulkFile
+from src.poretitioner.signals import (
     BaseSignal,
     Capture,
     Channel,

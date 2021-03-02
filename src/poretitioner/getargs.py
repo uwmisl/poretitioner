@@ -10,6 +10,24 @@ from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass
 from typing import List
 
+def as_cli_arg(property: str) -> str:
+    """We'd like to match command line arguments to their 
+    corresponding python variables, but sadly python doesn't 
+    allow variable/field names with hyphens. As such,
+    we convert the underscores to hyphens when using 
+    command line args.
+
+    Parameters
+    ----------
+    property : Variable or field name with underscores.
+        
+    Returns
+    -------
+    str
+        String with underscores replaced by dashes.
+    """
+    return property.replace("_", "-")
+
 
 @dataclass(frozen=True)
 class COMMAND:
@@ -42,7 +60,53 @@ class ARG:
 
     # Segmenter
     OUTPUT_DIRECTORY = "output_dir"  # Argument on the command line has a dash, but the attribute.
+    class SEGMENT:
+        BULKFAST5 = "bulkfast5"
+        N_CAPTURES_PER_FILE = "n_captures_per_file"
+        VOLTAGE_THRESHOLD = "voltage_threshold"
+        SIGNAL_THRESHOLD_FRAC = "signal_threshold_frac"
+        TRANSLOCATION_DELAY = "translocation_delay"
+        TERMINAL_CAPTURE_ONLY = "terminal_capture_only"
+        END_TOLERANCE = "end_tolerance"
+        GOOD_CHANNELS = "good_channels"
+        OPEN_CHANNEL_PRIOR_MEAN = "open_channel_prior_mean"
+        OPEN_CHANNEL_PRIOR_STDV = "open_channel_prior_stdv"
 
+    # Filtration
+    class FILTER:
+        LENGTH_MAX = "filter_length_max"
+        LENGTH_MIN = "filter_length_min"
+
+        MEAN_MAX = "filter_mean_max"
+        MEAN_MIN = "filter_mean_min"
+
+        STDEV_MAX = "filter_stdv_max"
+        STDEV_MIN = "filter_stdv_min"
+
+        MEDIAN_MAX = "filter_median_max"
+        MEDIAN_MIN = "filter_median_min"
+
+        MEDIAN_MAX = "filter_median_max"
+        MEDIAN_MIN = "filter_median_min"
+
+        MAX = "filter_max"
+        MIN = "filter_min"
+
+        # Add new arguments here as well.
+        ALL = [
+            LENGTH_MAX,
+            LENGTH_MIN,
+            MEAN_MAX,
+            MEAN_MIN,
+            STDEV_MAX,
+            STDEV_MIN,
+            MEDIAN_MAX,
+            MEDIAN_MIN,
+            MEDIAN_MAX,
+            MEDIAN_MIN,
+            MAX,
+            MIN,
+        ]
 
 def get_args(commandline_args: List = None) -> Namespace:
     """Gets the command line arguments passed to the application.
@@ -58,7 +122,7 @@ def get_args(commandline_args: List = None) -> Namespace:
     Namespace
         Namespace containing the command line arguments.
     """
-
+    
     # TODO: Add a description string: https://github.com/uwmisl/poretitioner/issues/27
     DESCRIPTION = ""
     # TODO: Add a usage string: https://github.com/uwmisl/poretitioner/issues/27
@@ -172,9 +236,59 @@ def add_output_directory_option_to_parser(parser: ArgumentParser):
     parser : ArgumentParser
         Parser to give an output directory option. This is where capture files will be saved.
     """
-    arg = ARG.OUTPUT_DIRECTORY.replace("_", "-")
+    arg = as_cli_arg(ARG.OUTPUT_DIRECTORY)
     parser.add_argument(
         f"--{arg}",
         action="store",
         help="Which directory to store the segmented capture fast5 files.",
     )
+
+# Filters
+def add_output_directory_option_to_parser(parser: ArgumentParser):
+    """Adds output directory option to a parser.
+
+    Parameters
+    ----------
+    parser : ArgumentParser
+        Parser to give an output directory option. This is where capture files will be saved.
+    """
+    arg = as_cli_arg(ARG.OUTPUT_DIRECTORY)
+    parser.add_argument(
+        f"--{arg}",
+        action="store",
+        help="Which directory to store the segmented capture fast5 files.",
+    )
+
+# Mapping from command line option "--foo" to all its args and kwa
+FILTER_ARGS = {
+    ARG.FILTER.LENGTH_MIN: {
+        "action": "store",
+        # Katie Q: What units are the length in? Samples?
+        "help": "Filter out captures that are fewer than this many samples",
+        "type": int,
+    }
+}
+
+SEGMENTATION_ARGS = {
+    # ARG.SEGMENT.GOOD_CHANNELS: {
+    #     "action": "store",
+    #     # Katie Q: What units are the length in? Samples?
+    #     "help": "Non-blocked/Non-dead pore channels on the nanopore device.\nSometimes individual pores die or get permanently blocked, these channels should not be considered for analysis. Provide as a space separated list, e.g. ",
+    #     "nargs": "+"
+    # }
+}
+
+def add_good_channels_arg(parser, arg, kwargs):
+     parser.add_argument(*args, **kwargs)
+
+
+import argparse
+import re
+from contextlib import suppress
+boop = argparse.ArgumentParser()
+chi = None
+good_channels_arg = f"--{as_cli_arg(ARG.SEGMENT.GOOD_CHANNELS)}"
+boop.add_argument(good_channels_arg, **SEGMENTATION_ARGS[ARG.SEGMENT.GOOD_CHANNELS])
+with suppress(SystemExit):
+    chi = boop.parse_args(args=[good_channels_arg, "1 2 4 5 6 7 8 11"])
+    re.split('; |,|, |\n',a)

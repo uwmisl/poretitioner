@@ -13,10 +13,10 @@ from typing import List, Optional
 
 import h5py
 import numpy as np
-from poretitioner.fast5s import CaptureFile
-from poretitioner.logger import Logger, getLogger
-from poretitioner.utils.classify import ClassifierFile
-from poretitioner.utils.core import PathLikeOrString, Window, WindowsByChannel
+from src.poretitioner.fast5s import CaptureFile
+from src.poretitioner.logger import Logger, getLogger
+from src.poretitioner.utils.classify import ClassifierFile
+from src.poretitioner.utils.core import PathLikeOrString, Window, WindowsByChannel
 
 
 class QuantifyCaptureFile(ClassifierFile):

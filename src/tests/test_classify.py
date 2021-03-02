@@ -12,9 +12,10 @@ from shutil import copyfile
 
 import h5py
 import pytest
-from poretitioner.fast5s import CaptureFile
-from poretitioner.utils import classify
-from poretitioner.utils.NTERs_trained_cnn_05152019 import load_cnn
+import src.poretitioner as poretitioner
+from src.poretitioner.fast5s import CaptureFile
+from src.poretitioner.utils import classify
+from src.poretitioner.utils.NTERs_trained_cnn_05152019 import load_cnn
 
 
 def init_classifier_invalidinput_test():

@@ -9,7 +9,7 @@ namely getting the application name and version.
 """
 import logging
 
-from poretitioner.logger import configure_root_logger, getLogger, verbosity_to_log_level
+from src.poretitioner.logger import configure_root_logger, getLogger, verbosity_to_log_level
 
 #################################
 #
