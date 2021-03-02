@@ -11,7 +11,7 @@ import json
 from contextlib import suppress
 from unittest.mock import mock_open, patch
 
-from poretitioner.application_info import get_application_info
+from src.poretitioner.application_info import get_application_info
 
 # Fake application version
 MOCK_VERSION = "17.29.0"

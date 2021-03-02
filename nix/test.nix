@@ -23,7 +23,7 @@ let
   pytest_config_filepath = "./pytest.ini";
   run_pytest_command = "${pytest_command}  -i";
   # Where to store the output of the coverage.
-  coverage_directory = "./src/src/tests/coverage/";
+  coverage_directory = "./src/tests/coverage/";
   report_to_stdout = "${coverage_command} report";
   generate_html_report = "${coverage_command} html --directory=${coverage_directory}";
 in

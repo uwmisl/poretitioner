@@ -67,7 +67,7 @@ def find_captures(
     open_channel_pA_calculated: float,
     terminal_capture_only: bool = False,
     # TODO: Katie Q: DANGER! Mutable obj reference as default
-    filters=None,
+    filters: Optional[List[filtering.FilterPlugin]]=None,
     delay=50,
     end_tol=0,
 ) -> List[Capture]:
@@ -91,10 +91,8 @@ def find_captures(
     terminal_capture_only : bool, optional
         Only return the final capture in the window, and only if it remains
         captured until the end of the window (to be ejected), by default False
-    filters : dict, optional
-        Keys are strings matching the supported filters, values are a tuple
-        giving the endpoints of the valid range. E.g. {"mean": (0.1, 0.5)}
-        defines a filter such that 0.1 <= mean(capture) <= 0.5., default {}
+    filters : List[FilterPlugin], optional
+        List of filter plugins to apply during segmentation, default None
     delay : int, optional
         Translocation delay. At high sampling rates, there may be some data
         points at the beginning of the capture that represent the initial
@@ -166,7 +164,7 @@ def find_captures(
 
 
 def find_captures_dask_wrapper(
-    capture: Capture, terminal_capture_only=False, filters=None, delay=50, end_tol=0
+    capture: Capture, terminal_capture_only=False, filters: Optional[List[filtering.FilterPlugin]]=None, delay=50, end_tol=0
 ):
     """Wrapper for find_captures since dask bag can only take one arg as input,
     plus kwargs. See find_captures() for full description.
@@ -177,10 +175,8 @@ def find_captures_dask_wrapper(
     terminal_capture_only : bool, optional
         Only return the final capture in the window, and only if it remains
         captured until the end of the window (to be ejected), by default False
-    filters : dict, optional
-        Keys are strings matching the supported filters, values are a tuple
-        giving the endpoints of the valid range. E.g. {"mean": (0.1, 0.5)}
-        defines a filter such that 0.1 <= mean(capture) <= 0.5., default {}
+    filters : List[FilterPlugin], optional
+        List of filter plugins to apply during segmentation, default None
     delay : int, optional
         Translocation delay. At high sampling rates, there may be some data
         points at the beginning of the capture that represent the initial
@@ -435,7 +431,7 @@ def segment(
     config: GeneralConfiguration,
     segment_config: SegmentConfiguration,
     save_location=None,
-    filters: Optional[List[filtering.RangeFilter]] = None,
+    filters: Optional[List[filtering.FilterPlugin]] = None,
     overwrite=True,
     f5_subsection_start=0,
     f5_subsection_end=None,
@@ -481,7 +477,7 @@ def parallel_find_captures(
     config: GeneralConfiguration,
     segment_config: SegmentConfiguration,
     # Only supporting range filters for now (MVP). This should be expanded to all FilterPlugins: https://github.com/uwmisl/poretitioner/issues/67
-    filters: List[filtering.RangeFilter] = None,
+    filters: List[filtering.FilterPlugin] = None,
     save_location=None,
     overwrite=False,
     f5_subsection_start=0,

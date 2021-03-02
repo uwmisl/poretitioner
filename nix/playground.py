@@ -20,8 +20,10 @@ def add_poretitioner_to_path():
     print(f"\nProject directory: {PROJECT_DIR_LOCATION}\n")
     poretitioner_directory = str(Path(PROJECT_DIR_LOCATION, "src"))
     print(f"\nPoretitioner package location: {poretitioner_directory}\n\n")
+    sys.path.append(".")
     sys.path.append(poretitioner_directory)
-    os.chdir(PROJECT_DIR_LOCATION)
+    sys.path.append(PROJECT_DIR_LOCATION)
+    #os.chdir(str(Path(PROJECT_DIR_LOCATION, "src",)))
 
 
 add_poretitioner_to_path()
@@ -36,14 +38,14 @@ from dataclasses import dataclass
 from os import PathLike
 from typing import Any, Dict, List, Optional, Union
 
-from poretitioner.signals import *
-from poretitioner.fast5s import *
-from poretitioner.utils import *
-from poretitioner.application_info import *
-from poretitioner.getargs import *
-import poretitioner.logger as logger
-from poretitioner.utils.classify import ClassifierFile
-from poretitioner.utils.configuration import GeneralConfiguration, SegmentConfiguration, readconfig
+from src.poretitioner.signals import *
+from src.poretitioner.fast5s import *
+from src.poretitioner.utils import *
+from src.poretitioner.application_info import *
+from src.poretitioner.getargs import *
+import src.poretitioner.logger as logger
+from src.poretitioner.utils.classify import ClassifierFile
+from src.poretitioner.utils.configuration import GeneralConfiguration, SegmentConfiguration, readconfig
 
 
 LOG_VERBOSITY = 3

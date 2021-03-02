@@ -13,9 +13,9 @@ from pathlib import Path
 import h5py
 import numpy as np
 import pytest
-from poretitioner.logger import configure_root_logger, getLogger, verbosity_to_log_level
-from poretitioner.signals import CaptureMetadata, ChannelCalibration, PicoampereSignal, RawSignal
-from poretitioner.utils import segment
+from src.poretitioner.logger import configure_root_logger, getLogger, verbosity_to_log_level
+from src.poretitioner.signals import CaptureMetadata, ChannelCalibration, PicoampereSignal, RawSignal
+from src.poretitioner.utils import segment
 from pytest import fixture
 
 configure_root_logger(verbosity=1, debug=False)

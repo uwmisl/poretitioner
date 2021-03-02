@@ -13,8 +13,8 @@ from pathlib import Path, PurePosixPath
 from typing import Dict, List, NewType, Optional, Union
 
 import h5py
-from poretitioner.utils.filtering import PATH as FILTER_PATH
-from poretitioner.utils.filtering import FilterPlugin, RangeFilter
+from .utils.filtering import PATH as FILTER_PATH
+from .utils.filtering import FilterPlugin, RangeFilter
 
 from .application_info import get_application_info
 from .logger import Logger, getLogger

@@ -14,7 +14,6 @@ from typing import Any, Dict, List, Union
 
 import h5py
 import numpy as np
-from poretitioner import logger, signals
 
 from ..logger import Logger, getLogger
 from ..signals import Capture
@@ -554,6 +553,18 @@ def plugin_from_file(name: str, filepath: PathLikeOrString):
     pass
 
 
-def get_plugins(filter_configs: List[FilterConfig]):
+def get_plugins(filter_configs: List[FilterConfig]) -> List[FilterPlugin]:
+    """Creates FilterPlugins from a list of filter configurations.
+
+    Parameters
+    ----------
+    filter_configs : List[FilterConfig]
+        [description]
+
+    Returns
+    -------
+    List[FilterPlugin]
+        [description]
+    """
     plugins = [plugin_from_config(config) for config in filter_configs]
     return plugins

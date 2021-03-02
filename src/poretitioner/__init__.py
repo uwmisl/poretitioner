@@ -1,13 +1,15 @@
-import sys
-import os
-from pathlib import Path
+# import sys
+# import os
+# from pathlib import Path
 
 from .poretitioner import main
 
-
+from .utils import *
 # project_root_dir = Path(__file__).parent.parent.resolve()
 # PROJECT_DIR_LOCATION = str(project_root_dir)
 
+from . import logger
+from . import getargs
 
 # def add_poretitioner_to_path():
 #     poretitioner_directory = str(Path(PROJECT_DIR_LOCATION, "poretitioner"))

@@ -11,12 +11,12 @@ import pprint
 import sys
 
 import numpy as np
-from poretitioner.application_info import *
-from poretitioner.fast5s import *
-from poretitioner.getargs import *
-from poretitioner.logger import *
-from poretitioner.signals import *
-from poretitioner.utils import *
+from src.poretitioner.application_info import *
+from src.poretitioner.fast5s import *
+from src.poretitioner.getargs import *
+from src.poretitioner.logger import *
+from src.poretitioner.signals import *
+from src.poretitioner.utils import *
 
 CALIBRATION = ChannelCalibration(0, 2, 1)
 CHANNEL_NUMBER = 1
