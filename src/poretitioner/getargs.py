@@ -270,25 +270,40 @@ FILTER_ARGS = {
 }
 
 SEGMENTATION_ARGS = {
-    # ARG.SEGMENT.GOOD_CHANNELS: {
-    #     "action": "store",
-    #     # Katie Q: What units are the length in? Samples?
-    #     "help": "Non-blocked/Non-dead pore channels on the nanopore device.\nSometimes individual pores die or get permanently blocked, these channels should not be considered for analysis. Provide as a space separated list, e.g. ",
-    #     "nargs": "+"
-    # }
+    ARG.SEGMENT.N_CAPTURES_PER_FILE: {
+        "action": "store",
+        # Katie Q: What units are the length in? Samples?
+        "help": "How many captures to store in a file. When the number of captures founds exceeds this number (n), new files will be created to house the other n+1 through 2n, 2n+1 through 3n +1, ... and so on.",
+        "type": int,
+    },
+
+    ARG.SEGMENT.OPEN_CHANNEL_PRIOR_MEAN: {
+        "action": "store",
+        # Katie Q: I don't feel like I'm phrasing this well, any ideas on better phrasing?
+        "help": "Average open channel current in picoAmperes (e.g. 235).",
+        "type": int,
+    },
+
+    ARG.SEGMENT.OPEN_CHANNEL_PRIOR_STDV: {
+        "action": "store",
+        # Katie Q: I don't feel like I'm phrasing this well, any ideas on better phrasing?
+        "help": "Average open channel current in picoAmperes (e.g. 25).",
+        "type": int,
+    },
+
+    ARG.SEGMENT.SIGNAL_THRESHOLD_FRAC: {
+
+    },
+
+    ARG.SEGMENT.TERMINAL_CAPTURE_ONLY: {
+
+    },
+
+    ARG.SEGMENT.TRANSLOCATION_DELAY: {
+
+    },
+
+    ARG.SEGMENT.VOLTAGE_THRESHOLD: {
+        
+    }
 }
-
-def add_good_channels_arg(parser, arg, kwargs):
-     parser.add_argument(*args, **kwargs)
-
-
-import argparse
-import re
-from contextlib import suppress
-boop = argparse.ArgumentParser()
-chi = None
-good_channels_arg = f"--{as_cli_arg(ARG.SEGMENT.GOOD_CHANNELS)}"
-boop.add_argument(good_channels_arg, **SEGMENTATION_ARGS[ARG.SEGMENT.GOOD_CHANNELS])
-with suppress(SystemExit):
-    chi = boop.parse_args(args=[good_channels_arg, "1 2 4 5 6 7 8 11"])
-    re.split('; |,|, |\n',a)
