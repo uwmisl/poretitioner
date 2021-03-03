@@ -1,4 +1,4 @@
-# ##########################################################################################
+###########################################################################################
 #
 # default.nix
 #
@@ -17,7 +17,8 @@
 
 { pkgs ? import <nixpkgs> { config = (import ./nix/config.nix); }
 , cudaSupport ? false
-, python ? (pkgs.callPackage ./nix/python.nix) { inherit pkgs; } }:
+, python ? (pkgs.callPackage ./nix/python.nix) { inherit pkgs; }
+}:
 with pkgs;
 let
   appInfo =
@@ -39,7 +40,7 @@ let
   run_pkgs = dependencies.run;
   all_pkgs = dependencies.all;
   test_pkgs = dependencies.test;
-  run_tests_and_coverage = "echo Running tests:	${tests.coverage};"
+  run_tests_and_coverage = "echo Running tests:  ${tests.coverage};"
     + tests.coverage;
   src = ./.;
 
@@ -57,13 +58,12 @@ let
       checkInputs = test_pkgs;
       inherit doCheck;
       checkPhase = run_tests_and_coverage;
-  
+
       # Run-time dependencies
-      propagatedBuildInputs = run_pkgs; # ++ [src];
+      propagatedBuildInputs = run_pkgs;
     };
 
   app = { doCheck ? true }: python.pkgs.toPythonApplication (poretitioner { inherit doCheck; });
-  #python.pkgs.toPythonApplication (poretitioner { inherit doCheck; });
 
   ####################################################################
   #
@@ -71,11 +71,8 @@ let
   #
   ####################################################################
 
-  #outBinPath = "${poretitioner.outPath}/bin/${poretitioner.pname}";
-
   # Currently can't build docker images on Mac OS (Darwin): https://github.com/NixOS/nixpkgs/blob/f5a90a7aab126857e9cac4f048930ddabc720c55/pkgs/build-support/docker/default.nix#L620
-  dockerImage = {app} : dockerTools.buildImage {
-  #dockerImage = lib.optionals (!stdenv.isDarwin) (dockerTools.buildImage {
+  dockerImage = { app }: dockerTools.buildImage {
     name = "${name}";
     tag = "latest";
 
@@ -84,23 +81,23 @@ let
     created = "now";
     config = {
       # Runs 'poretitioner' by default.
-      #Cmd = [ "${app.outPath}/bin/${app.pname}" ];
       Entrypoint = [ "${app.outPath}/bin/${app.pname}" ];
     };
   };
 
-in {
+in
+{
   app-no-test = app { doCheck = false; };
   test = poretitioner { doCheck = true; };
   app = app { doCheck = true; };
   lib = poretitioner { doCheck = false; };
-  docker = dockerImage {app=(app { doCheck = false; });};
+  docker = dockerImage { app = (app { doCheck = false; }); };
   # Note: Shell can only be run by using "nix-shell" (i.e. "nix-shell -A shell ./default.nix").
   # Here's an awesome, easy-to-read overview of nix shells: https://ghedam.at/15978/an-introduction-to-nix-shell
   shell = mkShell {
     #  [ (poretitioner { doCheck = false; }) ] ++
     shellHook = ''
-    PYTHONPATH="./src/poretitioner:$PYTHONPATH"
+      PYTHONPATH="./src/poretitioner:$PYTHONPATH"
     '';
     propagatedBuildInputs = all_pkgs;
   };

@@ -406,14 +406,9 @@ install_cachix () {
 }
 
 install_misl_env () {
-
     bold "Installing MISL env..."
     # Installs poretitioner developer dependencies
-    # PYTHONENV=$(nix-store --dump-db | grep ".*$( nix-env -q | grep 'python.*env')" -m 1 || nix-env -q | grep 'python.*env -m' 1)
-
-    # nix-env --set-flag priority 4 "$PYTHONENV/bin/f2py"
-    # --install --file $(pathToNixEnv) --show-trace
-    sudo nix-env --install --file $(pathToNixEnv) --show-trace
+    nix-env --install --file $(pathToNixEnv) --show-trace
 
     # Configures pre-commit, if it's installed via Nix.
     if [[ $(nix-env -q | grep pre-commit) ]]; then
