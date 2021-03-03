@@ -31,22 +31,22 @@ NORMAL=$(tput sgr0)
 
 bold () {
     local BOLD=$(tput bold)
-    echo -e "$BOLD$*$NORMAL"
+    printf "$BOLD$*$NORMAL\n"
 }
 
 green () {
     local GREEN=$(tput setaf 2; tput bold)
-    echo -e "$GREEN$*$NORMAL"
+    printf "$GREEN$*$NORMAL\n"
 }
 
 yellow () {
     local YELLOW=$(tput setaf 3; tput bold)
-    echo -e "$YELLOW$*$NORMAL"
+    printf "$YELLOW$*$NORMAL\n"
 }
 
 red () {
     local RED=$(tput setaf 1; tput bold)
-    echo -e "$RED$*$NORMAL"
+    printf "$RED$*$NORMAL\n"
 }
 
 ##############################################
@@ -152,17 +152,19 @@ needsMacOSCatalinaOrHigherInstall () {
 
     # Is this Mac OS?
     if ! [ $(uname -s ) = "Darwin" ] ; then
-        green "Not on MacOS, proceeding with standard install..."
+        green "Not on MacOS, proceeding with standard approach..."
         return 1;
     fi
 
     green "On MacOS, checking whether root directory is writeable..."
     echo ""
     yellow "I need to use 'sudo' to check whether the root directory is writeable."
-    yellow "This is because Nix will need to create a directory at the file system root (i.e. /nix/)"
-    yellow "Some extra install steps will be necessary if we find out it's not writeable."
+    yellow "This is because Nix will need to create/delete a directory at the file system root (i.e. /nix/)"
+    yellow "Some extra install/uninstall steps will be necessary if we find out it's not writeable."
     echo ""
-    yellow "Is it okay if I use sudo? \n"
+    yellow "I'd like to test this by running 'sudo [ -w / ]'"
+    echo ""
+    yellow "Is it okay if I use sudo to run the above command? \n"
 
     isValidResponse () {
         isYes $1 || isNo $1 || isQuit $1
@@ -182,21 +184,24 @@ needsMacOSCatalinaOrHigherInstall () {
     if isYes $response; then
         green "Thanks!";
     elif (isQuit $response || isNo $response); then
-        yellow "Sorry, we can't can't continue with installation without sudo. From here you can :"
+        yellow "I'm sorry, we can't continue installing or uninstalling without sudo. From here you can:"
         echo ""
-        echo "1) Try this script again, and allow sudo ('yes')."
+        echo "1) Try this script again, but allow sudo (by entering 'yes' when prompted)."
         echo ""
-        echo "2) Try manual installation from the instructions here: https://nixos.org/manual/nix/stable/#chap-installation"
+        echo "2) Try installing or uninstalling manually from the instructions here: https://nixos.org/manual/nix/stable/#chap-installation"
         exit 1;
     else
         red "Unsure how to interpret '$response'. Assuming asking for sudo is okay :) ";
     fi
 
     # Are we allowed to write to root?
+    set -x # Turning on set -x so the user can see what we're running with sudo.
     if sudo [ -w / ]; then
-        echo "Root directory is writeable, proceeding with standard install..."
+        set +x
+        echo "Root directory is writeable, proceeding with standard approach..."
         return 1
     else
+        set +x
         echo "On MacOS, root directory is NOT writeable."
     fi
 
@@ -206,9 +211,9 @@ needsMacOSCatalinaOrHigherInstall () {
 
 
     # Much love to https://unix.stackexchange.com/questions/285924/how-to-compare-a-programs-version-in-a-shell-script
-    if [ $(version $currentVersion) -ge $(version $catalinaVersion) ]; then
+    if [ $(get_version $currentVersion) -ge $(get_version $catalinaVersion) ]; then
         echo "On MacOS $currentVersion, which is higher than MacOS $catalinaVersion."
-        echo "Proceeding with special Darwin install."
+        echo "Proceeding with specialized Darwin approach."
         return 0
     else
         green "Root is writeable. Not on MacOS Catalina or higher"
@@ -327,47 +332,50 @@ uninstall_clean () {
         rm -rf $HOME/.config/nixpkgs
         rm -rf $HOME/.cache/nix
         rm -rf $HOME/.nixpkgs
-         green "Nix env uninstalled."
+        green "Nix env uninstalled."
     fi
 
-    if [ -d "/nix" && needsMacOSCatalinaOrHigherInstall ]; then
+    if [ -d "/nix" ] && needsMacOSCatalinaOrHigherInstall ; then
         echo ""
         red "These next steps need to be done manually, as they involve modifying your disk."
         echo ""
         yellow "  1. Removing the Nix entry from fstab using 'sudo vifs'"
         echo ""
-        echo "       1.1) Once in vifs, arrow-key down to the line that says "
+        echo "       1.1) Run the following command:"
         echo ""
-        bold "       'LABEL=Nix\040Store /nix apfs'"
+        bold "       \tsudo vifs"
         echo ""
-        echo "       1.2) type 'dd' (this deletes the line), then hit enter"
+        echo "       1.2) Once in vifs, arrow-key down to the line that says "
         echo ""
-        echo "       1.3) then type ':wq', then hit enter"
+        bold "       \t'LABEL=Nix\040Store /nix apfs'"
+        echo ""
+        echo "       1.3) type 'dd' (this deletes the line), then hit enter"
+        echo ""
+        echo "       1.4) then type ':wq', then hit enter"
         echo ""
         yellow "  2. Destroying the Nix data volume using 'diskutil apfs deleteVolume' (for example, 'diskutil apfs deleteVolume disk1s6_foo')"
 
-        local NIX_DISK_INFO=$(diskutil apfs list | grep --extended-regexp "Mount Point:[ ]* /nix" -B 3 -A 3)
-        local NIX_DISK=$(echo $NIX_DISK | awk -F'   |[(]' 'FNR == 2 {print $5}')
-        if [ -n NIX_DISK_INFO ];
-        then
+        if [ -n "$(diskutil apfs list | grep --extended-regexp "Mount Point:[ ]* /nix" -B 3 -A 3)" ]; then
+            NIX_DISK_INFO="$(diskutil apfs list | grep --extended-regexp "Mount Point:[ ]* /nix" -B 3 -A 3)"
+            NIX_DISK=$(diskutil apfs list | grep --extended-regexp "Mount Point:[ ]* /nix" -B 2 | xargs | awk -F' ' '{print $5}')
             echo ""
             echo "     This is the volume you want to destroy (since its mount point is /nix):"
             echo ""
-            bold "     $NIX_DISK_INFO"
+            bold "$NIX_DISK_INFO"
             echo ""
             echo "     So you'll want to run:"
             echo ""
-            bold "     'diskutil apfs deleteVolume $NIX_DISK' "
+            bold "     diskutil apfs deleteVolume ${NIX_DISK} "
         else
-            green "Oh, looks like you've already done that...Carrying on!"
-        fi;
+            green "    Oh, it looks like you've already done that...Carrying on!"
+        fi
 
         echo ""
         yellow "  3. Removing the 'nix' line from /etc/synthetic.conf or the file"
         echo ""
-        echo "    To do this, consider running: "
+        echo "    To do this, run: "
         echo ""
-        echo "    $ sudo grep -vE '^nix$' /etc/synthetic.conf > synthetic-temp.conf; sudo mv synthetic-temp.conf /etc/synthetic.conf "
+        bold "    sudo grep -vE '^nix$' /etc/synthetic.conf > synthetic-temp.conf; sudo mv synthetic-temp.conf /etc/synthetic.conf "
         echo ""
         echo "    Which will rewrite '/etc/synthetic.conf' with every line that does not contain the exact word 'nix'."
         echo ""
