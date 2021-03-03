@@ -53,6 +53,31 @@ red () {
 #                 Utilities                  #
 ##############################################
 
+firstChar () {
+    # Gets the first character from a string.
+    echo $1 | tr '[:upper:]' '[:lower:]' | cut -c1
+}
+
+isYes () {
+    # Whether this string is 'yes-like' (i.e. starts with a y)
+    [ $(firstChar $1) = "y" ]
+}
+
+isNo () {
+    # Whether this string is 'no-like' (i.e. starts with a n)
+    [ $(firstChar $1) = "n" ]
+}
+
+isQuit () {
+    # Whether this string is 'quit-like' (i.e. starts with a q)
+    [ $(firstChar $1) = "q" ]
+}
+
+# Version check utility, courtesy of https://stackoverflow.com/questions/4023830/how-to-compare-two-strings-in-dot-separated-version-format-in-bash/37939589#37939589
+get_version () {
+    echo "$@" | awk -F. '{ printf("%d%03d%03d%03d\n", $1,$2,$3,$4); }';
+}
+
 
 # This script requires a 'PORETITIONER_DIR' environment variable, to be set to
 # the directory where the poretitioner package resides (e.g. where you cloned https://github.com/uwmisl/poretitioner)
@@ -82,155 +107,139 @@ get () {
     # Finds the *Nix-friendly HTTP GET function. Uses curl if the user has it (MacOS/Linux)
     # or wget if they don't (Linux)
     # Exits if the user has neither (unlikely).
-    if [ -x "$(command -v curl)" ];
+    local curl=$(command -v curl)
+    local wget=$(command -v wget)
+    if [ -x $curl ];
     then
-      echo "curl"
-      return
-    elif [ -x "$(command -v wget)" ];
+        echo "$curl"
+    elif [ -x $wget ];
     then
-        echo "wget"
-        return
+       echo "$wget"
     else
-        red "Neither curl nor wget was found, so we're unable to do an HTTP get for install. Please install either 'curl' or 'wget'"
+        red "Neither curl nor wget was found, so we're unable to do an HTTP get for install. Please install either 'curl' or 'wget'."
+        echo ""
+        yellow "    Q: What is curl? "
+        echo ""
+        green "    A: Curl is a command line tool that fetches data from the internet."
+        echo ""
+        echo ""
+        yellow "    Q: How do I install curl? "
+        echo ""
+        green "    A: To install curl, open the following link in your web browser: "
+        echo ""
+        green '    https://curl.se/dlwiz/?type=bin'
+        echo ""
+        green "    Then select your operating system under 'Select Operating System > Show package for:'"
+        echo ""
+        green "    Then click 'select' and follow the subsequent instructions."
+        return 1
     fi
 }
 
+shell () {
+    command -v $SHELL
+}
 
 ##############################################
 #          Installation Methods              #
 ##############################################
 
-is_separate_nix_volume_necessary () {
+needsMacOSCatalinaOrHigherInstall () {
     # As of MacOS X Catalina (10.15.x), the root directory is no longer writeable.
     # However, Nix expects to be installed at this location. To get around this,
     # we borrowed a script from the NixOS repository that creates a separate
     # volume where Nix can be hosted at root (i.e. /nix/).
-    if [[ ! -w "/" && "$OSTYPE" == "darwin"*  && ("$(sw_vers -productVersion)" > "10.15" || "$(sw_vers -productVersion)" = "10.15") ]]; then
-        true
-    else false
-    fi
-}
 
-create_root_nix_if_necessaary () {
-    if [[ ! -d "/nix" && is_separate_nix_volume_necessary ]]; then
-        yellow "Detected operating system is MacOS X Catalina or higher ( >= 10.15), so we'll have to do a little extra disk set up."
-        yellow "Creating Nix volume..."
-
-        . ./nix/create-darwin-volume.sh
-
-        yellow "Nix volume created!"
-    fi
-    # else: We're either on a non-Darwin machine, or on OS X Mojave (10.14) or below, so /nix/ will be created at
-    # the system root (same behavior as Linux) in the install_linux step.
-}
-
-configure_nix_env_if_necessary () {
-    # This exists to patch the fact that as of 31 March 2020, Nix installer doesn't modify
-    # the Zshell profile (it only checks bash and sh).
-    p=$HOME/.nix-profile/etc/profile.d/nix.sh
-    if [ -z "$NIX_INSTALLER_NO_MODIFY_PROFILE" ]; then
-        # Make the shell source nix.sh during login.
-        for i in .bash_profile .bash_login .profile .zshrc; do
-            fn="$HOME/$i"
-            if [ -w "$fn" ]; then
-                if ! grep -q "$p" "$fn"; then
-                    echo "modifying $fn..." >&2
-                    echo "if [ -e $p ]; then . $p; fi # added by Nix installer" >> "$fn"
-                    source $fn
-                fi
-                added=1
-            fi
-        done
+    # Is this Mac OS?
+    if ! [ $(uname -s ) = "Darwin" ] ; then
+        green "Not on MacOS, proceeding with standard install..."
+        return 1;
     fi
 
-    # Sets up some important Nix environment variables
-    . /Users/$USER/.nix-profile/etc/profile.d/nix.sh
-}
+    green "On MacOS, checking whether root directory is writeable..."
+    echo ""
+    yellow "I need to use 'sudo' to check whether the root directory is writeable."
+    yellow "This is because Nix will need to create a directory at the file system root (i.e. /nix/)"
+    yellow "Some extra install steps will be necessary if we find out it's not writeable."
+    echo ""
+    yellow "Is it okay if I use sudo? \n"
 
-uninstall_clean() {
-    # Uninstalls all Nix and dev dependencies.
-    # Doesn't modify the shell .rc or .profile files, which might have lingering Nix references. These can be deleted manually.
+    isValidResponse () {
+        isYes $1 || isNo $1 || isQuit $1
+    }
 
-    # Uninstall pre-commit and clean its dependencies, since it touches the user's home directory.
-    if [ -x "$(command -v pre-commit)" ];
-    then
-        yellow "Uninstalling pre-commit..."
-        pre-commit clean;
-        pre-commit uninstall;
-        green "Pre-commit uninstalled."
+    bold "y/n/q"
+    read response
+
+    while ! $(isValidResponse $response)
+    do
+        red "Sorry, I don't understand $response."
+        echo "Please enter one of 'yes' (y), 'no' (n) or 'quit' (q) \n"
+        bold "y/n/q"
+        read response;
+    done
+
+    if isYes $response; then
+        green "Thanks!";
+    elif (isQuit $response || isNo $response); then
+        yellow "Sorry, we can't can't continue with installation without sudo. From here you can :"
+        echo ""
+        echo "1) Try this script again, and allow sudo ('yes')."
+        echo ""
+        echo "2) Try manual installation from the instructions here: https://nixos.org/manual/nix/stable/#chap-installation"
+        exit 1;
+    else
+        red "Unsure how to interpret '$response'. Assuming asking for sudo is okay :) ";
     fi
 
-    # Uninstall all Nix dependencies, including Nix itself.
-    if [ -x "$(command -v nix-env)" ];
-    then
-        yellow "Uninstalling Nix..."
-        nix-env -e "*"
-        rm -rf $HOME/.nix-*
-        rm -rf $HOME/.config/nixpkgs
-        rm -rf $HOME/.cache/nix
-        rm -rf $HOME/.nixpkgs
+    # Are we allowed to write to root?
+    if sudo [ -w / ]; then
+        echo "Root directory is writeable, proceeding with standard install..."
+        return 1
+    else
+        echo "On MacOS, root directory is NOT writeable."
     fi
 
-    if [[ -d "/nix" && is_separate_nix_volume_necessary ]]; then
-        echo ""
-        red "These next steps need to be done manually, as they involve modifying your disk."
-        echo ""
-        yellow "  1. Remove the Nix entry from fstab using 'sudo vifs'"
-        echo ""
-        echo "       Once in vifs, arrow-key down to the line that says 'LABEL=Nix\040Store /nix apfs', type 'dd' (this deletes the line), then type ':wq'."
-        echo ""
-        yellow "  2. Destroy the Nix data volume using 'diskutil apfs deleteVolume' (for example, 'diskutil apfs deleteVolume disk1s6_foo')"
+    # Is this MacOS 10.15 or higher?
+    currentVersion="$(sw_vers -productVersion)"
+    catalinaVersion="10.15"
 
-        if [[ $(diskutil apfs list | grep --extended-regexp "Mount Point:[ ]* /nix" -B 3 -A 3) ]];
-        then
-            echo ""
-            echo "     This is the volume you want to destroy (since its mount point is /nix):"
-            diskutil apfs list | grep --extended-regexp "Mount Point:[ ]* /nix" -B 3 -A 3
-            echo ""
-        fi;
 
-        echo ""
-        yellow "  3. Remove the 'nix' line from /etc/synthetic.conf or the file"
-        echo ""
-        echo "    To do this, consider running: "
-        echo ""
-        echo "    $ sudo grep -vE '^nix$' /etc/synthetic.conf > synthetic-temp.conf; sudo mv synthetic-temp.conf /etc/synthetic.conf "
-        echo ""
-        echo "    Which will rewrite '/etc/synthetic.conf' with every line that does not contain the exact word 'nix'."
-        echo ""
-        echo "After doing all of the above steps"
-        echo ""
-        yellow "  4. Reboot your computer"
-        echo ""
-        echo "Then uninstall will be complete and you'll be starting fresh."
-        echo ""
-    elif [[ -d "/nix" ]]; then
-        echo "Running 'sudo rm -rf /nix'"
-        sudo rm -rf /nix
-        echo "Finished 'sudo rm -rf /nix'"
-        green "Nix uninstalled."
-    fi;
+    # Much love to https://unix.stackexchange.com/questions/285924/how-to-compare-a-programs-version-in-a-shell-script
+    if [ $(version $currentVersion) -ge $(version $catalinaVersion) ]; then
+        echo "On MacOS $currentVersion, which is higher than MacOS $catalinaVersion."
+        echo "Proceeding with special Darwin install."
+        return 0
+    else
+        green "Root is writeable. Not on MacOS Catalina or higher"
+    fi
+    return 1
 }
 
 install_nix () {
-    if [ -x "$(command -v nix)" ]
-    then
+    if [ -x "$(command -v nix)" ]; then
         # Nix is already installed!
         bold "Nix is already installed. Skipping installation."
         return 0
     fi
 
+    local NIX_INSTALL_URL="https://nixos.org/nix/install"
     bold "Installing Nix..."
 
-    $(get) "https://nixos.org/nix/install" | sh
-
-    bold "Configuring Nix environment..."
-
-    configure_nix_env_if_necessary
-
-    bold "Nix environment configured."
-
-    green "Nix installed."
+    # As of MacOS X Catalina (10.15.x), the root directory is no longer writeable.
+    # However, Nix expects to be installed at this location. To get around this,
+    # we borrowed a script from the NixOS repository that creates a separate
+    # volume where Nix can be hosted at root (i.e. /nix/).
+    if needsMacOSCatalinaOrHigherInstall ; then
+        yellow "Detected operating system is MacOS X Catalina or higher ( >= 10.15), so we'll have to do a little extra disk set up."
+        yellow "Creating Nix volume..."
+        $(shell) <($(get) -L ${NIX_INSTALL_URL}) --darwin-use-unencrypted-nix-store-volume --daemon
+        yellow "Nix volume created!"
+    else
+        # Standard Linux or MacOS 10.14<= install.
+        $(shell) <($(get) -L ${NIX_INSTALL_URL}) --daemon
+    fi
+    green "Nix installed!"
 }
 
 install_cachix () {
@@ -281,7 +290,7 @@ main () {
     else
         # Make sure to call `create_root_nix_if_necessaary` for Mac OS X users, as it solves a problem
         # with Mac OS Catalina and above.
-        create_root_nix_if_necessaary
+        #create_root_nix_if_necessaary
         install_nix
         install_cachix
         install_misl_env
@@ -290,6 +299,90 @@ main () {
         # Reload the shell to set environment variables like $NIX_PATH.
         exec $SHELL
     fi
+}
+
+##############################################
+#                 Uninstall                  #
+##############################################
+
+uninstall_clean () {
+    # Uninstalls all Nix and dev dependencies.
+    # Doesn't modify the shell .rc or .profile files, which might have lingering Nix references. These can be deleted manually.
+
+    # Uninstall pre-commit and clean its dependencies, since it touches the user's home directory.
+    if [ -x "$(command -v pre-commit)" ];
+    then
+        yellow "Uninstalling pre-commit..."
+        pre-commit clean;
+        pre-commit uninstall;
+        green "Pre-commit uninstalled."
+    fi
+
+    # Uninstall all Nix dependencies, including Nix itself.
+    if [ -x "$(command -v nix-env)" ];
+    then
+        yellow "Uninstalling Nix env..."
+        nix-env -e "*"
+        rm -rf $HOME/.nix-*
+        rm -rf $HOME/.config/nixpkgs
+        rm -rf $HOME/.cache/nix
+        rm -rf $HOME/.nixpkgs
+         green "Nix env uninstalled."
+    fi
+
+    if [ -d "/nix" && needsMacOSCatalinaOrHigherInstall ]; then
+        echo ""
+        red "These next steps need to be done manually, as they involve modifying your disk."
+        echo ""
+        yellow "  1. Removing the Nix entry from fstab using 'sudo vifs'"
+        echo ""
+        echo "       1.1) Once in vifs, arrow-key down to the line that says "
+        echo ""
+        bold "       'LABEL=Nix\040Store /nix apfs'"
+        echo ""
+        echo "       1.2) type 'dd' (this deletes the line), then hit enter"
+        echo ""
+        echo "       1.3) then type ':wq', then hit enter"
+        echo ""
+        yellow "  2. Destroying the Nix data volume using 'diskutil apfs deleteVolume' (for example, 'diskutil apfs deleteVolume disk1s6_foo')"
+
+        local NIX_DISK_INFO=$(diskutil apfs list | grep --extended-regexp "Mount Point:[ ]* /nix" -B 3 -A 3)
+        local NIX_DISK=$(echo $NIX_DISK | awk -F'   |[(]' 'FNR == 2 {print $5}')
+        if [ -n NIX_DISK_INFO ];
+        then
+            echo ""
+            echo "     This is the volume you want to destroy (since its mount point is /nix):"
+            echo ""
+            bold "     $NIX_DISK_INFO"
+            echo ""
+            echo "     So you'll want to run:"
+            echo ""
+            bold "     'diskutil apfs deleteVolume $NIX_DISK' "
+        else
+            green "Oh, looks like you've already done that...Carrying on!"
+        fi;
+
+        echo ""
+        yellow "  3. Removing the 'nix' line from /etc/synthetic.conf or the file"
+        echo ""
+        echo "    To do this, consider running: "
+        echo ""
+        echo "    $ sudo grep -vE '^nix$' /etc/synthetic.conf > synthetic-temp.conf; sudo mv synthetic-temp.conf /etc/synthetic.conf "
+        echo ""
+        echo "    Which will rewrite '/etc/synthetic.conf' with every line that does not contain the exact word 'nix'."
+        echo ""
+        echo "After doing all of the above steps"
+        echo ""
+        yellow "  4. Reboot your computer"
+        echo ""
+        echo "Then uninstall will be complete and you'll be starting fresh."
+        echo ""
+    elif [[ -d "/nix" ]]; then
+        echo "Running 'sudo rm -rf /nix'"
+        sudo rm -rf /nix
+        echo "Finished 'sudo rm -rf /nix'"
+        green "Nix uninstalled."
+    fi;
 }
 
 main $@
