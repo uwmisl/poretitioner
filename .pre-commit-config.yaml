@@ -56,6 +56,18 @@ repos:
         name: Check documentation
         stages: [push]
 
+
+    #####################################
+    #        Format Nix files           #
+    #####################################
+-   repo: local
+    hooks:
+    -   id: nixpkgs-fmt
+        name: Format nix files
+        entry: nixpkgs-fmt
+        language: system
+        types: [nix]
+
     #####################################
     #          Runs unit tests          #
     #####################################

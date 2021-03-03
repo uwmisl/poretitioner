@@ -1,4 +1,4 @@
-# ##########################################################################################
+###########################################################################################
 #
 # env.nix
 #
@@ -11,7 +11,8 @@
 # replacing '<<path to this file>>' with the absolute path to this `env.nix` file.
 #
 ###########################################################################################
-{ pkgs ? import <nixpkgs> { config = import ./config.nix; }, cudaSupport ? false
+{ pkgs ? import <nixpkgs> { config = import ./config.nix; }
+, cudaSupport ? false
 }:
 with pkgs;
 let
@@ -20,5 +21,5 @@ let
   dependencies = callPackage ./dependencies.nix { inherit python cudaSupport; };
   dev_pkgs = dependencies.build;
   testing_pkgs = dependencies.test;
-  run_pkgs = dependencies.run;
-in dev_pkgs ++ testing_pkgs ++ run_pkgs ++ [ python ]
+in
+dev_pkgs ++ testing_pkgs ++ [ python ]

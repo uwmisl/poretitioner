@@ -1,4 +1,4 @@
-# ##########################################################################################
+###########################################################################################
 #
 # dependencies.nix
 #
@@ -18,14 +18,18 @@
 ###########################################################################################
 
 { pkgs ? import <nixpkgs> { config = (import ./config.nix); }
-, python ? (pkgs.callPackage ./python.nix) { inherit pkgs; }, lib ? pkgs.lib
-, stdenv ? pkgs.stdenv, cudaSupport ? false }:
+, python ? (pkgs.callPackage ./python.nix) { inherit pkgs; }
+, lib ? pkgs.lib
+, stdenv ? pkgs.stdenv
+, cudaSupport ? false
+}:
 with pkgs;
 with python.pkgs;
 let
   precommit = (import ./pkgs/pre-commit/pre-commit.nix) { inherit python; };
   debugpy = (callPackage ./pkgs/debugpy/debugpy.nix) { inherit python; };
-in rec {
+in
+rec {
 
   ###########################################################################################
   #
@@ -57,7 +61,7 @@ in rec {
     # Neural networks
     torchvision
   ] ++ lib.optional (cudaSupport) pytorchWithCuda
-    ++ lib.optional (!cudaSupport) pytorchWithoutCuda;
+  ++ lib.optional (!cudaSupport) pytorchWithoutCuda;
 
   ###########################################################################################
   #
@@ -79,7 +83,7 @@ in rec {
     # Docstring static analyzer
     pydocstyle
     # Nix file style enforcer
-    pkgs.nixfmt
+    pkgs.nixpkgs-fmt
   ];
 
   ###########################################################################################

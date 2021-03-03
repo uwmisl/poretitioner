@@ -1,4 +1,4 @@
-# ##########################################################################################
+###########################################################################################
 #
 # playground.nix
 #
@@ -14,7 +14,8 @@
 ###########################################################################################
 
 { pkgs ? import <nixpkgs> { config = import ./config.nix; }
-, python ? pkgs.callPackage ./python.nix { inherit pkgs; }, cudaSupport ? false
+, python ? pkgs.callPackage ./python.nix { inherit pkgs; }
+, cudaSupport ? false
 }:
 with pkgs;
 with python.pkgs;
@@ -25,8 +26,9 @@ let
   # use them in in bpython immediately.
   playground_py = ''./nix/playground.py'';
   dependencies = callPackage ./dependencies.nix { inherit python cudaSupport; };
-in mkShell {
-  buildInputs = dependencies.all ++ [bpython];
+in
+mkShell {
+  buildInputs = dependencies.all ++ [ bpython ];
   shellHook = ''
     ${bpython.pname} --interactive ${playground_py}
   '';
