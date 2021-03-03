@@ -8,6 +8,10 @@
 set -o errexit
 set -e
 
+
+
+NIX_TRUSTED_KEYS="cachix.cachix.org-1:eWNHQldwUO7G2VkjpnjDbWwy4KQ/HNxht7H4SSoMckM= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+
 ##############################################
 #   Script clean up and exception handling.  #
 ##############################################
@@ -222,12 +226,6 @@ needsMacOSCatalinaOrHigherInstall () {
 }
 
 install_nix () {
-    if [ -x "$(command -v nix)" ]; then
-        # Nix is already installed!
-        bold "Nix is already installed. Skipping installation."
-        return 0
-    fi
-
     local NIX_INSTALL_URL="https://nixos.org/nix/install"
     bold "Installing Nix..."
 
@@ -247,6 +245,147 @@ install_nix () {
     green "Nix installed!"
 }
 
+
+configure_nix_channel () {
+    green "Configuring nix channel..."
+    # Use this nix channel (i.e. registry of all packages available by default)
+    PINNED_NIX_CHANNEL="https://nixos.org/channels/nixpkgs-unstable"
+
+    printf "\tChecking for nix-channel '$PINNED_NIX_CHANNEL' in channels...\n"
+    if ! nix-channel --list | grep "$PINNED_NIX_CHANNEL" --silent; then
+        # Don't have this nix channel added.
+        printf "\tNot found, adding...\n"
+        nix-channel --add "$PINNED_NIX_CHANNEL" --trusted-public-keys "$NIX_TRUSTED_KEYS"
+        printf "\tAdded.\n"
+        echo ""
+    fi
+
+    CHANNEL_NAME=$(nix-channel --list | grep "$PINNED_NIX_CHANNEL" | awk '{print $1}')
+
+    printf "\tUpdating channel $CHANNEL_NAME...\n"
+    nix-channel --update "$CHANNEL_NAME" --trusted-public-keys "$NIX_TRUSTED_KEYS"
+    green "Nix channel configured!"
+}
+
+
+# get_line_numbers_in_nix_config () {
+#     # Gets the line number where a string argument ($1) was found with grep.
+#     grep -n -e "$1" /etc/nix/nix.conf | awk -F':' '{print $1}' | xargs
+# }
+
+get_line_numbers_in_nix_config () {
+    # Gets the line number where a string argument ($1) was found with grep.
+    grep -n -e $1 /etc/nix/nix.conf
+}
+
+foo () {
+    echo "I love $1"
+}
+# $(grep -n "build" /etc/nix/nix.conf | awk -F':' '{print $1}' | xargs)
+
+configure_nix () {
+    NIX_CONFIG_FILE="/etc/nix/nix.conf"
+    # Nix Configuration info: https://www.mankier.com/5/nix.conf
+    echo "----------------------------------"
+    echo "Current Nix configuration: "
+    echo "----------------------------------"
+    cat $NIX_CONFIG_FILE
+    echo "----------------------------------"
+    echo ""
+    echo ""
+    echo "I'm about to ask you for sudo permissions to modify $NIX_CONFIG_FILE"
+
+    echo "Checking Trusted Users configuration...."
+    if ! grep "trusted-users =.*" $NIX_CONFIG_FILE --silent; then
+        echo "Adding trusted users to $NIX_CONFIG_FILE"
+        echo "trusted-users = root $USER" | sudo tee -a $NIX_CONFIG_FILE
+        green "Trusted users configured!"
+    else
+        echo "Trusted users already configured. Continuing..."
+    fi
+
+    # Trusted Substitutions
+    echo "Checking Trusted Substituters configuration...."
+    TRUSTED_SUBSTITUTERS=('https://cache.nixos.org' 'https://tarballs.nixos.org' 'http://tarballs.nixos.org')
+    if ! grep "trusted-substituters =.*" $NIX_CONFIG_FILE --silent; then
+        echo "Adding trusted substituters to $NIX_CONFIG_FILE"
+        echo "trusted-substituters =" | sudo tee -a $NIX_CONFIG_FILE
+        green "Trusted Substituters section added!"
+    else
+        echo "Trusted Substituterssers already configured. Continuing..."
+    fi
+
+    trusted_substituters_line_number=$(grep -n "^trusted-substituters =.*" $NIX_CONFIG_FILE | awk -F':' '{print $1}' | xargs )
+    for trusted_subby in ${TRUSTED_SUBSTITUTERS[@]}; do
+        echo "Looking for '$trusted_subby'"
+        if ! grep -n "trusted-substituters =.*$trusted_subby.*" $NIX_CONFIG_FILE --silent; then
+            echo "Adding trusted substituter '$trusted_subby'..."
+            sudo sed -i -e "${trusted_substituters_line_number}s,$, ${trusted_subby},g" $NIX_CONFIG_FILE
+            echo "Added trusted substituter '$trusted_subby'."
+        else echo "Found trusted substituter '$trusted_subby'. Moving on..."
+        fi
+    done
+
+    # Allowed URIs
+    echo "Checking Allowed URIs configuration...."
+    ALLOWED_URIS=('https://cache.nixos.org' 'https://tarballs.nixos.org' 'http://tarballs.nixos.org')
+    if ! grep "allowed-uris =.*" $NIX_CONFIG_FILE --silent; then
+        echo "Adding allowed uris to $NIX_CONFIG_FILE"
+        echo "allowed-uris =" | sudo tee -a $NIX_CONFIG_FILE
+        green "Allowed URIs section added!"
+    else
+        echo "Allowed URIs already configured. Continuing..."
+    fi
+
+    uri_line_number=$(grep -n "^allowed-uris =.*" $NIX_CONFIG_FILE | awk -F':' '{print $1}' | xargs )
+    for allowed_uri in ${ALLOWED_URIS[@]}; do
+        echo "Looking for '$trusted_subby'"
+        if ! grep -n "trusted-substituters =.*$allowed_uri.*" $NIX_CONFIG_FILE --silent; then
+            echo "Adding trusted substituter '$allowed_uri'..."
+            sudo sed -i -e "${uri_line_number}s,$, ${allowed_uri},g" $NIX_CONFIG_FILE
+            echo "Added trusted substituter '$allowed_uri'."
+        else echo "Found trusted substituter '$allowed_uri'. Moving on..."
+        fi
+    done
+
+
+    # Substitutions
+    substituters_line_number=$(grep -n "^substituters =.*" $NIX_CONFIG_FILE | awk -F':' '{print $1}' | xargs )
+    for subby in ${VALID_SUBSTITUTERS[@]}; do
+        echo "Looking for '$subby'"
+        #line_numbers=$(grep -n "substituters =.* $subby" $NIX_CONFIG_FILE | awk -F':' '{print $1}' | xargs )
+        if ! grep -n "substituters =.*$subby.*" $NIX_CONFIG_FILE --silent; then
+            echo "Adding substituter '$subby'..."
+            sudo sed -i -e "${substituters_line_number}s,$, ${subby},g" $NIX_CONFIG_FILE
+            echo "Added substituter '$subby'."
+        else echo "Found substituter '$subby'. Moving on..."
+        fi
+    done
+
+    echo "Checking for Cachix in substituters:"
+    VALID_SUBSTITUTERS=('https://cache.nixos.org' 'https://cachix.cachix.org' 'https://tarballs.nixos.org' 'http://tarballs.nixos.org')
+    if ! grep "^substituters =.*" $NIX_CONFIG_FILE --silent; then
+        # Adding substituters configuration.
+        echo "Substituteters configuration not found, adding..."
+        echo "substituters =" | sudo tee -a $NIX_CONFIG_FILE
+        echo "Substituteters configuration added."
+    fi
+    # subby=${VALID_SUBSTITUTERS[2]}
+
+    substituters_line_number=$(grep -n "^substituters =.*" $NIX_CONFIG_FILE | awk -F':' '{print $1}' | xargs )
+    for subby in ${VALID_SUBSTITUTERS[@]}; do
+        echo "Looking for '$subby'"
+        #line_numbers=$(grep -n "substituters =.* $subby" $NIX_CONFIG_FILE | awk -F':' '{print $1}' | xargs )
+        if ! grep -n "substituters =.*$subby.*" $NIX_CONFIG_FILE --silent; then
+            echo "Adding substituter '$subby'..."
+            sudo sed -i -e "${substituters_line_number}s,$, ${subby},g" $NIX_CONFIG_FILE
+            echo "Added substituter '$subby'."
+        else echo "Found substituter '$subby'. Moving on..."
+        fi
+    done
+}
+
+
 install_cachix () {
     # Nix must be installed first before installing cachix.
 
@@ -255,7 +394,8 @@ install_cachix () {
     if [ ! -x "$(command -v cachix)" ] &&  [[ ! $(nix-env -q | grep cachix) ]]
     then
         yellow "Cachix not installed, installing Cachix..."
-        nix-env -iA cachix -f https://cachix.org/api/v1/install
+        #sudo nix-env -iA cachix -f https://cachix.org/api/v1/install
+        sudo nix-env -i cachix --substituters 'https://cache.nixos.org https://cachix.cachix.org' --trusted-public-keys 'cachix.cachix.org-1:eWNHQldwUO7G2VkjpnjDbWwy4KQ/HNxht7H4SSoMckM= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY='
         # Cachix is already installed.
         green "Cachix installed!"
     else
@@ -273,7 +413,7 @@ install_misl_env () {
 
     # nix-env --set-flag priority 4 "$PYTHONENV/bin/f2py"
     # --install --file $(pathToNixEnv) --show-trace
-    nix-env --install --file $(pathToNixEnv) --show-trace
+    sudo nix-env --install --file $(pathToNixEnv) --show-trace
 
     # Configures pre-commit, if it's installed via Nix.
     if [[ $(nix-env -q | grep pre-commit) ]]; then
@@ -290,13 +430,32 @@ install_misl_env () {
 # Bootstraps the developer environment.
 main () {
     if [[ $1 == "uninstall" ]]; then
-        green "Uninstalling"
         uninstall_clean
     else
         # Make sure to call `create_root_nix_if_necessaary` for Mac OS X users, as it solves a problem
         # with Mac OS Catalina and above.
         #create_root_nix_if_necessaary
-        install_nix
+        if [ -n $(command -v nix) ]; then
+            # Nix is already installed!
+            bold "Nix is already installed. Skipping installation."
+        else
+            install_nix
+            echo ""
+            red "!!!!!! Important !!!!!!!!"
+            echo ""
+            red "Nix is now technically installed, but you must close and re-open your shell before the shell will pick up on the changes."
+            echo ""
+            red "To continue, close and re-open the shell, then run this script again."
+            echo ""
+            yellow "Hint: Want to close your shell quickly? Enter: "
+            echo ""
+            bold "       while true; do exit 0; done"
+            echo ""
+            green "See you soon :)"
+            exit 0
+        fi
+        configure_nix
+        configure_nix_channel
         install_cachix
         install_misl_env
         green "All done!"
@@ -313,7 +472,7 @@ main () {
 uninstall_clean () {
     # Uninstalls all Nix and dev dependencies.
     # Doesn't modify the shell .rc or .profile files, which might have lingering Nix references. These can be deleted manually.
-
+    green "Uinstalling..."
     # Uninstall pre-commit and clean its dependencies, since it touches the user's home directory.
     if [ -x "$(command -v pre-commit)" ];
     then
@@ -327,13 +486,15 @@ uninstall_clean () {
     if [ -x "$(command -v nix-env)" ];
     then
         yellow "Uninstalling Nix env..."
-        nix-env -e "*"
+        sudo nix-env -e "*"
         rm -rf $HOME/.nix-*
         rm -rf $HOME/.config/nixpkgs
         rm -rf $HOME/.cache/nix
         rm -rf $HOME/.nixpkgs
         green "Nix env uninstalled."
     fi
+
+    yellow "Uninstalling Nix..."
 
     if [ -d "/nix" ] && needsMacOSCatalinaOrHigherInstall ; then
         echo ""
@@ -385,12 +546,14 @@ uninstall_clean () {
         echo ""
         echo "Then uninstall will be complete and you'll be starting fresh."
         echo ""
+        return 1
     elif [[ -d "/nix" ]]; then
         echo "Running 'sudo rm -rf /nix'"
         sudo rm -rf /nix
         echo "Finished 'sudo rm -rf /nix'"
-        green "Nix uninstalled."
+        yellow "Nix uninstalled."
     fi;
+    green "Uninstallation complete."
 }
 
 main $@
