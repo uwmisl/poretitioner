@@ -430,7 +430,7 @@ main () {
         # Make sure to call `create_root_nix_if_necessaary` for Mac OS X users, as it solves a problem
         # with Mac OS Catalina and above.
         #create_root_nix_if_necessaary
-        if [ -n $(command -v nix) ]; then
+        if  command -v nix ; then
             # Nix is already installed!
             bold "Nix is already installed. Skipping installation."
         else
