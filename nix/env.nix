@@ -11,12 +11,15 @@
 # replacing '<<path to this file>>' with the absolute path to this `env.nix` file.
 #
 ###########################################################################################
-{ pkgs ? import <nixpkgs> { config = import ./config.nix; }, cudaSupport ? false
+{ pkgs ? import <nixpkgs> { config = import ./config.nix; }
+, cudaSupport ? false
 }:
 with pkgs;
 let
   python = callPackage ./python.nix { inherit pkgs; };
+  # Install main dependencies so they're cached
   dependencies = callPackage ./dependencies.nix { inherit python cudaSupport; };
   dev_pkgs = dependencies.build;
   testing_pkgs = dependencies.test;
-in [ python ] ++ dev_pkgs ++ testing_pkgs
+in
+dev_pkgs ++ testing_pkgs ++ [ python ]

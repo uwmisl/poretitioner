@@ -17,9 +17,19 @@
 #
 ###########################################################################################
 
-{ pkgs, python, lib ? pkgs.lib, stdenv ? pkgs.stdenv, cudaSupport ? false }:
-let precommit = (import ./pkgs/pre-commit/pre-commit.nix) { inherit python; };
-in with python.pkgs; rec {
+{ pkgs ? import <nixpkgs> { config = (import ./config.nix); }
+, python ? (pkgs.callPackage ./python.nix) { inherit pkgs; }
+, lib ? pkgs.lib
+, stdenv ? pkgs.stdenv
+, cudaSupport ? false
+}:
+with pkgs;
+with python.pkgs;
+let
+  precommit = (import ./pkgs/pre-commit/pre-commit.nix) { inherit python; };
+  debugpy = (callPackage ./pkgs/debugpy/debugpy.nix) { inherit python; };
+in
+rec {
 
   ###########################################################################################
   #
@@ -29,6 +39,8 @@ in with python.pkgs; rec {
   ###########################################################################################
 
   run = [
+    # Reading/writing TOML documents.
+    toml
     # Numerical computation library
     numpy
     # Data manipulation and analysis
@@ -49,7 +61,7 @@ in with python.pkgs; rec {
     # Neural networks
     torchvision
   ] ++ lib.optional (cudaSupport) pytorchWithCuda
-    ++ lib.optional (!cudaSupport) pytorchWithoutCuda;
+  ++ lib.optional (!cudaSupport) pytorchWithoutCuda;
 
   ###########################################################################################
   #
@@ -70,8 +82,8 @@ in with python.pkgs; rec {
     flake8
     # Docstring static analyzer
     pydocstyle
-    # Nix-file formatter
-    pkgs.nixfmt
+    # Nix file style enforcer
+    pkgs.nixpkgs-fmt
   ];
 
   ###########################################################################################
@@ -88,6 +100,8 @@ in with python.pkgs; rec {
     pytestrunner
     # Test code coverage generator
     pytestcov
+    # Debugpy (Used for debugging in VSCode: https://code.visualstudio.com/docs/python/debugging#_command-line-debugging)
+    debugpy
   ];
 
   ###########################################################################################

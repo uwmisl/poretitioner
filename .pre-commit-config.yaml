@@ -7,17 +7,17 @@ repos:
     hooks:
     -   id: black
         args: [--safe, --line-length=99]
-        name: Prettify code
+        name: Prettify Python Code
         always_run: true
 
     #####################################
     #       Sorts module imports        #
     #####################################
 -   repo: https://github.com/timothycrosley/isort
-    rev: master
+    rev: 5.6.4
     hooks:
     -   id: isort
-        name: Sort imports
+        name: Sort Python Imports
         always_run: false
         args: [--multi-line=3, --trailing-comma, --force-grid-wrap=0, --use-parentheses, --line-width=99]
 
@@ -43,7 +43,7 @@ repos:
     -   id: flake8
         additional_dependencies: [flake8~=3.7.3]
         args: [--max-line-length=99]
-        name: Check style
+        name: Check Python Style
         stages: [push]
 
     #####################################
@@ -53,8 +53,20 @@ repos:
     rev: 5.0.2
     hooks:
     -   id: pydocstyle
-        name: Check documentation
+        name: Check Python Documentation
         stages: [push]
+
+
+    #####################################
+    #        Format Nix files           #
+    #####################################
+-   repo: local
+    hooks:
+    -   id: nixpkgs-fmt
+        name: Prettify Nix Files
+        entry: nixpkgs-fmt
+        language: system
+        types: [nix]
 
     #####################################
     #          Runs unit tests          #
@@ -66,4 +78,4 @@ repos:
         entry: pytest -v
         language: system
         types: [python]
-        stages: [push]
+        always_run: true
