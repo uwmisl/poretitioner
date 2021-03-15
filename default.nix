@@ -15,7 +15,7 @@
 #
 ###########################################################################################
 
-{ pkgs ? import <nixpkgs> { config = (import ./nix/config.nix); }
+{ pkgs ? import <nixpkgs> { config = (import ./nix/config.nix); overlays = [ (import ./nix/overlays.nix) ]; }
 , cudaSupport ? false
 , python ? (pkgs.callPackage ./nix/python.nix) { inherit pkgs; }
 }:
