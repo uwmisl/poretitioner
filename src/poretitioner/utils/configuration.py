@@ -129,9 +129,9 @@ class BaseConfiguration(metaclass=ABCMeta):
         names = {field.name for field in dataclasses.fields(self.__class__)}
         return names
 
-    def initialize_fields(self, command_line_args: Dict = None, config: Dict = None):
+    def initialize_fields(self, command_line_args: Dict = None, config: Dict = None, log: Logger = None):
         """[summary]
-
+        #TODO 
         Parameters
         ----------
         command_line_args : Dict, optional
@@ -139,6 +139,9 @@ class BaseConfiguration(metaclass=ABCMeta):
         config : Dict, optional
             [description], by default None
         """
+
+        log = log if log is not None else getLogger()
+
         command_line_args = command_line_args if command_line_args is not None else {}
         config = config if config is not None else {}
         # Command line args take precidence over configuration files in the event of a conflict.
@@ -230,7 +233,8 @@ class GeneralConfiguration(BaseConfiguration):
     capture_directory: str
 
     def validate(self):
-        foo-fda = 
+        # assert self.n_workers > 0
+        # assert self.captures_per_f5 > 0
         pass
 
     def __init__(self, command_line_args: Dict = None, config: Dict = None, log: Logger = getLogger()) -> None:
@@ -244,7 +248,8 @@ class GeneralConfiguration(BaseConfiguration):
             [description], by default None
         """
         self.initialize_fields(command_line_args=command_line_args, config=config)
-        
+
+
     def validate(self):
         raise NotImplementedError("Not implemented configuration")
 
@@ -314,11 +319,14 @@ def readconfig(path, command_line_args=None, log: Logger = getLogger()):
     config_path = str(get_absolute_path(path)).strip() # Strip any trailing/leading whitespace.
 
     read_config = toml.load(config_path)
+    #config = ConfigParser()
 
     gen_config = read_config[CONFIG.GENERAL]
     seg_config = read_config[CONFIG.SEGMENTATION]
     filter_config = read_config[CONFIG.FILTER]
-
+ 
+    #config.read(config_path)
+    #config = config
     log.debug(f"\n\ngen_config: {gen_config!s}\n\n")
     log.debug(f"\n\nseg_config: {seg_config!s}\n\n")
     log.debug(f"\n\ncommand_line_args: {command_line_args!s}\n\n")
@@ -339,6 +347,9 @@ def readconfig(path, command_line_args=None, log: Logger = getLogger()):
 
     return configs
 
+    # TODO: Return configuration https://github.com/uwmisl/poretitioner/issues/73
+
 
 def read_segmentation(config, command_line_args=None):
     seg_config = readconfig(config, command_line_args=command_line_args)
+    print(seg_config)

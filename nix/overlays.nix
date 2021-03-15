@@ -7,7 +7,4 @@ self: super:
     # https://github.com/NixOS/nixpkgs/pull/116162
     __darwinAllowLocalNetworking = true;
   };
-#   rr = super.callPackage ./pkgs/rr {
-#     stdenv = self.stdenv_32bit;
-#   };
 }
