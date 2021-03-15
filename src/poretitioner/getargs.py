@@ -59,7 +59,7 @@ class ARG:
     VERBOSE = "verbose"
 
     # Segmenter
-    OUTPUT_DIRECTORY = "output_dir"  # Argument on the command line has a dash, but the attribute.
+    CAPTURE_DIRECTORY = "output_dir"  # Argument on the command line has a dash, but the attribute.
     class SEGMENT:
         BULKFAST5 = "bulkfast5"
         N_CAPTURES_PER_FILE = "n_captures_per_file"
@@ -206,7 +206,7 @@ def get_args(commandline_args: List = None) -> Namespace:
 
     # Segmenter
     parser_segment = subparser.add_parser(COMMAND.SEGMENT, description="Segment captures")
-    add_output_directory_option_to_parser(parser_segment)
+    add_capture_directory_option_to_parser(parser_segment)
 
     parser_filter = subparser.add_parser(COMMAND.FILTER, description="Filter captures")
     parser_classify = subparser.add_parser(COMMAND.CLASSIFY, description="Classify captures")
@@ -228,7 +228,7 @@ def get_args(commandline_args: List = None) -> Namespace:
 
 
 
-def add_output_directory_option_to_parser(parser: ArgumentParser):
+def add_capture_directory_option_to_parser(parser: ArgumentParser):
     """Adds output directory option to a parser.
 
     Parameters
@@ -236,7 +236,7 @@ def add_output_directory_option_to_parser(parser: ArgumentParser):
     parser : ArgumentParser
         Parser to give an output directory option. This is where capture files will be saved.
     """
-    arg = as_cli_arg(ARG.OUTPUT_DIRECTORY)
+    arg = as_cli_arg(ARG.CAPTURE_DIRECTORY)
     parser.add_argument(
         f"--{arg}",
         action="store",
@@ -244,7 +244,7 @@ def add_output_directory_option_to_parser(parser: ArgumentParser):
     )
 
 # Filters
-def add_output_directory_option_to_parser(parser: ArgumentParser):
+def add_capture_directory_option_to_parser(parser: ArgumentParser):
     """Adds output directory option to a parser.
 
     Parameters
@@ -252,7 +252,7 @@ def add_output_directory_option_to_parser(parser: ArgumentParser):
     parser : ArgumentParser
         Parser to give an output directory option. This is where capture files will be saved.
     """
-    arg = as_cli_arg(ARG.OUTPUT_DIRECTORY)
+    arg = as_cli_arg(ARG.CAPTURE_DIRECTORY)
     parser.add_argument(
         f"--{arg}",
         action="store",
@@ -263,8 +263,7 @@ def add_output_directory_option_to_parser(parser: ArgumentParser):
 FILTER_ARGS = {
     ARG.FILTER.LENGTH_MIN: {
         "action": "store",
-        # Katie Q: What units are the length in? Samples?
-        "help": "Filter out captures that are fewer than this many samples",
+        "help": "Exclude potential captures that have fewer than this many observations in the nanopore current trace.",
         "type": int,
     }
 }

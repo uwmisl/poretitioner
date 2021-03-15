@@ -674,7 +674,7 @@ class CaptureMetadata:
         file.
     start_time_local : int
         Starting time of the capture relative to the beginning of the segmented
-        region. (Relative to f5_subsection_start in parallel_find_captures().)
+        region. (Relative to sub_run_start_seconds in parallel_find_captures().)
     duration : int
         Number of data points in the capture.
     ejected : boolean

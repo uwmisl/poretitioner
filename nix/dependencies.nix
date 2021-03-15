@@ -59,9 +59,9 @@ rec {
     # For interactive builds
     jupyter
     # Neural networks
-    torchvision
-  ] ++ lib.optional (cudaSupport) pytorchWithCuda
-  ++ lib.optional (!cudaSupport) pytorchWithoutCuda;
+    #torchvision
+  ] ; #++ lib.optional (cudaSupport) pytorchWithCuda
+  #++ lib.optional (!cudaSupport) pytorchWithoutCuda;
 
   ###########################################################################################
   #

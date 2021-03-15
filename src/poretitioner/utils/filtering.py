@@ -1,16 +1,17 @@
 """
 =========
-filter.py
+filtering.py
 =========
 
-# TODO : Write functionality for filtering nanopore captures : https://github.com/uwmisl/poretitioner/issues/43
+This module provides more granular filtering for captures.
+You can customize your own filters too.
 
 """
 import re
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from pathlib import PosixPath
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Optional, Union
 
 import h5py
 import numpy as np
@@ -54,12 +55,12 @@ class FilterPlugin(metaclass=ABCMeta):
         Returns
         -------
         str
-            [description]
+            The unique name for this filter (e.g. "fourier_transform").
 
         Raises
         ------
         NotImplementedError
-            [description]
+            Raised if this filter is called without this name method being implemented.
         """
         raise NotImplementedError(
             "'name' class method not implemented for filter. This class method should return a unique name for this filter."
@@ -126,10 +127,16 @@ class FilterPlugin(metaclass=ABCMeta):
 
 class RangeFilter(FilterPlugin):
 
-    minimum: float = -np.inf
-    maximum: float = np.inf
+    def __init__(self, minimum: Optional[float] = None, maximum: Optional[float] = None):
+        """A filter that filters based on whether a signal falls between a maximum and a minimum.
 
-    def __init__(self, minimum: float = -np.inf, maximum: float = np.inf):
+        Parameters
+        ----------
+        minimum : float, optional
+            The smallest value this signal should be allowed to take (inclusive), by default RangeFilter.DEFAULT_MINIMUM
+        maximum : float, optional
+            The largest value this signal should be allowed to take (inclusive), by default RangeFilter.DEFAULT_MAXIMUM
+        """
         self.minimum = minimum
         self.maximum = maximum
 
@@ -152,7 +159,10 @@ class RangeFilter(FilterPlugin):
         return capture
 
     def is_in_range(self, value: float) -> bool:
-        return self.minimum <= value <= self.maximum
+        minimum = self.minimum if self.minimum is not None else -np.inf
+        maximum = self.maximum if self.maximum is not None else np.inf
+
+        return minimum <= value <= maximum
 
     def apply(self, signal):
         value = self.extract(signal)
@@ -417,62 +427,12 @@ def filter_and_store_result(config, fast5_files, filter_name, overwrite=False):
             write_filter_results(f5, config, passed_read_ids, filter_name)
 
 
-# def write_filter_results(f5, config, read_ids, filter_name):
-#     local_logger = logger.getLogger()
-#     filter_path = f"/Filter/{filter_name}"
-#     if filter_path not in f5:
-#         f5.create_group(f"{filter_path}/pass")
-#     filt_grp = f5.get(filter_path)
-
-#     # Save filter configuration to the fast5 file at filter_path
-#     for k, v in config.items():
-#         if k == filter_name:
-#             local_logger.debug("keys and vals:", k, v)
-#             for filt, filt_vals in v.items():
-#                 if len(filt_vals) == 2:
-#                     (min_filt, max_filt) = filt_vals
-#                     # Create compound dset for filters
-#                     local_logger.debug("filt types", type(min_filt), type(max_filt))
-#                     dtypes = np.dtype(
-#                         [("min", type(min_filt), ("max", type(max_filt)))]
-#                     )
-#                     d = filt_grp.create_dataset(k, (2,), dtype=dtypes)
-#                     d[filt] = (min_filt, max_filt)
-#                 else:
-#                     d = filt_grp.create_dataset(k)
-#                     d[filt] = filt_vals
-
-# For all read_ids that passed the filter (AKA reads that were passed in),
-# create a hard link in the filter_path to the actual read's location in
-# the fast5 file.
-# for read_id in read_ids:
-#     read_path = f"/read_{read_id}"
-#     read_grp = f5.get(read_path)
-#     local_logger.debug(read_grp)
-#     filter_read_path = f"{filter_path}/pass/read_{read_id}"
-#     # Create a hard link from the filter read path to the actual read path
-#     f5[filter_read_path] = read_grp
 
 
 def filter_like_existing(config, example_fast5, example_filter_path, fast5_files, new_filter_path):
     # Filters a set of fast5 files exactly the same as an existing filter
     # TODO : #68 : implement
     raise NotImplementedError()
-
-
-# class FilterFileMixin(CaptureFile):
-#     def __init__(
-#         self,
-#         capture_filepath: PathLikeOrString,
-#         mode: str = "r",
-#         logger: Logger = getLogger(),
-#     ):
-#         super().__init__(capture_filepath, mode, logger=logger)
-
-#         f5 = self.f5
-
-#         if PATH.FILTER not in f5:
-#             f5.create_group(PATH.FILTER)
 
 
 def get_filter_pass_path(read_id):

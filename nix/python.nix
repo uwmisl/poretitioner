@@ -12,7 +12,7 @@
 
 { pkgs }:
 let
-  python = pkgs.python37; # Specifies Python version. In our case, Python 3.7;
+  python = pkgs.python39; # Specifies Python version. In our case, Python 3.7;
 
   # The following code customizes our Python packages, like Cuda vs. Non-Cuda Pytorch.
   pythonWithOverrides = (python.withPackages (pypkgs:

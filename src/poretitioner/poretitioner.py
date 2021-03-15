@@ -20,6 +20,25 @@ from .utils.filtering import (
     StandardDeviationFilter,
 )
 
+class Poretitoner:
+    general_config: GeneralConfiguration
+    segment_config: SegmentConfiguration
+
+    def __init__(self):
+        pass
+
+    def segment(self):
+        pass
+
+    def filter(self):
+        pass
+
+    def classify(self):
+        pass
+
+    def quantify(self):
+        pass
+
 
 def run(args):
     # Configures the root application logger.
@@ -30,8 +49,8 @@ def run(args):
 
     # Get the command line args as a dictionary.
     command_line_args = vars(args)
-    if "capture_directory" not in command_line_args and getattr(args, ARG.OUTPUT_DIRECTORY, False):
-        command_line_args["capture_directory"] = command_line_args[ARG.OUTPUT_DIRECTORY]
+    if "capture_directory" not in command_line_args and getattr(args, ARG.CAPTURE_DIRECTORY, False):
+        command_line_args["capture_directory"] = command_line_args[ARG.CAPTURE_DIRECTORY]
 
     # Read configuration file, if it exists.
     try:
@@ -39,24 +58,10 @@ def run(args):
     except KeyError as e:
         log.info(f"No config file found from arg: {ARG.CONFIG}.")
         raise e
-    print(f"\n\nconfiguration path: {configuration_path!s}")
     configuration = readconfig(configuration_path, command_line_args=command_line_args, log=log)
-    print(str(configuration))
 
     if args.command == COMMAND.SEGMENT:
         bulk_f5_filepath = Path(command_line_args[ARG.BULK_FAST5]).resolve()
-
-        # TODO: Update with actual segmentation config. https://github.com/uwmisl/poretitioner/issues/73
-        filters: List[RangeFilter] = [
-            # MeanFilter(),
-            # StandardDeviationFilter(),
-            # MedianFilter(),
-            # MinimumFilter,
-            # MaximumFilter(),
-            LengthFilter(10, np.inf)
-        ]
-
-        
 
         seg_config = configuration[CONFIG.SEGMENTATION]
         filter_config = configuration[CONFIG.FILTER]
@@ -64,7 +69,7 @@ def run(args):
 
         filters = get_plugins(filter_configs)
 
-        save_location = Path(getattr(args, ARG.OUTPUT_DIRECTORY)).resolve()
+        save_location = Path(getattr(args, ARG.CAPTURE_DIRECTORY)).resolve()
         
         segmentation_config_str = pprint.pformat(seg_config.__dict__)
         general_config_str = pprint.pformat(config.__dict__)
@@ -80,8 +85,8 @@ def run(args):
             seg_config,
             save_location=save_location,
             filters=filters,
-            f5_subsection_start=0,
-            f5_subsection_end=None,
+            sub_run_start_seconds=0,
+            sub_run_end_seconds=None,
         )
 
         segment_results = pprint.pformat(capture_metadata)

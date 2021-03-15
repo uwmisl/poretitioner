@@ -2,15 +2,20 @@
 ###############################################################################
 # This script installs Nix, a functional package manager, as well as other
 # core dependencies used at MISL.
+#
+# Shell style guide: https://google.github.io/styleguide/shellguide.html
+#
 ###############################################################################
 
 
 set -o errexit
 set -e
 
-
-
 NIX_TRUSTED_KEYS="cachix.cachix.org-1:eWNHQldwUO7G2VkjpnjDbWwy4KQ/HNxht7H4SSoMckM= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+
+# To learn more about Nix configs, please check out: 
+# https://nixos.org/manual/nix/unstable/command-ref/conf-file.html 
+NIX_CONFIG_FILE="$HOME/.config/nix/nix.conf" #"/etc/nix/nix.conf"
 
 ##############################################
 #   Script clean up and exception handling.  #
@@ -83,29 +88,21 @@ get_version () {
 }
 
 
-# This script requires a 'PORETITIONER_DIR' environment variable, to be set to
-# the directory where the poretitioner package resides (e.g. where you cloned https://github.com/uwmisl/poretitioner)
-# If PORETITIONER_DIR wasn't provided, assume this script's being run from
+# This script requires a 'PROJECT_DIRECTORY' environment variable, to be set to
+# the directory where the current package resides (e.g. where you cloned https://github.com/uwmisl/*)
+# If PROJECT_DIRECTORY wasn't provided, assume this script's being run from
 # the poretitioner directory.
-PORETITIONER_DIR=${PORETITIONER_DIR:-$(pwd)}
+PROJECT_DIRECTORY=${PROJECT_DIRECTORY:-$(pwd)}
 
-pathToNixEnv () {
-    # Where the poretitioner env.nix resides.
-    echo "${PORETITIONER_DIR}/nix/env.nix"
-}
+PATH_TO_PROJECT_NIX_DIRECTORY="${PROJECT_DIRECTORY}/nix/"
 
-if [[ ! -f $(pathToNixEnv) ]];
+if [ ! -d $PATH_TO_PROJECT_NIX_DIRECTORY ];
 then
-    yellow "This script requires a PORETITIONER_DIR environment variable, set to the poretitioner repo's path."
-    yellow "e.g. PORETITIONER_DIR='$HOME/developer/misl/poretitioner'"
-    echo "PORETITIONER_DIR is currently set to '${PORETITIONER_DIR}'"
+    yellow "This script requires a PROJECT_DIRECTORY environment variable, set to a directory that has a 'nix' subdirectory."
+    yellow "e.g. PROJECT_DIRECTORY='$HOME/developer/misl/poretitioner'"
+    echo "PROJECT_DIRECTORY is currently set to '$PROJECT_DIRECTORY'"
     exit 1
 fi
-
-pathToPreCommitNix () {
-    # Where the poretitioner pre-commit.nix resides.
-    echo "${PORETITIONER_DIR}/nix/pkgs/pre-commit/pre-commit.nix"
-}
 
 get () {
     # Finds the *Nix-friendly HTTP GET function. Uses curl if the user has it (MacOS/Linux)
@@ -226,7 +223,9 @@ needsMacOSCatalinaOrHigherInstall () {
 }
 
 install_nix () {
-    local NIX_INSTALL_URL="https://nixos.org/nix/install"
+    # To use a newer version of Nix, simply change the pinned-version here.
+    NIX_PINNED_VERSION="2.3.9"
+    local NIX_INSTALL_URL="https://releases.nixos.org/nix/nix-${NIX_PINNED_VERSION}/install"
     bold "Installing Nix..."
 
     # As of MacOS X Catalina (10.15.x), the root directory is no longer writeable.
@@ -267,38 +266,33 @@ configure_nix_channel () {
     green "Nix channel configured!"
 }
 
-
-# get_line_numbers_in_nix_config () {
-#     # Gets the line number where a string argument ($1) was found with grep.
-#     grep -n -e "$1" /etc/nix/nix.conf | awk -F':' '{print $1}' | xargs
-# }
-
 get_line_numbers_in_nix_config () {
     # Gets the line number where a string argument ($1) was found with grep.
     grep -n -e $1 /etc/nix/nix.conf
 }
 
-foo () {
-    echo "I love $1"
-}
-# $(grep -n "build" /etc/nix/nix.conf | awk -F':' '{print $1}' | xargs)
-
-configure_nix () {
-    NIX_CONFIG_FILE="/etc/nix/nix.conf"
-    # Nix Configuration info: https://www.mankier.com/5/nix.conf
+print_nix_config () {
     echo "----------------------------------"
     echo "Current Nix configuration: "
     echo "----------------------------------"
-    cat $NIX_CONFIG_FILE
+    if [ -f $1 ]; then
+        cat $1
+    fi
     echo "----------------------------------"
     echo ""
     echo ""
-    echo "I'm about to ask you for sudo permissions to modify $NIX_CONFIG_FILE"
+}
+
+configure_nix () {
+    
+    # Nix Configuration info: https://www.mankier.com/5/nix.conf
+    print_nix_config $NIX_CONFIG_FILE
+    #echo "I'm about to ask you for sudo permissions to modify $NIX_CONFIG_FILE"
 
     echo "Checking Trusted Users configuration...."
     if ! grep "trusted-users =.*" $NIX_CONFIG_FILE --silent; then
         echo "Adding trusted users to $NIX_CONFIG_FILE"
-        echo "trusted-users = root $USER" | sudo tee -a $NIX_CONFIG_FILE
+        echo "trusted-users = root $(whoami)" | tee -a $NIX_CONFIG_FILE
         green "Trusted users configured!"
     else
         echo "Trusted users already configured. Continuing..."
@@ -309,18 +303,19 @@ configure_nix () {
     TRUSTED_SUBSTITUTERS=('https://cache.nixos.org' 'https://tarballs.nixos.org' 'http://tarballs.nixos.org')
     if ! grep "trusted-substituters =.*" $NIX_CONFIG_FILE --silent; then
         echo "Adding trusted substituters to $NIX_CONFIG_FILE"
-        echo "trusted-substituters =" | sudo tee -a $NIX_CONFIG_FILE
+        echo "trusted-substituters =" | tee -a $NIX_CONFIG_FILE
         green "Trusted Substituters section added!"
     else
         echo "Trusted Substituterssers already configured. Continuing..."
     fi
 
+    # Trusted Substitutions
     trusted_substituters_line_number=$(grep -n "^trusted-substituters =.*" $NIX_CONFIG_FILE | awk -F':' '{print $1}' | xargs )
     for trusted_subby in ${TRUSTED_SUBSTITUTERS[@]}; do
         echo "Looking for '$trusted_subby'"
         if ! grep -n "trusted-substituters =.*$trusted_subby.*" $NIX_CONFIG_FILE --silent; then
             echo "Adding trusted substituter '$trusted_subby'..."
-            sudo sed -i -e "${trusted_substituters_line_number}s,$, ${trusted_subby},g" $NIX_CONFIG_FILE
+            sed -i -e "${trusted_substituters_line_number}s,$, ${trusted_subby},g" $NIX_CONFIG_FILE
             echo "Added trusted substituter '$trusted_subby'."
         else echo "Found trusted substituter '$trusted_subby'. Moving on..."
         fi
@@ -331,7 +326,7 @@ configure_nix () {
     ALLOWED_URIS=('https://cache.nixos.org' 'https://tarballs.nixos.org' 'http://tarballs.nixos.org')
     if ! grep "allowed-uris =.*" $NIX_CONFIG_FILE --silent; then
         echo "Adding allowed uris to $NIX_CONFIG_FILE"
-        echo "allowed-uris =" | sudo tee -a $NIX_CONFIG_FILE
+        echo "allowed-uris =" | tee -a $NIX_CONFIG_FILE
         green "Allowed URIs section added!"
     else
         echo "Allowed URIs already configured. Continuing..."
@@ -339,24 +334,22 @@ configure_nix () {
 
     uri_line_number=$(grep -n "^allowed-uris =.*" $NIX_CONFIG_FILE | awk -F':' '{print $1}' | xargs )
     for allowed_uri in ${ALLOWED_URIS[@]}; do
-        echo "Looking for '$trusted_subby'"
-        if ! grep -n "trusted-substituters =.*$allowed_uri.*" $NIX_CONFIG_FILE --silent; then
-            echo "Adding trusted substituter '$allowed_uri'..."
-            sudo sed -i -e "${uri_line_number}s,$, ${allowed_uri},g" $NIX_CONFIG_FILE
-            echo "Added trusted substituter '$allowed_uri'."
-        else echo "Found trusted substituter '$allowed_uri'. Moving on..."
+        echo "Looking for '$allowed_uri'"
+        if ! grep -n "allowed-uris =.*$allowed_uri.*" $NIX_CONFIG_FILE --silent; then
+            echo "Adding allowed uri '$allowed_uri'..."
+            sed -i -e "${uri_line_number}s,$, ${allowed_uri},g" $NIX_CONFIG_FILE
+            echo "Added allowed uri '$allowed_uri'."
+        else echo "Found allowed uri '$allowed_uri'. Moving on..."
         fi
     done
-
 
     # Substitutions
     substituters_line_number=$(grep -n "^substituters =.*" $NIX_CONFIG_FILE | awk -F':' '{print $1}' | xargs )
     for subby in ${VALID_SUBSTITUTERS[@]}; do
         echo "Looking for '$subby'"
-        #line_numbers=$(grep -n "substituters =.* $subby" $NIX_CONFIG_FILE | awk -F':' '{print $1}' | xargs )
         if ! grep -n "substituters =.*$subby.*" $NIX_CONFIG_FILE --silent; then
             echo "Adding substituter '$subby'..."
-            sudo sed -i -e "${substituters_line_number}s,$, ${subby},g" $NIX_CONFIG_FILE
+            sed -i -e "${substituters_line_number}s,$, ${subby},g" $NIX_CONFIG_FILE
             echo "Added substituter '$subby'."
         else echo "Found substituter '$subby'. Moving on..."
         fi
@@ -367,22 +360,23 @@ configure_nix () {
     if ! grep "^substituters =.*" $NIX_CONFIG_FILE --silent; then
         # Adding substituters configuration.
         echo "Substituteters configuration not found, adding..."
-        echo "substituters =" | sudo tee -a $NIX_CONFIG_FILE
+        echo "substituters =" | tee -a $NIX_CONFIG_FILE
         echo "Substituteters configuration added."
     fi
-    # subby=${VALID_SUBSTITUTERS[2]}
 
     substituters_line_number=$(grep -n "^substituters =.*" $NIX_CONFIG_FILE | awk -F':' '{print $1}' | xargs )
     for subby in ${VALID_SUBSTITUTERS[@]}; do
         echo "Looking for '$subby'"
-        #line_numbers=$(grep -n "substituters =.* $subby" $NIX_CONFIG_FILE | awk -F':' '{print $1}' | xargs )
         if ! grep -n "substituters =.*$subby.*" $NIX_CONFIG_FILE --silent; then
             echo "Adding substituter '$subby'..."
-            sudo sed -i -e "${substituters_line_number}s,$, ${subby},g" $NIX_CONFIG_FILE
+            sed -i -e "${substituters_line_number}s,$, ${subby},g" $NIX_CONFIG_FILE
             echo "Added substituter '$subby'."
         else echo "Found substituter '$subby'. Moving on..."
         fi
     done
+
+    green "\nDone configuring nix. Let's look at the config file:\n"
+    print_nix_config $NIX_CONFIG_FILE
 }
 
 
@@ -394,7 +388,6 @@ install_cachix () {
     if [ ! -x "$(command -v cachix)" ] &&  [[ ! $(nix-env -q | grep cachix) ]]
     then
         yellow "Cachix not installed, installing Cachix..."
-        #sudo nix-env -iA cachix -f https://cachix.org/api/v1/install
         sudo nix-env -i cachix --substituters 'https://cache.nixos.org https://cachix.cachix.org' --trusted-public-keys 'cachix.cachix.org-1:eWNHQldwUO7G2VkjpnjDbWwy4KQ/HNxht7H4SSoMckM= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY='
         # Cachix is already installed.
         green "Cachix installed!"
@@ -406,14 +399,14 @@ install_cachix () {
 }
 
 install_misl_env () {
+    # Installs developer dependencies
     bold "Installing MISL env..."
-    # Installs poretitioner developer dependencies
-    nix-env --install --file $(pathToNixEnv) --show-trace
-
-    # Configures pre-commit, if it's installed via Nix.
-    if [[ $(nix-env -q | grep pre-commit) ]]; then
-        pre-commit install
-    fi
+    
+    # Ensures sure we have bash >= 4.0 ready to go.
+    # As of 2021, the default bash version on MacOS is 3.2 (released in 2007)
+    # But Nix needs bash 4.0+ to work.
+    # https://github.com/NixOS/nixpkgs/issues/71625
+    nix-env --install "bash-interactive-4.4-p23" --show-trace
 
     green "MISL env installed."
 }
@@ -440,11 +433,7 @@ main () {
             echo ""
             red "Nix is now technically installed, but you must close and re-open your shell before the shell will pick up on the changes."
             echo ""
-            red "To continue, close and re-open the shell, then run this script again."
-            echo ""
-            yellow "Hint: Want to close your shell quickly? Enter: "
-            echo ""
-            bold "       while true; do exit 0; done"
+            red "To continue, close and re-open this shell, then run this script again."
             echo ""
             green "See you soon :)"
             exit 0

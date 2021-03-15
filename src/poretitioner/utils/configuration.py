@@ -230,8 +230,7 @@ class GeneralConfiguration(BaseConfiguration):
     capture_directory: str
 
     def validate(self):
-        # assert self.n_workers > 0
-        # assert self.captures_per_f5 > 0
+        foo-fda = 
         pass
 
     def __init__(self, command_line_args: Dict = None, config: Dict = None, log: Logger = getLogger()) -> None:
@@ -245,19 +244,7 @@ class GeneralConfiguration(BaseConfiguration):
             [description], by default None
         """
         self.initialize_fields(command_line_args=command_line_args, config=config)
-        # command_line_args = command_line_args if command_line_args is not None else {}
-        # config = config if config is not None else {}
-        # # Command line args take precidence over configuration files in the event of a conflict.
-        # combined = {**config, **command_line_args}
-
-        # valid_fields = self.valid_field_names
-        # for field, value in combined.items():
-        #     if field in valid_fields:
-        #         object.__setattr__(self, field, value)
-        #         log.debug(f"{self.__class__.__name__!s}[{field}] = {value}")
-        #     else:
-        #         log.debug(f"'{field}' is not a valid field for configuration {self.__class__.__name__!s}. Ignoring...")
-
+        
     def validate(self):
         raise NotImplementedError("Not implemented configuration")
 
@@ -289,18 +276,6 @@ class SegmentConfiguration(BaseConfiguration):
         """
         command_line_args = stripped_by_keys(command_line_args, self.valid_field_names) # Only keep filter-related command line args
         self.initialize_fields(command_line_args=command_line_args, config=config)
-
-        # config = config if config is not None else {}
-        # # Command line args take precidence over configuration files in the event of a conflict.
-        # combined = {**config, **command_line_args}
-        # valid_fields = self.valid_field_names
-        # # TODO: Sanitize input 
-        # for field, value in combined.items():
-        #     if field in valid_fields:
-        #         object.__setattr__(self, field, value)
-        #         log.debug(f"{self.__class__.__name__!s}[{field}] = {value}")
-        #     else:
-        #         log.debug(f"'{field}' is not a valid field for configuration {self.__class__.__name__!s}. Ignoring...")
 
     def validate(self):
         # TODO: Validation
@@ -339,14 +314,11 @@ def readconfig(path, command_line_args=None, log: Logger = getLogger()):
     config_path = str(get_absolute_path(path)).strip() # Strip any trailing/leading whitespace.
 
     read_config = toml.load(config_path)
-    #config = ConfigParser()
 
     gen_config = read_config[CONFIG.GENERAL]
     seg_config = read_config[CONFIG.SEGMENTATION]
     filter_config = read_config[CONFIG.FILTER]
- 
-    #config.read(config_path)
-    #config = config
+
     log.debug(f"\n\ngen_config: {gen_config!s}\n\n")
     log.debug(f"\n\nseg_config: {seg_config!s}\n\n")
     log.debug(f"\n\ncommand_line_args: {command_line_args!s}\n\n")
@@ -367,9 +339,6 @@ def readconfig(path, command_line_args=None, log: Logger = getLogger()):
 
     return configs
 
-    # TODO: Return configuration https://github.com/uwmisl/poretitioner/issues/73
-
 
 def read_segmentation(config, command_line_args=None):
     seg_config = readconfig(config, command_line_args=command_line_args)
-    print(seg_config)

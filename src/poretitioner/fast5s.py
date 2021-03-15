@@ -80,8 +80,20 @@ class SubRun(namedtuple("SubRun", ["id", "offset", "duration"])):
     duration: int
 
 
-def format_read_id(read_id: str):
-    return read_id if "read" in read_id else f"read_{read_id}"
+def format_read_id(read_id: str) -> str:
+    """Take a read_id and ensure it's prefixed with "read_".
+
+    Parameters
+    ----------
+    read_id : str
+        Read_id, which may or may not be prefixed with "read_".
+
+    Returns
+    -------
+    str
+        Read_id string, which 
+    """
+    return read_id if read_id.startswith("read_") else f"read_{read_id}"
 
 
 def channel_path_for_read_id(read_id: str, root: str = FAST5_ROOT) -> PathLikeOrString:
@@ -97,16 +109,11 @@ def channel_path_for_read_id(read_id: str, root: str = FAST5_ROOT) -> PathLikeOr
     str
         Correctly formatted channel path.
     """
-    read_id = (
-        read_id if "read" in read_id else f"read_{read_id}"
-    )  # Conditionally adds the "read_" prefix, for backwards compatibility with capture files that didn't use this prefix.
+    read_id = format_read_id(read_id)
     read_id_path = PurePosixPath(root, read_id)
     channel_path = add_channel_id_to_path(read_id_path)
+    channel_path = PurePosixPath(root, read_id, KEY.CHANNEL_ID)
 
-    if "read" in read_id:
-        channel_path = PurePosixPath(root, read_id, KEY.CHANNEL_ID)
-    else:
-        channel_path = PurePosixPath(root, f"read_{read_id}", KEY.CHANNEL_ID)
     return channel_path
 
 
@@ -123,10 +130,8 @@ def signal_path_for_read_id(read_id: str, root: str = FAST5_ROOT) -> PathLikeOrS
     str
         Correctly formatted signal path.
     """
-    if "read" in read_id:
-        signal_path = PurePosixPath(root, read_id, KEY.SIGNAL)
-    else:
-        signal_path = PurePosixPath(root, f"read_{read_id}", KEY.SIGNAL)
+    read_id = format_read_id(read_id)
+    signal_path = PurePosixPath(root, read_id, KEY.SIGNAL)
 
     return signal_path
 
@@ -256,7 +261,6 @@ class BaseFile:
 
 
 class BulkFile(BaseFile):
-    # TODO: Katie Q: Work with Katie to determine how we want to handle validation.
 
     def __init__(
         self, bulk_filepath: PathLikeOrString, mode: str = "r", logger: Logger = getLogger()
@@ -516,10 +520,28 @@ class CaptureFile(BaseFile):
     def initialize_from_bulk(
         self,
         bulk_f5: BulkFile,
-        filters: List[RangeFilter],
+        capture_criteria: List[RangeFilter],
         segment_config: SegmentConfiguration,
         sub_run: Optional[SubRun] = None,
     ):
+        """[summary]
+
+        Parameters
+        ----------
+        bulk_f5 : BulkFile
+            Bulk Fast5 file, generated from an Oxford Nanopore experiment.
+        capture_criteria : List[RangeFilter]
+            Filters that define what 
+        segment_config : SegmentConfiguration
+            [description]
+        sub_run : Optional[SubRun], optional
+            [description], by default None
+
+        Raises
+        ------
+        ValueError
+            [description]
+        """
         # Only supporting range filters for now (MVP). This should be expanded to all FilterPlugins: https://github.com/uwmisl/poretitioner/issues/67
 
         # Referencing spec v0.1.1
@@ -587,7 +609,7 @@ class CaptureFile(BaseFile):
                     save_value = json.dumps({k: v.__dict__ for k, v in value.items()})    
                 context_id_group.create_dataset(key, data=save_value)
 
-        for filter_plugin in filters:
+        for filter_plugin in capture_criteria:
             name = filter_plugin.name()
 
             # `isinstance` is an anti-pattern, pls don't use in production.
@@ -595,7 +617,7 @@ class CaptureFile(BaseFile):
                 maximum = filter_plugin.maximum
                 minimum = filter_plugin.minimum
 
-                self.log.debug(f"Filtering for {name}: ({minimum}, {maximum})")
+                self.log.debug(f"Setting capture criteria for {name}: ({minimum}, {maximum})")
                 if minimum is None:
                     minimum = -1
                 if maximum is None:
@@ -620,7 +642,7 @@ class CaptureFile(BaseFile):
         """Retrieve the sampling rate from a capture fast5 file. Units: Hz.
 
         Also referred to as the sample rate, sample frequency, or sampling
-        frequency. Or some say Kosm.
+        frequency.
 
         Returns
         -------
