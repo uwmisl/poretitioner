@@ -26,7 +26,6 @@
 with pkgs;
 with python.pkgs;
 let
-  precommit = (import ./pkgs/pre-commit/pre-commit.nix) { inherit python; };
   debugpy = (callPackage ./pkgs/debugpy/debugpy.nix) { inherit python; };
 in
 rec {
@@ -60,8 +59,8 @@ rec {
     jupyter
     # Neural networks
     #torchvision
-  ] ; #++ lib.optional (cudaSupport) pytorchWithCuda
-  #++ lib.optional (!cudaSupport) pytorchWithoutCuda;
+  ] ++ lib.optional (cudaSupport) pytorchWithCuda
+  ++ lib.optional (!cudaSupport) pytorchWithoutCuda;
 
   ###########################################################################################
   #
@@ -73,7 +72,7 @@ rec {
 
   build = [
     # Git hooks
-    precommit
+    pre-commit
     # Import sorter
     isort
     # Highly opinionated code-formatter
