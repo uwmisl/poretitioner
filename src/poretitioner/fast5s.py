@@ -594,8 +594,6 @@ class CaptureFile(BaseFile):
         context_id_group = self.f5.create_group(CAPTURE_PATH.CONTEXT_ID)
         capture_windows_group = self.f5.create_group(CAPTURE_PATH.CAPTURE_WINDOWS)
 
-        # KATIE Q: Is it same to assume that whatever filter configuration is defined in the
-        # filter section will be used in subsequent steps?
         # Only supporting range filters for now (MVP): https://github.com/uwmisl/poretitioner/issues/67
         if segment_config is None:
             raise ValueError("No segment configuration provided.")
@@ -605,7 +603,7 @@ class CaptureFile(BaseFile):
                 try:
                     save_value = json.dumps(value)
                 except TypeError:
-                        # In case the object isn't easily serializable
+                    # In case the object isn't easily serializable
                     save_value = json.dumps({k: v.__dict__ for k, v in value.items()})    
                 context_id_group.create_dataset(key, data=save_value)
 

@@ -24,7 +24,7 @@ class Poretitoner:
     general_config: GeneralConfiguration
     segment_config: SegmentConfiguration
 
-    def __init__(self):
+    def __init__(self, config):
         pass
 
     def segment(self):
@@ -38,6 +38,13 @@ class Poretitoner:
 
     def quantify(self):
         pass
+
+
+from poretitioner import Poretitoner
+
+porty = Poretitoner("../path/tpo/config.toml")
+
+porty.segment()
 
 
 def run(args):
