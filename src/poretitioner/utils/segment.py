@@ -114,6 +114,11 @@ def find_captures(
 
     filters = [] if filters is None else filters
 
+    # Try to locally recalculate open_channel_pA (if not possible, default to input)
+    open_channel_pA_calculated = find_open_channel_current(
+        signal_pA, open_channel_pA_calculated, 35, open_channel_pA_calculated
+    )
+
     # Convert to frac current
     frac_current = signal_pA.to_fractionalized(open_channel_pA_calculated)
 
