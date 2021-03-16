@@ -126,8 +126,9 @@ class FilterPlugin(metaclass=ABCMeta):
 
 
 class RangeFilter(FilterPlugin):
-
-    def __init__(self, minimum: Optional[float] = None, maximum: Optional[float] = None):
+    def __init__(
+        self, minimum: Optional[float] = None, maximum: Optional[float] = None
+    ):
         """A filter that filters based on whether a signal falls between a maximum and a minimum.
 
         Parameters
@@ -170,8 +171,7 @@ class RangeFilter(FilterPlugin):
 
 
 class StandardDeviationFilter(RangeFilter):
-    """ Filters for captures with standard deviations in some range.
-    """
+    """Filters for captures with standard deviations in some range."""
 
     @classmethod
     def name(cls) -> str:
@@ -187,8 +187,7 @@ class StandardDeviationFilter(RangeFilter):
 
 
 class MeanFilter(RangeFilter):
-    """Filters for captures with an arithmetic mean within a range.
-    """
+    """Filters for captures with an arithmetic mean within a range."""
 
     @classmethod
     def name(cls) -> str:
@@ -246,8 +245,7 @@ class MaximumFilter(RangeFilter):
 
 
 class LengthFilter(RangeFilter):
-    """Filters captures based on their length.
-    """
+    """Filters captures based on their length."""
 
     @classmethod
     def name(cls) -> str:
@@ -301,7 +299,9 @@ class MyCustomFilter(FilterPlugin):
         return meets_criteria
 
 
-def apply_feature_filters(capture: CaptureOrTimeSeries, filters: List[FilterPlugin]) -> bool:
+def apply_feature_filters(
+    capture: CaptureOrTimeSeries, filters: List[FilterPlugin]
+) -> bool:
     """
     Check whether an array of current values (i.e. a single nanopore capture)
     passes a set of filters. Filters can be based on summary statistics
@@ -322,8 +322,12 @@ def apply_feature_filters(capture: CaptureOrTimeSeries, filters: List[FilterPlug
     boolean
         True if capture passes all filters; False otherwise.
     """
+    if filters is None:
+        filters = []
+
     # TODO: Parallelize? https://github.com/uwmisl/poretitioner/issues/67
     filtered = [filter_out(capture) for filter_out in filters]
+    print(filtered)
 
     # Did this signal pass all filters?
     all_passed = all(filtered)
@@ -427,9 +431,9 @@ def filter_and_store_result(config, fast5_files, filter_name, overwrite=False):
             write_filter_results(f5, config, passed_read_ids, filter_name)
 
 
-
-
-def filter_like_existing(config, example_fast5, example_filter_path, fast5_files, new_filter_path):
+def filter_like_existing(
+    config, example_fast5, example_filter_path, fast5_files, new_filter_path
+):
     # Filters a set of fast5 files exactly the same as an existing filter
     # TODO : #68 : implement
     raise NotImplementedError()
