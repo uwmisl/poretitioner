@@ -116,17 +116,18 @@ def find_captures(
 
     # Convert to frac current
     frac_current = signal_pA.to_fractionalized(open_channel_pA_calculated)
-    # del signal_pA
+
     # Apply signal threshold & get list of captures
     potential_captures = find_windows_below_threshold(
         frac_current, signal_threshold_frac
     )
+    del frac_current
 
     captures = [
         Capture(
-            signal_pA[potential_capture.start : potential_capture.end],
+            signal_pA[potential_capture.start + delay : potential_capture.end],
             Window(  # Relative to the run, not to the start of the capture window
-                potential_capture.start + capture_window.start,
+                potential_capture.start + capture_window.start + delay,
                 potential_capture.end + capture_window.start,
             ),
             signal_threshold_frac,
@@ -143,19 +144,6 @@ def find_captures(
             captures = [captures[-1]]
         else:
             captures = []
-
-    if delay > 0:
-        for i, capture in enumerate(captures):
-            capture_start, capture_end = capture.window
-            if capture.window.duration > delay:
-                delayed_window = Window(capture_start + delay, capture_end)
-                captures[i] = Capture(
-                    capture.signal[delayed_window.start : delayed_window.end],
-                    delayed_window,
-                    signal_threshold_frac,
-                    open_channel_pA_calculated,
-                    captures[i].ejected,
-                )
 
     # Apply filters to remaining capture(s)
     filtered_captures = [

@@ -169,12 +169,12 @@ def find_captures_0_single_capture_test():
     data_file = "src/tests/data/capture_windows/test_data_capture_window_0.txt.gz"
     window = Window(3572989, 3665680)
     data = picoampere_signal_from_data_file(data_file)
-    actual_captures = [(33822 + window.start, 92691 + window.start, True)]
+    actual_captures = [(33832 + window.start, 92691 + window.start, True)]
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = False
     filters = [filtering.LengthFilter(100, None)]
-    delay = 0
+    delay = 10
     end_tol = 0
 
     captures = segment.find_captures(
@@ -187,8 +187,6 @@ def find_captures_0_single_capture_test():
         delay=delay,
         end_tol=end_tol,
     )
-    print(captures)
-    print(actual_captures)
     assert len(captures) == len(actual_captures)
     for test_capture in captures:
         test_start = test_capture.window.start
