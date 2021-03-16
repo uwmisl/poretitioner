@@ -731,17 +731,16 @@ class Capture:
 
     open_channel_pA_calculated : float
         Calculated open channel current value.
+
+    ejected: bool
+        Whether or not the capture was ejected from the pore.
     """
 
     signal: PicoampereSignal
     window: Window
     signal_threshold_frac: float
     open_channel_pA_calculated: float
-
-    @property
-    def ejected(self, end_tol=0):
-        ejected = np.abs(self.window.end - self.signal.duration) <= end_tol
-        return ejected
+    ejected: Optional[bool]
 
     @property
     def duration(self):
@@ -757,7 +756,6 @@ class Capture:
         return string
 
     def __len__(self):
-        print(self.duration)
         return self.duration
 
 
