@@ -64,9 +64,11 @@ def generate_read_id(*args, **kwargs) -> str:
 
 def find_captures(
     signal_pA: PicoampereSignal,
+    channel_number: int,
     capture_window: Window,
     signal_threshold_frac: float,
     open_channel_pA_calculated: float,
+    open_channel_pA_prior_range: float = 30,
     terminal_capture_only: bool = False,
     # TODO: Katie Q: DANGER! Mutable obj reference as default
     filters: Optional[List[filtering.FilterPlugin]] = None,
@@ -85,11 +87,16 @@ def find_captures(
     ----------
     signal_pA : PicoampereSignal
         Time series of nanopore current values (in units of pA).
+    channel_number : int
+        Channel this signal_pA originated from.
     signal_threshold_frac : float
         Threshold for the first pass of finding captures (in fractional
         current). (Captures are <= the threshold.)
     open_channel_pA_calculated : float
         Calculated estimate of the open channel current value.
+    open_channel_pA_prior_range : float
+        When recalculating the local open_channel_pA, accept values up to this
+        far away from open_channel_pA_calculated.
     terminal_capture_only : bool, optional
         Only return the final capture in the window, and only if it remains
         captured until the end of the window (to be ejected), by default False
@@ -116,7 +123,10 @@ def find_captures(
 
     # Try to locally recalculate open_channel_pA (if not possible, default to input)
     open_channel_pA_calculated = find_open_channel_current(
-        signal_pA, open_channel_pA_calculated, 35, open_channel_pA_calculated
+        signal_pA,
+        open_channel_pA_calculated,
+        open_channel_pA_prior_range,
+        open_channel_pA_calculated,
     )
 
     # Convert to frac current
@@ -131,6 +141,7 @@ def find_captures(
     captures = [
         Capture(
             signal_pA[potential_capture.start + delay : potential_capture.end],
+            channel_number,
             Window(  # Relative to the run, not to the start of the capture window
                 potential_capture.start + capture_window.start + delay,
                 potential_capture.end + capture_window.start,
@@ -195,6 +206,7 @@ def find_captures_dask_wrapper(
     filters = [] if filters is None else filters
     return find_captures(
         unsegmented_signal.signal,  # TODO this is not yet a capture at this point! It's just a region in the time series where there *could* be captures.
+        unsegmented_signal.channel_number,
         unsegmented_signal.window,
         unsegmented_signal.signal_threshold_frac,
         unsegmented_signal.open_channel_pA_calculated,
@@ -203,125 +215,6 @@ def find_captures_dask_wrapper(
         delay=delay,
         end_tol=end_tol,
     )
-
-
-def create_capture_fast5(
-    bulk_f5_fname, capture_f5_fname, config, overwrite=False, sub_run=(None, None, None)
-):
-    """Prepare a fast5 file to contain the results of segmentation (capture
-    fast5 file). The file does not contain raw data yet, just a skeleton.
-
-    Parameters
-    ----------
-    bulk_f5_fname : str
-        Filename of the bulk fast5, to be segmented into captures.
-    capture_f5_fname : str
-        Filename of the capture fast5 file to be created/written. Directory
-        containing this file must already exist.
-    config : dict
-        Configuration parameters for the segmenter.
-        # TODO : document allowed values : https://github.com/uwmisl/poretitioner/issues/27
-    overwrite : bool, optional
-        Flag whether or not to overwrite capture_f5_fname, by default False
-    sub_run : tuple, optional
-        If the bulk fast5 contains multiple runs (shorter sub-runs throughout
-        the data collection process), this can be used to record additional
-        context about the sub run: (sub_run_id : str, sub_run_offset : int, and
-        sub_run_duration : int). sub_run_id is the identifier for the sub run,
-        sub_run_offset is the time the sub run starts in the bulk fast5,
-        measured in #/time series points.
-
-    Raises
-    ------
-    OSError
-        Raised if the bulk fast5 file does not exist.
-        Raised if the path to the capture fast5 file does not exist.
-    """
-    local_logger = logger.getLogger()
-    if not os.path.exists(bulk_f5_fname):
-        raise OSError(f"Bulk fast5 file does not exist: {bulk_f5_fname}")
-    if overwrite:
-        if os.path.exists(capture_f5_fname):
-            os.remove(capture_f5_fname)
-    else:
-        try:
-            assert not os.path.exists(capture_f5_fname)
-        except AssertionError:
-            raise FileExistsError()
-
-    path, fname = os.path.split(capture_f5_fname)
-    if not os.path.exists(path):
-        raise OSError(f"Path for the new capture fast5 does not exist: {path}")
-
-    with h5py.File(capture_f5_fname, "a") as capture_f5:
-        with h5py.File(bulk_f5_fname, "r") as bulk_f5:
-            ugk = bulk_f5.get("/UniqueGlobalKey")
-
-            # Referencing spec v0.1.1
-            # /Meta
-            capture_f5.create_group("/Meta")
-
-            # /Meta/context_tags
-            attrs = ugk["context_tags"].attrs
-            g = capture_f5.create_group("/Meta/context_tags")
-            for k, v in attrs.items():
-                g.attrs.create(k, v)
-            g.attrs.create(
-                "bulk_filename", bulk_f5_fname, dtype=f"S{len(bulk_f5_fname)}"
-            )
-            sample_frequency = bulk_f5.get("Meta").attrs["sample_rate"]
-            g.attrs.create("sample_frequency", sample_frequency)
-
-            # /Meta/tracking_id
-            attrs = ugk["tracking_id"].attrs
-            g = capture_f5.create_group("/Meta/tracking_id")
-            for k, v in attrs.items():
-                g.attrs.create(k, v)
-
-            if sub_run is not None:
-                sub_run_id, sub_run_offset, sub_run_duration = sub_run
-                if sub_run_id is not None:
-                    g.attrs.create(
-                        "sub_run_id", sub_run_id, dtype=f"S{len(sub_run_id)}"
-                    )
-                if sub_run_offset is not None:
-                    g.attrs.create("sub_run_offset", sub_run_offset)
-                if sub_run_duration is not None:
-                    g.attrs.create("sub_run_duration", sub_run_duration)
-
-            # /Meta/Segmentation
-            # TODO: define config param structure : https://github.com/uwmisl/poretitioner/issues/27
-            # config = {"param": "value",
-            #           "filters": {"f1": (min, max), "f2: (min, max)"}}
-            g = capture_f5.create_group("/Meta/Segmentation")
-            # print(__name__)
-            g.attrs.create("segmenter", __name__, dtype=f"S{len(__name__)}")
-            g.attrs.create(
-                "segmenter_version", __version__, dtype=f"S{len(__version__)}"
-            )
-            g_filt = capture_f5.create_group("/Meta/Segmentation/filters")
-            g_seg = capture_f5.create_group("/Meta/Segmentation/context_id")
-            segment_config = config.get("segment")
-            if segment_config is None:
-                raise ValueError("No segment configuration provided.")
-            for k, v in segment_config.items():
-                if k == "filter":
-                    for filt, filt_vals in v.items():
-                        if len(filt_vals) == 2:
-                            (min_filt, max_filt) = filt_vals
-                            # Create compound dset for filters
-                            local_logger.debug(
-                                "filt types", type(min_filt), type(max_filt)
-                            )
-                            if min_filt is None:
-                                min_filt = -1
-                            if max_filt is None:
-                                max_filt = -1
-                            if min_filt == -1 and max_filt == -1:
-                                continue
-                            g_filt.create_dataset(filt, data=(min_filt, max_filt))
-                else:
-                    g_seg.create_dataset(k, data=v)
 
 
 @dataclass
@@ -351,7 +244,8 @@ def _prep_capture_windows(
     voltage_threshold: int,
     signal_threshold_frac: float,
     good_channels: List[int],
-    open_channel_pA_calculated: float,
+    open_channel_pA_prior: float,
+    open_channel_pA_prior_bound: float = 40,
     sub_run_start_seconds: int = 0,
     sub_run_end_seconds: Optional[int] = None,
 ) -> PreppedCaptureCandidates:
@@ -372,8 +266,10 @@ def _prep_capture_windows(
         current). (Captures are <= the threshold.)
     good_channels : List[int]
         Specifies the nanopore array channels to be segmented.
-    open_channel_pA_calculated : float
-        Calculated estimate of the open channel current value.
+    open_channel_pA_prior : float
+        Given estimate of the open channel current value (not calculated).
+    open_channel_pA_prior_bound : float
+        Range of current values allowed on either side of open_channel_pA_prior.
 
     Returns
     -------
@@ -418,14 +314,22 @@ def _prep_capture_windows(
                 channel_number, start=sub_run_start_seconds, end=sub_run_end_seconds
             )
             pico = raw_signal.to_picoamperes()
+            open_channel_pA_calculated = find_open_channel_current(
+                pico,
+                open_channel_guess=open_channel_pA_prior,
+                default=open_channel_pA_prior,
+                open_channel_bound=open_channel_pA_prior_bound,
+            )
             for capture_window in capture_windows:
                 start, end = capture_window.start, capture_window.end
 
                 unsegmented_signal = Capture(
                     pico[start:end],
+                    channel_number,
                     capture_window,
                     signal_threshold_frac,
                     open_channel_pA_calculated,
+                    None,
                 )
                 metadata = SignalMetadata(
                     channel_number=channel_number,
@@ -480,7 +384,6 @@ def segment(
         f"Segmenting configuration '{bulk_f5_filepath}' and saving results at location '{save_location}' "
     )
     return parallel_find_captures(
-        bulk_f5_filepath,
         config,
         segment_config,
         filters=filters,
@@ -492,7 +395,6 @@ def segment(
 
 
 def parallel_find_captures(
-    bulk_f5_fname,
     config: GeneralConfiguration,
     segment_config: SegmentConfiguration,
     # Only supporting range filters for now (MVP). This should be expanded to all FilterPlugins: https://github.com/uwmisl/poretitioner/issues/67
@@ -537,29 +439,19 @@ def parallel_find_captures(
         If the desired output location does not exist (i.e., save_location) in
         the config, raise IOError.
     """
-
+    bulk_f5_fname = segment_config.bulkfast5
     local_logger = logger.getLogger()
+    local_logger.setLevel(0)
     # TODO: Update with actual configuring https://github.com/uwmisl/poretitioner/issues/73
-    n_workers = config.n_workers  # config["compute"]["n_workers"]
+    n_workers = config.n_workers
     assert type(n_workers) is int
-    voltage_threshold = (
-        segment_config.voltage_threshold
-    )  # config["segment"]["voltage_threshold"]
-    signal_threshold_frac = (
-        segment_config.signal_threshold_frac
-    )  # config["segment"]["signal_threshold"]
-    delay = (
-        segment_config.translocation_delay
-    )  # config["segment"]["translocation_delay"]
-    open_channel_prior_mean = (
-        segment_config.open_channel_prior_mean
-    )  # config["segment"]["open_channel_prior_mean"]
-    good_channels = segment_config.good_channels  # config["segment"]["good_channels"]
-    end_tol = segment_config.end_tolerance  # config["segment"]["end_tol"]
-    terminal_capture_only = (
-        segment_config.terminal_capture_only
-    )  # config["segment"]["terminal_capture_only"]
-    # filters = config.get("filters")
+    voltage_threshold = segment_config.voltage_threshold
+    signal_threshold_frac = segment_config.signal_threshold_frac
+    delay = segment_config.translocation_delay
+    open_channel_prior_mean = segment_config.open_channel_prior_mean
+    good_channels = segment_config.good_channels
+    end_tol = segment_config.end_tolerance
+    terminal_capture_only = segment_config.terminal_capture_only
     save_location = save_location if save_location else config.capture_directory
     n_per_file = segment_config.n_captures_per_file
     filters = [] if filters is None else filters
@@ -658,12 +550,107 @@ def parallel_find_captures(
         )
         return capture_metadata
 
+    # with BulkFile(bulk_f5_fname, "r") as bulk:
+    #     for captures, metadata in zip(captures, context):
+    #         for cap in captures:
+    #             # Create a read ID, if this capture's signal doesn't already have one.
+    #             read_id = cap.signal.read_id
+    #             read_id = read_id if read_id is not None else generate_read_id()
+    #             print(read_id)
+    #             start, end = cap.window.start, cap.window.end
+    #             capture_metadata = get_capture_metadata(
+    #                 read_id,
+    #                 sampling_rate,
+    #                 voltage_threshold,
+    #                 cap,
+    #                 metadata,
+    #                 sub_run_start_seconds=sub_run_start_seconds,
+    #             )
+
+    #             capture_metadatum.append(capture_metadata)
+
+    #             if n_in_file >= n_per_file:
+    #                 n_in_file = 0
+    #                 file_no += 1
+
+    #             capture_f5_filepath = Path(save_location, f"{run_id}_{file_no}.fast5")
+    #             print(f"capture_fname:{capture_f5_filepath} n_in_file:{n_in_file}")
+
+    #             # Set writing mode (detailing cases explicitly here)
+    #             mode = ""
+    #             if (
+    #                 n_in_file == 0
+    #                 and os.path.exists(capture_f5_filepath)
+    #                 and not overwrite
+    #             ):
+    #                 # CASE:
+    #                 #   * We're on the first read to write for this file
+    #                 #   * The file already exists
+    #                 #   * We're not supposed to overwrite this file
+    #                 # RESULT: IOError
+    #                 # TODO Verify that the folder is empty waaay up top, not here.
+    #                 raise IOError(
+    #                     f"File ({capture_f5_filepath}) already exists and overwrite set to False."
+    #                 )
+    #             elif n_in_file == 0 and overwrite:
+    #                 # CASE:
+    #                 #   * We're on the first read to write for this file
+    #                 #   * Overwrite is set
+    #                 # RESULT: Create a new file, even if it means overwriting an existing file
+    #                 # TODO : This can actually create a bug, example scenario: what if we have overwrite=True and
+    #                 # this run only generates 3 files, but the previous generated 5? The last 2 files would still
+    #                 # be there. Should just delete everything in the save_location before writing
+    #                 mode = "w"  # Create new file, truncate if exists
+    #             else:
+    #                 # CASE:
+    #                 #   * We're on the nth read to write for this file
+    #                 #   * We already handled whether to open a new one, so just write to this file.
+    #                 # RESULT: Write to the existing file.
+    #                 mode = "r+"  # Read/write, file must exist
+
+    #             # TODO: The current loop constanly re-opens the capture_file! Replace with loop that keeps a
+    #             # file open until it fills up.
+
+    #             n_in_file += 1
+
+    #             picoamperes: PicoampereSignal = cap.signal
+    #             raw_signal = picoamperes.to_raw()[start:end]
+    #             local_logger.debug(f"\tLength of raw signal : {len(raw_signal)}")
+
+    #             local_logger.debug(f"\tWriting to file: {capture_f5_filepath}...")
+
+    #             # mode = "w" if overwrite else "r+"
+    #             print(mode)
+    #             with CaptureFile(capture_f5_filepath, mode=mode) as capture_file:
+    #                 print("#/reads in file before writing", len(capture_file.reads))
+    #                 capture_file.initialize_from_bulk(
+    #                     bulk, filters, segment_config, sub_run=None
+    #                 )
+    #                 print("HERE")
+    #                 capture_file.write_capture(raw_signal, capture_metadata)
+    #                 print("#/reads in file after writing", len(capture_file.reads))
+
+    #             local_logger.debug(f"\tWritten!")
+
+    # Delete existing files if they already exist
+    if overwrite and len(os.listdir(save_location)) > 0:
+        for f in os.listdir(save_location):
+            if f.endswith("fast5"):
+                os.unlink(os.path.join(save_location, f))
+
     with BulkFile(bulk_f5_fname, "r") as bulk:
+        # Create first capture_file
+        capture_f5_filepath = Path(save_location, f"{run_id}_{file_no}.fast5")
+        local_logger.info(f"capture_fname:{capture_f5_filepath} n_in_file:{n_in_file}")
+        capture_file = CaptureFile(capture_f5_filepath, mode="w")
+        capture_file.initialize_from_bulk(bulk, filters, segment_config, sub_run=None)
+
         for captures, metadata in zip(captures, context):
             for cap in captures:
                 # Create a read ID, if this capture's signal doesn't already have one.
                 read_id = cap.signal.read_id
                 read_id = read_id if read_id is not None else generate_read_id()
+                print(read_id)
                 start, end = cap.window.start, cap.window.end
                 capture_metadata = get_capture_metadata(
                     read_id,
@@ -677,24 +664,32 @@ def parallel_find_captures(
                 capture_metadatum.append(capture_metadata)
 
                 if n_in_file >= n_per_file:
+                    # File full! Close the old and open a new one!
                     n_in_file = 0
                     file_no += 1
+                    capture_file.f5.close()
+                    capture_f5_filepath = Path(
+                        save_location, f"{run_id}_{file_no}.fast5"
+                    )
+                    print(f"capture_fname:{capture_f5_filepath} n_in_file:{n_in_file}")
+                    mode = "w"
+                    capture_file = CaptureFile(capture_f5_filepath, mode=mode)
+                    capture_file.initialize_from_bulk(
+                        bulk, filters, segment_config, sub_run=None
+                    )
 
-                capture_f5_filepath = Path(save_location, f"{run_id}_{file_no}.fast5")
                 n_in_file += 1
 
-                picoamperes: PicoampereSignal = cap.signal.to_picoamperes()
+                picoamperes: PicoampereSignal = cap.signal
                 raw_signal = picoamperes.to_raw()[start:end]
                 local_logger.debug(f"\tLength of raw signal : {len(raw_signal)}")
 
                 local_logger.debug(f"\tWriting to file: {capture_f5_filepath}...")
 
-                mode = "w" if overwrite else "r+"
-                with CaptureFile(capture_f5_filepath, mode=mode) as capture_file:
-                    capture_file.initialize_from_bulk(
-                        bulk, filters, segment_config, sub_run=None
-                    )
-                    capture_file.write_capture(raw_signal, capture_metadata)
+                # with CaptureFile(capture_f5_filepath, mode=mode) as capture_file:
+                print("#/reads in file before writing", len(capture_file.reads))
+                capture_file.write_capture(raw_signal, capture_metadata)
+                print("#/reads in file after writing", len(capture_file.reads))
 
                 local_logger.debug(f"\tWritten!")
 

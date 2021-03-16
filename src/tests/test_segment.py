@@ -27,6 +27,10 @@ from src.poretitioner.signals import (
 )
 from src.poretitioner.utils import segment, filtering
 from pytest import fixture
+from src.poretitioner.utils.configuration import (
+    GeneralConfiguration,
+    SegmentConfiguration,
+)
 
 configure_root_logger(verbosity=1, debug=False)
 
@@ -176,9 +180,10 @@ def find_captures_0_single_capture_test():
     filters = [filtering.LengthFilter(100, None)]
     delay = 10
     end_tol = 0
-
+    channel_number = 1
     captures = segment.find_captures(
         data,
+        channel_number,
         window,
         signal_threshold_frac,
         alt_open_channel_pA,
@@ -206,8 +211,10 @@ def find_captures_0_single_capture_terminal_test():
     filters = [filtering.LengthFilter(100, None)]
     delay = 0
     end_tol = 0
+    channel_number = 1
     captures = segment.find_captures(
         data,
+        channel_number,
         window,
         signal_threshold_frac,
         alt_open_channel_pA,
@@ -239,8 +246,10 @@ def find_captures_1_double_capture_noterminal_test():
     filters = [filtering.LengthFilter(100, None)]
     delay = 0
     end_tol = 0
+    channel_number = 1
     captures = segment.find_captures(
         data,
+        channel_number,
         window,
         signal_threshold_frac,
         alt_open_channel_pA,
@@ -266,8 +275,10 @@ def find_captures_1_double_capture_noterminal_2_test():
     filters = [filtering.LengthFilter(100, None)]
     delay = 0
     end_tol = 0
+    channel_number = 1
     captures = segment.find_captures(
         data,
+        channel_number,
         window,
         signal_threshold_frac,
         alt_open_channel_pA,
@@ -292,8 +303,10 @@ def find_captures_2_nocaptures_test():
     filters = [filtering.LengthFilter(100, None)]
     delay = 10
     end_tol = 0
+    channel_number = 1
     captures = segment.find_captures(
         data,
+        channel_number,
         window,
         signal_threshold_frac,
         alt_open_channel_pA,
@@ -320,8 +333,10 @@ def find_captures_3_multicapture_terminal_test():
     filters = [filtering.LengthFilter(100, None)]
     delay = 0
     end_tol = 0
+    channel_number = 2
     captures = segment.find_captures(
         data,
+        channel_number,
         window,
         signal_threshold_frac,
         alt_open_channel_pA,
@@ -348,8 +363,10 @@ def find_captures_3_multicapture_nonterminal_test():
     filters = [filtering.LengthFilter(100, None)]
     delay = 0
     end_tol = 0
+    channel_number = 2
     captures = segment.find_captures(
         data,
+        channel_number,
         window,
         signal_threshold_frac,
         alt_open_channel_pA,
@@ -375,8 +392,10 @@ def find_captures_4_unfolded_terminal_test():
     filters = [filtering.LengthFilter(100, None)]
     delay = 0
     end_tol = 0
+    channel_number = 2
     captures = segment.find_captures(
         data,
+        channel_number,
         window,
         signal_threshold_frac,
         alt_open_channel_pA,
@@ -403,8 +422,10 @@ def find_captures_5_unfolded_terminal_test():
     filters = [filtering.LengthFilter(100, None)]
     delay = 0
     end_tol = 0
+    channel_number = 1
     captures = segment.find_captures(
         data,
+        channel_number,
         window,
         signal_threshold_frac,
         alt_open_channel_pA,
@@ -446,8 +467,10 @@ def find_captures_6_clog_no_open_channel_test():
     filters = [filtering.LengthFilter(100, None)]
     delay = 100
     end_tol = 0
+    channel_number = 1
     captures = segment.find_captures(
         data,
+        channel_number,
         window,
         signal_threshold_frac,
         alt_open_channel_pA,
@@ -487,8 +510,10 @@ def find_captures_7_capture_no_open_channel_test():
     filters = [filtering.LengthFilter(100, None)]
     delay = 100
     end_tol = 0
+    channel_number = 2
     captures = segment.find_captures(
         data,
+        channel_number,
         window,
         signal_threshold_frac,
         alt_open_channel_pA,
@@ -531,8 +556,10 @@ def find_captures_8_capture_no_open_channel_test():
     filters = [filtering.LengthFilter(100, None)]
     delay = 3
     end_tol = 0
+    channel_number = 2
     captures = segment.find_captures(
         data,
+        channel_number,
         window,
         signal_threshold_frac,
         alt_open_channel_pA,
@@ -553,28 +580,59 @@ def find_captures_8_capture_no_open_channel_test():
         assert (test_start, test_end, ejected) in actual_captures
 
 
-@pytest.mark.xfail(reason="Need to implement config (filters currently in progress).")
+def generate_read_id_test():
+    read_id = segment.generate_read_id()
+    assert type(read_id) is str
+    assert len(read_id) == 36
+
+
+def prep_capture_windows_test():
+    bulk_f5_fname = "src/tests/data/bulk_fast5_dummy.fast5"
+    voltage_threshold = -180
+    signal_threshold_frac = 0.7
+    good_channels = [1, 2, 3]
+    open_channel_pA_prior = 220
+    open_channel_pA_prior_bound = 40
+    prepped = segment._prep_capture_windows(
+        bulk_f5_fname,
+        voltage_threshold,
+        signal_threshold_frac,
+        good_channels,
+        open_channel_pA_prior,
+        open_channel_pA_prior_bound,
+    )
+    count_by_channel = {1: 0, 2: 0, 3: 0}
+    for window in prepped.captures:
+        count_by_channel[window.channel_number] += 1
+    for channel_number in good_channels:
+        assert count_by_channel[channel_number] == 4
+
+
+# @pytest.mark.xfail(reason="Need to implement config (filters currently in progress).")
 class TestParallelFindCaptures:
     def parallel_find_captures_test(self):
         bulk_f5_fname = "src/tests/data/bulk_fast5_dummy.fast5"
+
+        filters = [filtering.LengthFilter(100, None)]
+        config = GeneralConfiguration(
+            config={"n_workers": 2, "capture_directory": "src/tests"}
+        )
+
         segment_config = {
             "voltage_threshold": -180,
-            "signal_threshold": 0.7,
+            "signal_threshold_frac": 0.7,
             "translocation_delay": 20,
             "open_channel_prior_mean": 220,
+            "open_channel_prior_stdv": 50,
             "good_channels": [1, 2, 3],
-            "end_tol": 50,
+            "end_tolerance": 50,
             "terminal_capture_only": False,
-            "filter": {"length": (100, None)},
+            "n_captures_per_file": 1000,
+            "bulkfast5": bulk_f5_fname,
         }
-        compute_config = {"n_workers": 2}
-        output_config = {"capture_f5_dir": "tests", "captures_per_f5": 4000}
-        config = {
-            "compute": compute_config,
-            "segment": segment_config,
-            "output": output_config,
-        }
-        segment.parallel_find_captures(bulk_f5_fname, config, overwrite=True)
+        segment_config = SegmentConfiguration(segment_config)
+
+        segment.parallel_find_captures(config, segment_config, overwrite=True)
         run_id = "d0befb838f5a9a966e3c559dc3a75a6612745849"
         actual_n_captures = 9
         n_captures = 0
@@ -595,7 +653,7 @@ class TestParallelFindCaptures:
                 assert len_signal == duration
 
                 voltage = a.get("voltage")
-                assert voltage == config["segment"]["voltage_threshold"]
+                assert voltage == segment_config.voltage_threshold
 
         assert n_captures == actual_n_captures
         os.remove(capture_f5_fname)
