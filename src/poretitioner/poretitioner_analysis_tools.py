@@ -6,17 +6,17 @@ from .utils.core import NumpyArrayLike, PathLikeOrString
 
 
 class PoretitionerRun:
-    fast5_dir : PathLikeOrString
+    capture_dir : PathLikeOrString
 
-    # TODO Cache as much as possible, e.g. the list of fast5_filenames at fast5_dir.
+    # TODO Cache as much as possible, e.g. the list of capture_filenames at capture_dir.
     
     ### Segmentation result accessors
 
     def get_all_read_ids(self):
-        """Returns an iterable of all read_ids in all the fast5 files located in fast5_dir.
+        """Returns an iterable of all read_ids in all the capture files located in capture_dir.
         """
         # Cache these filenames
-        fast5_filenames = [os.path.join(self.fast5_dir, fast5_filename) for fast5_filename in os.listdir(self.fast5_dir) if fast5_filename.endswith(".fast5")]
+        capture_filenames = [os.path.join(self.capture_dir, capture_filename) for capture_filename in os.listdir(self.capture_dir) if capture_filename.endswith(".fast5")]
         # Open each as CaptureFile, call .reads and append to iterable
         read_ids = []
         return read_ids
@@ -95,7 +95,7 @@ class PoretitionerRun:
 
 
     def get_bulk_filename(self):
-        """Retrieves the name of the bulk fast5 used to produce these results.
+        """Retrieves the name of the bulk file used to produce these results.
 
         Should be the same for all files in this dir.
 
@@ -122,7 +122,7 @@ class PoretitionerRun:
 
     def get_filtered_read_ids(self, filter_id : str):
         """Returns an iterable of read_ids that passed the filter filter_id, across
-        all the fast5 files located in fast5_dir.
+        all the capture files located in capture_dir.
 
         Parameters
         ----------
