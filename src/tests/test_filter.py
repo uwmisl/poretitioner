@@ -15,78 +15,65 @@ import src.poretitioner.utils.filtering as filtering
 import pytest
 
 # TODO: Restore Filter unit tests: https://github.com/uwmisl/poretitioner/issues/88
-# def apply_feature_filters_empty_test():
-#     """Check for pass when no valid filters are provided."""
-#     # capture -- mean: 1; stdv: 0; median: 1; min: 1; max: 1; len: 6
-#     capture = [1, 1, 1, 1, 1, 1]
-#     filters = {}
-#     # No filter given -- pass
-#     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     pass_filters = True  # filtering.apply_feature_filters(capture, filters)
-#     filters = {"not_a_filter": (0, 1)}
-#     # No *valid* filter given -- pass
-#     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     pass_filters = True  # filtering.apply_feature_filters(capture, filters)
-#     assert pass_filters
+def apply_feature_filters_empty_test():
+    """Check for pass when no valid filters are provided."""
+    # capture -- mean: 1; stdv: 0; median: 1; min: 1; max: 1; len: 6
+    capture = [1, 1, 1, 1, 1, 1]
+    filters = []
+    # No filter given -- pass
+    pass_filters = filtering.apply_feature_filters(capture, filters)
+    assert pass_filters
 
 
-# def apply_feature_filters_length_test():
-#     """Test length filter function."""
-#     # capture -- mean: 1; stdv: 0; median: 1; min: 1; max: 1; len: 6
-#     capture = [1, 1, 1, 1, 1, 1]
+def apply_feature_filters_length_test():
+    """Test length filter function."""
+    # capture -- mean: 1; stdv: 0; median: 1; min: 1; max: 1; len: 6
+    capture = [1, 1, 1, 1, 1, 1]
 
-#     # Only length filter -- pass (edge case, inclusive high)
-#     filters = {"length": (0, 6)}
-#     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     pass_filters = True  # filtering.apply_feature_filters(capture, filters)
-#     assert pass_filters
+    # Only length filter -- pass (edge case, inclusive high)
+    filters = [filtering.LengthFilter(0, 6)]
+    pass_filters = filtering.apply_feature_filters(capture, filters)
+    assert pass_filters
 
-#     # Only length filter -- pass (edge case, inclusive low)
-#     filters = {"length": (6, 10)}
-#     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     pass_filters = True  # filtering.apply_feature_filters(capture, filters)
-#     assert pass_filters
+    # Only length filter -- pass (edge case, inclusive low)
+    filters = [filtering.LengthFilter(6, 10)]
+    pass_filters = filtering.apply_feature_filters(capture, filters)
+    assert pass_filters
 
-#     # Only length filter -- fail (too short)
-#     filters = {"length": (8, 10)}
-#     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     pass_filters = True  # filtering.apply_feature_filters(capture, filters)
-#     assert not pass_filters
+    # Only length filter -- fail (too short)
+    filters = [filtering.LengthFilter(8, 10)]
+    pass_filters = filtering.apply_feature_filters(capture, filters)
+    assert not pass_filters
 
-#     # Only length filter -- fail (too long)
-#     filters = {"length": (0, 5)}
-#     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     pass_filters = True  # filtering.apply_feature_filters(capture, filters)
-#     assert not pass_filters
+    # Only length filter -- fail (too long)
+    filters = [filtering.LengthFilter(0, 5)]
+    pass_filters = filtering.apply_feature_filters(capture, filters)
+    assert not pass_filters
 
-#     # Only length filter -- pass (no filter actually given)
-#     filters = {"length": (None, None)}
-#     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     pass_filters = True  # filtering.apply_feature_filters(capture, filters)
-#     assert pass_filters
+    # Only length filter -- pass (no filter actually given)
+    filters = [filtering.LengthFilter(None, None)]
+    pass_filters = filtering.apply_feature_filters(capture, filters)
+    assert pass_filters
 
 
-# def apply_feature_filters_mean_test():
-#     """Test mean filter function. stdv, median, min, and max apply similarly."""
-#     # capture -- mean: 0.5; stdv: 0.07; median: 0.5; min: 0.4; max: 0.6; len: 5
-#     capture = [0.5, 0.5, 0.6, 0.4, 0.5]
-#     # Only mean filter -- pass
-#     filters = {"mean": (0, 1)}
-#     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     pass_filters = True  # filtering.apply_feature_filters(capture, filters)
-#     assert pass_filters
+def apply_feature_filters_mean_test():
+    """Test mean filter function. stdv, median, min, and max apply similarly."""
+    # capture -- mean: 0.5; stdv: 0.07; median: 0.5; min: 0.4; max: 0.6; len: 5
+    capture = [0.5, 0.5, 0.6, 0.4, 0.5]
+    # Only mean filter -- pass
+    filters = [filtering.MeanFilter(0, 1)]
+    pass_filters = filtering.apply_feature_filters(capture, filters)
+    assert pass_filters
 
-#     # Only mean filter -- fail (too high)
-#     filters = {"mean": (0, 0.4)}
-#     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     pass_filters = True  # filtering.apply_feature_filters(capture, filters)
-#     assert not pass_filters
+    # Only mean filter -- fail (too high)
+    filters = [filtering.MeanFilter(0, 0.4)]
+    pass_filters = filtering.apply_feature_filters(capture, filters)
+    assert not pass_filters
 
-#     # Only mean filter -- fail (too low)
-#     filters = {"mean": (0.6, 1)}
-#     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     pass_filters = True  # filtering.apply_feature_filters(capture, filters)
-#     assert not pass_filters
+    # Only mean filter -- fail (too low)
+    filters = [filtering.MeanFilter(0.6, 1)]
+    pass_filters = filtering.apply_feature_filters(capture, filters)
+    assert not pass_filters
 
 
 def check_capture_ejection_by_read_test():
@@ -95,33 +82,33 @@ def check_capture_ejection_by_read_test():
     bad_read_id = "akejwoeirjo;ewijr"
     with h5py.File(f5_fail, "r") as f5:
         with pytest.raises(ValueError) as e:
-            # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-            True  # filtering.check_capture_ejection_by_read(f5, bad_read_id)
+            filtering.check_capture_ejection_by_read(f5, bad_read_id)
             assert "does not exist in the fast5 file" in e
     # TODO implement fast5 writing to file
 
 
-# def check_capture_ejection_test():
-#     """Essentially checks whether a value (end_capture) is close enough (within
-#     a margin of tol_obs) to any value in voltage_ends.
-#     """
-#     end_capture = 1000
-#     voltage_ends = [0, 1000, 2000, 3000]
-#     tol_obs = 100
-#     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     assert True  # filtering.check_capture_ejection(end_capture, voltage_ends, tol_obs=tol_obs)
+def check_capture_ejection_test():
+    """Essentially checks whether a value (end_capture) is close enough (within
+    a margin of tol_obs) to any value in voltage_ends.
+    """
+    end_capture = 1000
+    voltage_ends = [0, 1000, 2000, 3000]
+    tol_obs = 100
+    assert filtering.check_capture_ejection(end_capture, voltage_ends, tol_obs=tol_obs)
 
-#     end_capture = 1200
-#     voltage_ends = [0, 1000, 2000, 3000]
-#     tol_obs = 100
-#     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     assert not True  # filtering.check_capture_ejection(end_capture, voltage_ends, tol_obs=tol_obs)
+    end_capture = 1200
+    voltage_ends = [0, 1000, 2000, 3000]
+    tol_obs = 100
+    assert not filtering.check_capture_ejection(
+        end_capture, voltage_ends, tol_obs=tol_obs
+    )
 
-#     end_capture = 3100
-#     voltage_ends = [0, 1000, 2000, 3000]
-#     tol_obs = 100
-#     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     assert not True  # filtering.check_capture_ejection(end_capture, voltage_ends, tol_obs=tol_obs)
+    end_capture = 3100
+    voltage_ends = [0, 1000, 2000, 3000]
+    tol_obs = 100
+    assert not filtering.check_capture_ejection(
+        end_capture, voltage_ends, tol_obs=tol_obs
+    )
 
 
 # def apply_filters_to_read_test():

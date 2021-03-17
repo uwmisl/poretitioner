@@ -737,7 +737,11 @@ class TestSegment:
             "translocation_delay": 20,
             "open_channel_prior_mean": 220,
             "open_channel_prior_stdv": 50,
-            "good_channels": [1, 3],
+            "good_channels": [
+                1,
+                2,
+                3,
+            ],  # this will be internally overwritten by the good channels calculation, which should not include channel 2
             "end_tolerance": 50,
             "terminal_capture_only": False,
             "n_captures_per_file": 1000,
