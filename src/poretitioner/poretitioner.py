@@ -65,8 +65,8 @@ def run(args):
             seg_config,
             save_location=save_location,
             filters=filters,
-            sub_run_start_seconds=0,
-            sub_run_end_seconds=None,
+            sub_run_start_observations=0,
+            sub_run_end_observations=None,
         )
 
         segment_results = pprint.pformat(capture_metadata)
