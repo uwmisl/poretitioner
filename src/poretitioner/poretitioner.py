@@ -7,23 +7,20 @@ import numpy as np
 
 from . import logger
 from .getargs import ARG, COMMAND, get_args
+
 from .utils import segment
+
 from .utils.configuration import (
     CONFIG,
     readconfig,
     SegmentConfiguration,
     GeneralConfiguration,
-    FilterConfiguration,
 )
 from .utils.filtering import (
-    get_plugins,
-    LengthFilter,
-    MaximumFilter,
-    MeanFilter,
-    MedianFilter,
-    MinimumFilter,
-    RangeFilter,
-    StandardDeviationFilter,
+    get_filters,
+    FilterConfig,
+    Filters,
+    FilterSet,
 )
 
 
@@ -52,32 +49,30 @@ def run(args):
     configuration = readconfig(
         configuration_path, command_line_args=command_line_args, log=log
     )
+    bulk_f5_filepath = Path(command_line_args[ARG.BULK_FAST5]).resolve()
+
+    seg_config = configuration[CONFIG.SEGMENTATION]
+    filter_set: FilterSet = configuration[CONFIG.FILTER]
+    config = configuration[CONFIG.GENERAL]
+
+    save_location = Path(getattr(args, ARG.CAPTURE_DIRECTORY)).resolve()
+
+    log.info(f"bulk_f5_filepath: {bulk_f5_filepath}")
+    log.info(f"\n\nSave location: {save_location}")
 
     if args.command == COMMAND.SEGMENT:
-        bulk_f5_filepath = Path(command_line_args[ARG.BULK_FAST5]).resolve()
-
-        seg_config = configuration[CONFIG.SEGMENTATION]
-        filter_config: FilterConfiguration = configuration[CONFIG.FILTER]
-        config = configuration[CONFIG.GENERAL]
-
-        filters = get_plugins(filter_config)
-
-        save_location = Path(getattr(args, ARG.CAPTURE_DIRECTORY)).resolve()
-
         segmentation_config_str = pprint.pformat(seg_config.__dict__)
         general_config_str = pprint.pformat(config.__dict__)
-        log.warning(f"bulk_f5_filepath: {bulk_f5_filepath}")
-        log.warning(f"\n\nSave location: {save_location}")
-        log.warning(f"\n\n Segmentation config: {segmentation_config_str}")
 
-        log.warning(f"\n\n General config: {general_config_str}")
+        capture_criteria_filter_configs = { name: FilterConfig(name, attributes) for name, attributes in seg_config.capture_criteria.items() }
+        capture_criteria = get_filters(capture_criteria_filter_configs)
 
         capture_metadata = segment.segment(
             bulk_f5_filepath,
             config,
             seg_config,
             save_location=save_location,
-            filters=filters,
+            capture_criteria=capture_criteria,
             sub_run_start_observations=0,
             sub_run_end_observations=None,
         )
@@ -109,7 +104,7 @@ def main():
             "segment",
             "--bulkfast5",
             "./src/tests/data/bulk_fast5_dummy.fast5",
-            "--output-dir",
+            "--capture-directory",
             "./out/data/",
             "--config",
             "./poretitioner_config.toml" " ",

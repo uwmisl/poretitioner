@@ -12,33 +12,134 @@ from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import List
+from typing import NewType
 
 import numpy as np
 import torch
 import torch.nn as nn
 
 from .. import fast5s, logger
-from ..fast5s import CaptureFile
 from ..logger import Logger, getLogger
 from ..signals import FractionalizedSignal, RawSignal
 
 # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-from . import NTERs_trained_cnn_05152019 as pretrained_model
+from .model import NTERs_trained_cnn_05152019 as pretrained_model
 from . import filtering
 from .configuration import ClassifierConfiguration
 from .core import PathLikeOrString
+from .core import ReadId
 
 use_cuda = False  # True
 # TODO : Don't hardcode use of CUDA : https://github.com/uwmisl/poretitioner/issues/41
 
+LabelForResult = Callable[ [torch.Tensor], ClassLabel ]
 
 __all__ = [
     "predict_class",
     "ClassifierDetails",
     "ClassificationResult",
     "ClassifierFile",
-    "NULL_CLASSIFICATION_RESULT",
 ]
+
+# Uniquely identifies a classification run that happened (e.g. 'NTER_2018_RandomForest_Attempt_3').
+ClassificationRunId = NewType("ClassificationRunId", str)
+ClassLabel = NewType("ClassLabel", str)
+
+@dataclass(frozen=True)
+class ClassifierDetails:
+
+    model: str
+    model_version: str
+    classification_threshold: float
+
+    # Timestamp of when this classification occurred, in seconds from epoch (as a float).
+    #
+    # Q: Why not date-time? 
+    #
+    # A: Sadly, as of 2020, h5py doesn't provide a good way of storing dates [1].
+    #    Doing so would also be less precise than storing epoch time.
+    # 
+    # Q: Why seconds (knowing it will be fractionalized)?
+    # 
+    # A: On most modern machines, python time.time() provides micro-second precision.
+    #    But this can't be guaranteed (on older machines, it might only provide second precision) [1].
+    #  
+    # If we really wanted an int, the alternative to guarantee an int would be to store 
+    # the timestamp in nanoseconds [3], but that feels verbose to me.
+    #
+    # [1] - https://stackoverflow.com/questions/23570632/store-datetimes-in-hdf5-with-h5py
+    # [2] - https://docs.python.org/3/library/time.html#time.time
+    # [3] - https://docs.python.org/3/library/time.html#time.time_ns
+    timestamp_ms: float
+    model_file: PathLikeOrString
+
+
+@dataclass(frozen=True)
+class CLASSIFICATION_PATH:
+    ROOT = f"/Classification/"
+
+    @classmethod
+    def for_classification_run(cls, classification_run: ClassificationRunId) -> str:
+        path = str(PosixPath(CLASSIFICATION_PATH.ROOT, ClassificationRunId))
+        return path
+
+    @classmethod
+    def pass_path(cls, classification_run: ClassificationRunId) -> str:
+        """Path to the group that contains the readIds that passed classification during this
+        classification run.
+
+        Parameters
+        ----------
+        classification_run : ClassificationRunId
+            A unique identifier for the classification run that generated these results (e.g. "my_classication_run_04").
+
+        Returns
+        -------
+        str
+            Pathlike to path. (e.g. /Classifcation/my_classication_run_04/pass)
+        """
+        CLASSICATION_RUN_PATH = cls.for_classification_run(classification_run)
+        path = str(PosixPath(CLASSICATION_RUN_PATH, "pass"))
+        return path
+    
+    @classmethod
+    def fail_path(cls, classification_run: ClassificationRunId) -> str:
+        """Path to the group that contains the readIds that failed classification during this
+        classification run.
+
+        Parameters
+        ----------
+        classification_run : ClassificationRunId
+            A unique identifier for the classification run that generated these results (e.g. "my_classication_run_04").
+
+        Returns
+        -------
+        str
+            Pathlike to path. (e.g. /Classifcation/my_classication_run_04/fail)
+        """
+        CLASSICATION_RUN_PATH = cls.for_classification_run(classification_run)
+        path = str(PosixPath(CLASSICATION_RUN_PATH, "fail"))
+        return path
+
+    def read_id_path(cls, classification_run: ClassificationRunId, read_id: ReadId) -> str:
+        """Path to the group that contains the classification results for a given readId. 
+
+        Parameters
+        ----------
+        classification_run : ClassificationRunId
+            A unique identifier for the classification run that generated these results (e.g. "my_classication_run_04").
+
+        read_id : ReadId
+            The readId of the read we want to know the classification results for.
+
+        Returns
+        -------
+        str
+            Path to the group that contains the classification results for a given readId. 
+        """
+        CLASSICATION_RUN_PATH = cls.for_classification_run(classification_run)
+        path = str(PosixPath(CLASSICATION_RUN_PATH, f"{read_id}"))
+        return path
 
 
 @dataclass(frozen=True)
@@ -47,12 +148,15 @@ class ClassificationResult:
 
     Fields
     ----------
-    predicted : str
-        The class predicted by the classifier.
-    probability : int
-        The confidence that this prediction is correct.
-    assigned_class: str
-        TODO: Katie Q: Where does assigned class come from?
+    score : float
+        A value representing the 'score' of a label predicted by the classifier. 
+        Abstractly, the score is a measure of confidence that this label is correct, as determined by the score being greater than some threshold.
+ 
+        What exact values this score can take on depends on your classifier 
+        (e.g. if you pass the final result through a soft-max, this score will represent a probability from 0 to 1.0).
+
+    label : ClassLabel
+        The label assigned to this prediction.
 
     Returns
     -------
@@ -60,124 +164,62 @@ class ClassificationResult:
         ClassificationResult instance.
     """
 
-    predicted: str
-    probability: float
-    assigned_class: str
-
-    @property
-    def passed_classification(self) -> bool:
-        """Whether this result passed classification.
-
-        Returns
-        -------
-        bool
-            True if the predicted class matches the assigned one.
-        """
-        return self.predicted == self.assigned_class
-
-    @property
-    def is_null(self) -> bool:
-        """Whether this is a null classification (i.e. hasn't been classified, or couldn't be).
-
-        Returns
-        -------
-        bool
-            Whether this is a null classification.
-        """
-        return NullClassificationResult.is_null(self)
-
-
-@dataclass(frozen=True)
-class NullClassificationResult(ClassificationResult):
-    """This represents a capture that hasn't been classified yet.
-    Just a basic null class. Never meant to be instantiated, just use
-    the `is_null` classmethod.
-    """
-
-    predicted: str = "NULL CLASSIFICATION: NO PREDICTION"
-    probability: float = 0
-    assigned_class: str = "NULL CLASSIFICATION: NO ASSIGNED CLASS"
-
-    @classmethod
-    def is_null(cls, other: ClassificationResult):
-        result = (
-            other.predicted == cls.predicted
-            and other.probability == cls.probability
-            and other.assigned_class == cls.assigned_class
-        )
-        return result
-
-    def passed_classification(self):
-        return False
-
-
-# Constant, so we don't have to make thousands of repeats of this object when classifying.
-NULL_CLASSIFICATION_RESULT = NullClassificationResult()
-
-
-@dataclass(frozen=True)
-class ClassifierDetails:
-    """Details about the classifier that produces `ClassificationResult`.
-
-    Fields
-    ----------
-    model : str
-        The friendly name of the classifier than predicted this result.
-    model_version : str
-        The version of the model that predicted this result.
-    model_file: str
-        Location where this model was saved.
-    classification_threshold: float
-        The confidence threshold.
-    """
-
-    model: str
-    model_version: str
-    model_file: str
-    classification_threshold: float
+    label: ClassLabel
+    score: float
 
 
 # TODO: Finish writing Classifier plugin architecture: https://github.com/uwmisl/poretitioner/issues/91
 class ClassifierPlugin(metaclass=ABCMeta):
-    @property
+
     @abstractmethod
     def model_name(self) -> str:
-        pass
+        raise NotImplementedError(
+            "model_name hasn't been implemented for this classifier."
+        )
 
-    @property
     @abstractmethod
     def model_version(self) -> str:
-        pass
+        raise NotImplementedError(
+            "model_version hasn't been implemented for this classifier."
+        )
 
-    @property
     @abstractmethod
     def model_file(self) -> str:
-        pass
+        raise NotImplementedError(
+            "model_file hasn't been implemented for this classifier."
+        )
 
     @abstractmethod
-    def load(self, filepath: str, can_use_cuda: bool):
-        """This method is where you should do any pre processing needed.
+    def load(self, filepath: str, use_cuda: bool = False):
+        """Loads a model for classification.
+
+        This method is where you should do any pre processing needed.
         For exammple, loading and configuring a Pytorch model, or a sci-kit learn model.
 
         Parameters
         ----------
         filepath : str
-            [description]
+            Path to a classifier model.
+        use_cuda : bool
+            Whether to use cuda.
 
         Raises
         ------
         NotImplementedError
-            [description]
+            If this method hasn't been implemented.
         """
+        raise NotImplementedError(
+            "load hasn't been implemented for this classifier."
+        )
 
     @abstractmethod
-    def evaluate(self, capture):
+    def evaluate(self, capture) -> ClassificationResult:
         raise NotImplementedError(
             "Evaluate hasn't been implemented for this classifier."
         )
 
 
-class ClassifierFile(CaptureFile):
+class ClassifierFile:
     def __init__(
         self,
         capture_filepath: PathLikeOrString,
@@ -190,9 +232,7 @@ class ClassifierFile(CaptureFile):
         if self.classification_path not in f5:
             f5.create_group(self.classification_path)
 
-    def get_classification_for_read(
-        self, model: str, read_id: str
-    ) -> ClassificationResult:
+    def get_classification_for_read(self, model: str, read_id: ReadId) -> ClassificationResult:
         """Gets the classification result for the read, if it's been classified,
         or NullClassificationResult, if it hasn't.
 
@@ -206,8 +246,7 @@ class ClassifierFile(CaptureFile):
         Returns
         -------
         ClassificationResult
-            Gets the result of a read's classification if it was already classified, or
-            `NULL_CLASSIFICATION_RESULT` if it hasn't been read yet.
+            Gets the result of a read's classification
         """
         result_path = self._get_results_path_for_model(model, read_id)
         f5 = self.f5
@@ -219,7 +258,7 @@ class ClassifierFile(CaptureFile):
             )
             return result
         predict_class = f5[result_path].attrs["best_class"]
-        probability = f5[result_path].attrs["best_score"]
+        score = f5[result_path].attrs["best_score"]
         assigned_class = f5[result_path].attrs["assigned_class"]
         result = ClassificationResult(predict_class, probability, assigned_class)
         return result
@@ -239,13 +278,11 @@ class ClassifierFile(CaptureFile):
         results_path = str(PurePosixPath(self.classification_path, model))
         return results_path
 
-    def _get_results_path_for_model(self, model: str, read_id: str) -> str:
-        results_path = str(
-            PurePosixPath(self._get_classification_path_for_model(model), read_id)
-        )
+    def _get_results_path_for_model(self, model: str, read_id: ReadId) -> str:
+        results_path = str(PurePosixPath(self._get_classification_path_for_model(model), read_id))
         return results_path
 
-    def write_details(self, classifier_details: ClassifierDetails):
+    def write_details(self, classification_run: str, classifier_details: ClassifierDetails):
         """Write metadata about the classifier that doesn't need to be repeated for
         each read.
 
@@ -255,18 +292,15 @@ class ClassifierFile(CaptureFile):
             Subset of the configuration parameters that belong to the classifier.
         """
         model = classifier_details.model
-
-        model_path = self._get_classification_path_for_model(model)
+        model_path = CLASSIFICATION_PATH.for_classification_run(classification_run)
         if model_path not in self.f5:
             self.f5.create_group(model_path)
-        self.f5[model_path].attrs["model"] = classifier_details.model
-        self.f5[model_path].attrs["model_version"] = classifier_details.model_version
-        self.f5[model_path].attrs["model_file"] = classifier_details.model_file
-        self.f5[model_path].attrs[
-            "classification_threshold"
-        ] = classifier_details.classification_threshold
 
-    def write_result(self, model: str, read_id: str, result: ClassificationResult):
+        for model_attribute, value for vars(classifier_details).items():
+            dtype = None if not isinstance(value, str) else f"S{len(value)}"
+            self.f5[model_path].attrs.create(model_attribute, value, dtype=dtype)
+
+    def write_result(self, model: str, read_id: ReadId, result: ClassificationResult):
         results_path = self._get_results_path_for_model(model, read_id)
         if results_path not in self.f5:
             self.f5.create_group(results_path)
@@ -527,32 +561,129 @@ def predict_class(
 #     return result
 
 
-# def write_classifier_details(f5, classifier_confidence_thresholdig: ClassifierConfiguration, results_path):
-#     """Write metadata about the classifier that doesn't need to be repeated for
-#     each read.
+def write_classifier_details(f5, classifier_confidence_thresholdig: ClassifierConfiguration, results_path):
+    """Write metadata about the classifier that doesn't need to be repeated for
+    each read.
 
-#     Parameters
-#     ----------
-#     f5 : h5py.File
-#         Opened fast5 file in a writable mode.
-#     classifier_confidence_threshold : dict
-#         Subset of the configuration parameters that belong to the classifier.
-#     results_path : str
-#         Where the classification results will be stored in the f5 file.
-#     """
+    Parameters
+    ----------
+    f5 : h5py.File
+        Opened fast5 file in a writable mode.
+    classifier_confidence_threshold : dict
+        Subset of the configuration parameters that belong to the classifier.
+    results_path : str
+        Where the classification results will be stored in the f5 file.
+    """
 
-#     if results_path not in f5:
-#         f5.create_group(results_path)
-#     f5[results_path].attrs["model"] = classifier_confidence_thresholdig.classifier
-#     f5[results_path].attrs["model_version"] = classifier_confidence_thresholdig
-#     f5[results_path].attrs["model_file"] = classifier_confidence_thresholdig["classification_path"]
-#     f5[results_path].attrs["classification_threshold"] = classifier_confidence_thresholdig["min_confidence"]
+    if results_path not in f5:
+        f5.create_group(results_path)
+    f5[results_path].attrs["model"] = classifier_confidence_thresholdig.classifier
+    f5[results_path].attrs["model_version"] = classifier_confidence_thresholdig
+    f5[results_path].attrs["model_file"] = classifier_confidence_thresholdig["classification_path"]
+    f5[results_path].attrs["classification_threshold"] = classifier_confidence_thresholdig["min_confidence"]
 
 
-# def write_classifier_result(f5, results_path, read_id, predicted_class, prob, passed_classification):
-#     results_path = f"{results_path}/{read_id}"
-#     if results_path not in f5:
-#         f5.create_group(results_path)
-#     f5[results_path].attrs["best_class"] = predicted_class
-#     f5[results_path].attrs["best_score"] = prob
-#     f5[results_path].attrs["assigned_class"] = predicted_class if passed_classification else -1
+def write_classifier_result(f5, results_path, read_id, predicted_class, prob, passed_classification):
+    results_path = f"{results_path}/{read_id}"
+    if results_path not in f5:
+        f5.create_group(results_path)
+    f5[results_path].attrs["best_class"] = predicted_class
+    f5[results_path].attrs["best_score"] = prob
+    f5[results_path].attrs["assigned_class"] = predicted_class if passed_classification else -1
+
+
+class PytorchClassifierPlugin(ClassifierPlugin):
+
+    def __init__(module: nn.Module, name: str, version: str, state_dict_filepath: PathLikeOrString, use_cuda: bool = False):
+        """An abstract class for classifier that are built from PyTorch. 
+
+        Subclass this and implement `evaluate`
+
+        Optionally, if you'd like to do some special pre-processing on the data or load the PyTorch module in a specific way 
+        do so by writing `pre_process` and `load` functions as well, and call them before evaluating the module in `evalaute`.
+
+        For an example of this in action, see the `models/NTERs_trained_cnn_05152019.py` module.
+
+        Parameters
+        ----------
+        module : nn.Module
+            The PyTorch module to use as a classifier. This can be either the instantiated module, or the class itself. If the class is passed, a bare module will be instantiated from it.
+        name : str
+            Uniquely identifying name for this module.
+        version : str
+            Version of the model. Useful for keeping track of differently learned parameters.
+        state_dict_filepath : PathLikeOrString
+            Path to the state_dict describing the module's parameters.
+            For more on PyTorch state_dicts, see https://pytorch.org/tutorials/recipes/recipes/what_is_state_dict.html. 
+        use_cuda : bool, optional
+            Whether to use CUDA for GPU processing, by default False
+        """
+        self.module = module if isinstance(module, nn.Module) else module() # Instantiate the module, if the user passed in the class rather than an instance.
+        self.name = name
+        self.version = version
+
+        self.state_dict_filepath = state_dict_filepath
+        self.use_cuda = cuda
+
+    def load(self, filepath: str, use_cuda: bool = False):
+        """Loads the PyTorch module. This means instantiating it, 
+        setting its state dict [1], and setting it to evaluation mode [2].
+
+        [1] - https://pytorch.org/tutorials/recipes/recipes/what_is_state_dict.html
+        [2] - 
+
+        Parameters
+        ----------
+        filepath : str
+            [description]
+        use_cuda : bool, optional
+            [description], by default False
+        """
+        torch_module = module()
+        # For more on Torch devices, please see: 
+        #   https://pytorch.org/docs/stable/tensor_attributes.html#torch-device
+        device = "cpu" if not use_cuda else "cuda" 
+
+        state_dict = torch.load(filepath, map_location=torch.device(device))
+        torch_module.load_state_dict(state_dict, strict=True)
+
+        # Sets the model to inference mode
+        torch_module.eval()
+
+        self.module = torch_module
+
+    def pre_process(self, capture: Capture) -> torch.Tensor:
+        """Do some pre-processing on the data, if desired. 
+
+        Otherwise, this method just converts the fractionalized 
+        capture to a torch Tensor.
+
+        Parameters
+        ----------
+        capture : Capture
+            Capture we want to classify.
+
+        Returns
+        -------
+        torch.Tensor
+            A tensor that resulted from pre-processing the capture data.
+        """
+        tensor = torch.from_numpy(capture.fractionalized)
+        if self.use_cuda:
+            tensor = tensor.cuda()
+        return tensor
+    
+    @abstractmethod
+    def evaluate(self, capture: Capture):
+        raise NotImplementedError(
+            "Evaluate hasn't been implemented for this classifier."
+        )
+
+    def model_name(self) -> str:
+        return self.name
+
+    def model_version(self) -> str:
+        return self.version
+
+    def model_file(self) -> str:
+        return self.state_dict_filepath

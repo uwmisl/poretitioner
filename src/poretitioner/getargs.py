@@ -59,7 +59,7 @@ class ARG:
 
     # Segmenter
     CAPTURE_DIRECTORY = (
-        "output_dir"  # Argument on the command line has a dash, but the attribute.
+        "capture_directory"  # Argument on the command line has a dash, but the attribute.
     )
 
     class SEGMENT:
@@ -76,6 +76,8 @@ class ARG:
 
     # Filtration
     class FILTER:
+        FILTER_SET_NAME = "filter_set_name"
+
         LENGTH_MAX = "filter_length_max"
         LENGTH_MIN = "filter_length_min"
 
@@ -280,6 +282,12 @@ def add_capture_directory_option_to_parser(parser: ArgumentParser):
 
 # Mapping from command line option "--foo" to all its args and kwa
 FILTER_ARGS = {
+    ARG.FILTER.FILTER_SET_NAME: {
+        "action": "store",
+        "help": "A unique identifier for a collection of filters, ideally describing why the collection was chosen, like 'NTER_PAPER_FINAL_2018_10_09'.",
+        "type": str,
+    },
+
     ARG.FILTER.LENGTH_MIN: {
         "action": "store",
         "help": "Exclude potential captures that have fewer than this many observations in the nanopore current trace.",

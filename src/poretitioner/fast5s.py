@@ -10,12 +10,13 @@ from collections import namedtuple
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path, PurePosixPath
-from typing import Dict, List, NewType, Optional, Union
+from typing import Dict, List, NewType, Optional, Set, Union
 
 import h5py
 from .utils.filtering import PATH as FILTER_PATH
-from .utils.filtering import FilterPlugin, RangeFilter
+from .utils.filtering import FilterSet, FilterPlugin, RangeFilter
 
+from .utils.classify import CLASSIFICATION_PATH
 from .application_info import get_application_info
 from .logger import Logger, getLogger
 from .signals import (
@@ -25,8 +26,9 @@ from .signals import (
     RawSignal,
     VoltageSignal,
 )
-from .utils.configuration import FilterConfig, SegmentConfiguration
+from .utils.configuration import SegmentConfiguration
 from .utils.core import NumpyArrayLike, PathLikeOrString
+from .utils.core import ReadId
 
 __all__ = ["BulkFile", "CaptureFile", "channel_path_for_read_id", "signal_path_for_read_id"]
 
@@ -63,10 +65,10 @@ class CAPTURE_PATH:
     SEGMENTATION = "/Meta/Segmentation"
     CAPTURE_WINDOWS = "/Meta/Segmentation/capture_windows"
     CONTEXT_ID = "/Meta/Segmentation/context_id"
-    FILTERS = "/Meta/Segmentation/filters"
+    FILTERS = "/Meta/Segmentation/capture_criteria"
 
-
-class SubRun(namedtuple("SubRun", ["id", "offset", "duration"])):
+@dataclass(frozen=True)
+class SubRun:
     """ If the bulk fast5 contains multiple runs (shorter sub-runs throughout
     the data collection process), this can be used to record additional
     context about the sub run: (id : str, offset : int, and
@@ -75,12 +77,12 @@ class SubRun(namedtuple("SubRun", ["id", "offset", "duration"])):
     measured in #/time series points.
     """
 
-    id: str
-    offset: int
-    duration: int
+    sub_run_id: str
+    sub_run_offset: int
+    sub_run_duration: int
 
 
-def format_read_id(read_id: str) -> str:
+def format_read_id(read_id: str) -> ReadId:
     """Take a read_id and ensure it's prefixed with "read_".
 
     Parameters
@@ -90,13 +92,13 @@ def format_read_id(read_id: str) -> str:
 
     Returns
     -------
-    str
-        Read_id string, which 
+    ReadId
+        Read_id string, which uniquely identifies a read.
     """
-    return read_id if read_id.startswith("read_") else f"read_{read_id}"
+    return ReadId(read_id) if read_id.startswith("read_") else ReadId(f"read_{read_id}")
 
 
-def channel_path_for_read_id(read_id: str, root: str = FAST5_ROOT) -> PathLikeOrString:
+def channel_path_for_read_id(read_id: ReadId, root: str = FAST5_ROOT) -> PathLikeOrString:
     """Generates an HDFS group path for a read_id's channel.
 
     Parameters
@@ -117,7 +119,7 @@ def channel_path_for_read_id(read_id: str, root: str = FAST5_ROOT) -> PathLikeOr
     return channel_path
 
 
-def signal_path_for_read_id(read_id: str, root: str = FAST5_ROOT) -> PathLikeOrString:
+def signal_path_for_read_id(read_id: ReadId, root: str = FAST5_ROOT) -> PathLikeOrString:
     """Generates an HDFS group path for a read_id's signal.
 
     Parameters
@@ -513,9 +515,23 @@ class CaptureFile(BaseFile):
         """
         logger.debug(f"Creating capture file at {capture_filepath} in mode ({mode})")
         super().__init__(capture_filepath, mode=mode, logger=logger)
+
+        # Creates /Filters
+        if self.f5.get(FILTER_PATH.ROOT) is None:
+            self.f5.create_group(FILTER_PATH.ROOT)
+
+        # Creates /Classification
+        if self.f5.get(CLASSIFICATION_PATH.ROOT) is None:
+            self.f5.create_group(CLASSIFICATION_PATH.ROOT)
+
         if not self.filepath.exists():
             error_msg = f"Capture fast5 file does not exist at path: {self.filepath}. Make sure the capture file is in this location."
             raise OSError(error_msg)
+
+    # @property
+    # TODO: get the sub run info stored from initialization
+    # def sub_run(self):
+    #     self.f5[CAPTURE_PATH.CONTEXT_TAGS].attrs
 
     def initialize_from_bulk(
         self,
@@ -531,7 +547,7 @@ class CaptureFile(BaseFile):
         bulk_f5 : BulkFile
             Bulk Fast5 file, generated from an Oxford Nanopore experiment.
         capture_criteria : List[RangeFilter]
-            Filters that define what 
+            Filters that define what signals could even potentially be a capture.
         segment_config : SegmentConfiguration
             [description]
         sub_run : Optional[SubRun], optional
@@ -542,7 +558,7 @@ class CaptureFile(BaseFile):
         ValueError
             [description]
         """
-        # Only supporting range filters for now (MVP). This should be expanded to all FilterPlugins: https://github.com/uwmisl/poretitioner/issues/67
+        # Only supporting range capture_criteria for now (MVP). This should be expanded to all FilterPlugins: https://github.com/uwmisl/poretitioner/issues/67
 
         # Referencing spec v0.1.1
 
@@ -566,20 +582,18 @@ class CaptureFile(BaseFile):
             capture_tracking_id_group.attrs.create(key, value)
 
         if sub_run is not None:
-            id = sub_run.id
-            offset = sub_run.offset
-            duration = sub_run.duration
-            if id is not None:
-                capture_tracking_id_group.attrs.create("sub_run_id", id, dtype=f"S{len(id)}")
-            if offset is not None:
-                capture_tracking_id_group.attrs.create("sub_run_offset", offset)
-            if duration is not None:
-                capture_tracking_id_group.attrs.create("sub_run_duration", duration)
+            id = sub_run.sub_run_id
+            offset = sub_run.sub_run_offset
+            duration = sub_run.sub_run_duration
+
+            capture_tracking_id_group.attrs.create("sub_run_id", id, dtype=f"S{len(id)}")
+            capture_tracking_id_group.attrs.create("sub_run_offset", offset)
+            capture_tracking_id_group.attrs.create("sub_run_duration", duration)
 
         # /Meta/Segmentation
         # TODO: define config param structure : https://github.com/uwmisl/poretitioner/issues/27
         # config = {"param": "value",
-        #           "filters": {"f1": (min, max), "f2: (min, max)"}}
+        #           "capture_criteria": {"f1": (min, max), "f2: (min, max)"}}
         capture_segmentation_group = self.f5.create_group(CAPTURE_PATH.SEGMENTATION)
         # print(__name__)
         version = get_application_info().version
@@ -594,7 +608,7 @@ class CaptureFile(BaseFile):
         context_id_group = self.f5.create_group(CAPTURE_PATH.CONTEXT_ID)
         capture_windows_group = self.f5.create_group(CAPTURE_PATH.CAPTURE_WINDOWS)
 
-        # Only supporting range filters for now (MVP): https://github.com/uwmisl/poretitioner/issues/67
+        # Only supporting range capture_criteria for now (MVP): https://github.com/uwmisl/poretitioner/issues/67
         if segment_config is None:
             raise ValueError("No segment configuration provided.")
         else:
@@ -616,12 +630,9 @@ class CaptureFile(BaseFile):
                 minimum = filter_plugin.minimum
 
                 self.log.debug(f"Setting capture criteria for {name}: ({minimum}, {maximum})")
-                if minimum is None:
-                    minimum = -1
-                if maximum is None:
-                    maximum = -1
-                if minimum == -1 and maximum == -1:
+                if minimum is None and maximum is None:
                     continue
+                    
                 filter_group.create_dataset(name, data=(minimum, maximum))
             # Based on the example code, it doesn't seem like we write anything for ejected filter?
 
@@ -670,16 +681,33 @@ class CaptureFile(BaseFile):
         return rate
 
     @property
-    def reads(self, root: str = FAST5_ROOT) -> List[str]:
+    def reads(self, root: str = FAST5_ROOT) -> List[ReadId]:
         root_group = self.f5.get(root)
         potential_reads = [] if not root_group else root_group.keys()
         reads = [read for read in potential_reads if self.is_read(read)]
         return reads
 
+
+    def filter(self, filter_set: FilterSet) -> Set[ReadId]:
+        # First, check whether this exact filter set exists in the file already
+        
+        filter_path = self.fast5.get(FILTER_PATH.ROOT) 
+        
+        
+
+
+        # If not, create it and write the result
+
+        # If so, log that it was a found and return the result
+        
+
     @property
     def filtered_reads(self):
         # TODO: Implement filtering here  to only return reads that pass a filter. https://github.com/uwmisl/poretitioner/issues/67
         return self.reads
+
+    def filter_sets(self):
+        pass
 
     def is_read(self, path: PathLikeOrString) -> bool:
         """Whether this path points to a capture read.
@@ -701,7 +729,7 @@ class CaptureFile(BaseFile):
         return self.f5.get(channel_path) and self.f5.get(signal_path)
 
     def get_fractionalized_read(
-        self, read_id: str, start: Optional[int] = None, end: Optional[int] = None
+        self, read_id: ReadId, start: Optional[int] = None, end: Optional[int] = None
     ) -> FractionalizedSignal:
         """Gets the fractionalized signal from this read.
 
@@ -736,7 +764,7 @@ class CaptureFile(BaseFile):
 
         return fractionalized
 
-    def get_channel_calibration_for_read(self, read_id: str) -> ChannelCalibration:
+    def get_channel_calibration_for_read(self, read_id: ReadId) -> ChannelCalibration:
         """Retrieve the channel calibration for a specific read in a segmented fast5 file (i.e. CaptureFile).
         This is used for properly scaling values when converting raw signal to actual units.
 
@@ -757,7 +785,7 @@ class CaptureFile(BaseFile):
         calibration = self.get_channel_calibration_for_path(channel_path)
         return calibration
 
-    def get_capture_metadata_for_read(self, read_id: str) -> CaptureMetadata:
+    def get_capture_metadata_for_read(self, read_id: ReadId) -> CaptureMetadata:
         """Retrieve the capture metadata for given read.
 
         Parameters
@@ -830,16 +858,4 @@ class CaptureFile(BaseFile):
         f5[channel_path].attrs["sampling_rate"] = metadata.sampling_rate
         f5[channel_path].attrs[KEY.OPEN_CHANNEL_PA] = metadata.open_channel_pA
 
-    def write_filter_results(self, read_ids: List[str]):
-        # For all read_ids that passed the filter (AKA reads that were passed in),
-        # create a hard link in the filter_path to the actual read's location in
-        # the fast5 file.
-        set_matching_read_ids = set(self.reads)
-        passing_read_ids = [read_id for read_id in read_ids if read_id in set_matching_read_ids]
-        for read_id in passing_read_ids:
-            read_path = format_read_id(read_id)
-            read_grp = self.f5.get(read_path)
-            self.log.debug(read_grp)
-            filter_read_path = FILTER_PATH.filter_pass_path_for_read_id(read_id)
-            # Create a hard link from the filter read path to the actual read path
-            self.f5[filter_read_path] = read_grp
+   

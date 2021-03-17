@@ -19,7 +19,6 @@ from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
-import pprint
 
 import numpy as np
 
@@ -29,6 +28,7 @@ from ..logger import getLogger, Logger
 from .core import stripped_by_keys, PathLikeOrString
 
 from .filtering import FilterSet
+from .filtering import FilterConfig, FilterConfigs
 
 @dataclass(frozen=True)
 class CONFIG:
@@ -172,6 +172,7 @@ class BaseConfiguration(metaclass=ABCMeta):
 
 @dataclass(frozen=True)
 class GeneralConfiguration(BaseConfiguration):
+    version: str
     n_workers: int
     capture_directory: str
 
@@ -190,6 +191,7 @@ class GeneralConfiguration(BaseConfiguration):
         config : Dict, optional
             [description], by default None
         """
+        command_line_args = stripped_by_keys(command_line_args, self.valid_field_names) # Only keep filter-related command line args
         self.initialize_fields(command_line_args=command_line_args, config=config)
 
 
@@ -206,10 +208,10 @@ class SegmentConfiguration(BaseConfiguration):
     translocation_delay: float
     terminal_capture_only: bool
     end_tolerance: float
-    good_channels: List[int]
     open_channel_prior_mean: int
     open_channel_prior_stdv: int
     terminal_capture_only: bool
+    capture_criteria: Dict
 
     def __init__(self, command_line_args: Dict = None, config: Dict = None, log: Logger = getLogger()) -> None:
         """[summary]
@@ -247,35 +249,31 @@ class ClassifierConfiguration(BaseConfiguration):
     def validate(self):
         raise NotImplementedError("Not implemented configuration")
 
-def get_filter_configuration(filter_command_line_args: Dict = None, filter_config_from_file: Dict = None, log = None):
+def get_filter_set(filter_command_line_args: Dict = None, filter_config_from_file: Dict = None, log = None) -> FilterSet:
 
     filter_config_from_file = filter_config_from_file if filter_config_from_file is not None else {}
     filter_command_line_args = filter_command_line_args if filter_command_line_args is not None else {}
+    filter_command_line_args = stripped_by_keys(filter_command_line_args, ARG.FILTER.ALL) # Only keep filter-related command line args
     # Command line args take precidence over configuration files in the event of a conflict.
-    combined = {**filter_config, **filter_command_line_args}
+    combined = {**filter_config_from_file, **filter_command_line_args}
     log.debug(f"\nFilters: {combined!s}")
 
     try:
         # Get the filter set name, then remove it from the dictionary so we know everything else in `combined `refers to actual filters.
         filter_set_name = combined.pop(ARG.FILTER.FILTER_SET_NAME)
-    except AttributeError as e:
+    except KeyError as e:
         error_msg = f"Uh oh, we couldn't find the argument {ARG.FILTER.FILTER_SET_NAME} in either the config file or the command line. Please be sure to specify it in the config file, or on the command line."
         log.error(error_msg)
         raise e
     
     
-    log.debug(f"\nFilters[{filter_name}] = {filter_config!r}")
-    filter_configs = {}
-    for filter_name, filter_attributes in combined.items():
-        # TODO: Filter Plugin should allow filepaths. https://github.com/uwmisl/poretitioner/issues/91
-        filepath = None
+    my_filter_configs = { filter_name: FilterConfig(filter_name, filter_attributes) for filter_name, filter_attributes in combined.items() }
 
-        my_filter_configs = { filter_name: FilterConfig(filter_name, filter_attributes, filepath) for filter_name, filter_attributes in combined.items() }
+    log.debug(f"\n{my_filter_configs!s}")
 
-        FilterSet.from_filter_configs(filter_set_name )
-        pprint.p
-        log.debug(f"\nFilters[{filter_name}] = {filter_config!r}")
-        my_filter_configs[filter_name] = filter_config
+    filter_set = FilterSet.from_filter_configs(filter_set_name, my_filter_configs)
+    return filter_set
+
 
 def readconfig(path, command_line_args=None, log: Logger = getLogger()):
     """Read configuration from the path.
@@ -304,10 +302,7 @@ def readconfig(path, command_line_args=None, log: Logger = getLogger()):
     log.debug(f"\n\ncommand_line_args: {command_line_args!s}\n\n")
     log.debug(f"\n\nfilter_config: {filter_config!s}\n\n")
 
-    filter_command_line_args = stripped_by_keys(command_line_args, ARG.FILTER.ALL) # Only keep filter-related command line args
-    
-    FilterSet.from_filter_configs()
-    filter_set = FilterSet(filter_config=filter_config, command_line_args=filter_command_line_args, log=log)
+    filter_set = get_filter_set(filter_command_line_args=command_line_args, filter_config_from_file=filter_config, log=log)
 
     segmentation_configuration = SegmentConfiguration(config=seg_config, command_line_args=command_line_args, log=log)
     general_configuration = GeneralConfiguration(config=gen_config, command_line_args=command_line_args, log=log)

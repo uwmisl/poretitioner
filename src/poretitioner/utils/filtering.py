@@ -31,6 +31,22 @@ FilterSetId = NewType("FilterSetId", str)
 # Unique identifier for an individual filter (e.g. "min_frac")
 FilterName = NewType("FilterName", str)
 
+
+__all__ = [
+    "does_pass_filters",
+    "get_filters",
+    "FilterName",
+    "FilterSetId",
+    "FilterConfig",
+    "Filter",
+    "Filters",
+    "DEFAULT_FILTER_PLUGINS"
+    "FilterSet",
+    "FilterConfigs",
+    "FilterPlugin",
+    "PATH",
+]
+
 @dataclass(frozen=True)
 class PATH:
     ROOT = f"/Filter/"
@@ -58,10 +74,13 @@ class FilterConfig:
         - FilterConfig: A high-level description of a filter.
     
         - FilterPlugin: An actual, callable, implementation of a FilterConfig.
+
+
+    For custom plugins, make sure "filepath" is an attribute that points to the file to laod
     """
     name: str
     attributes: Dict[str, Any]
-    filepath: Optional[str] = None
+    
 
 # Mapping of a FilterName to filter configurations.
 FilterConfigs = NewType("FilterConfigs", Dict[FilterName, FilterConfig])
@@ -328,35 +347,6 @@ class MyCustomFilter(FilterPlugin):
         return meets_criteria
 
 
-def apply_feature_filters(capture: CaptureOrTimeSeries, filters: List[FilterPlugin]) -> bool:
-    """
-    Check whether an array of current values (i.e. a single nanopore capture)
-    passes a set of filters. Filters can be based on summary statistics
-    (e.g., mean) and/or a range of allowed values.
-
-    Notes on filter behavior: If the filters list is empty, there are no filters
-    and the capture passes.
-
-    Parameters
-    ----------
-    capture : CaptureOrTimeSeries | NumpyArrayLike
-        Capture containing time series of nanopore current values for a single capture, or the signal itself.
-    filters : List[FilterPlugin]
-        List of FilterPlugin instances. Write your own filter by subclassing FilterPlugin.
-
-    Returns
-    -------
-    boolean
-        True if capture passes all filters; False otherwise.
-    """
-    # TODO: Parallelize? https://github.com/uwmisl/poretitioner/issues/67
-    all_passed = True 
-    for filter_out in filters: 
-        if not filter_out(capture):
-            return False 
-    return True
-
-
 def check_capture_ejection_by_read(f5, read_id):
     """Checks whether the current capture was in the pore until the voltage
     was reversed.
@@ -405,27 +395,28 @@ def check_capture_ejection(end_capture, voltage_ends, tol_obs=20):
     return False
 
 
-def apply_filters_to_read(config, f5, read_id, filter_name):
-    passed_filters = True
 
-    # Check whether the capture was ejected
-    if "ejected" in config["filters"][filter_name]:
-        only_use_ejected_captures = config["filters"][filter_name]["ejected"]  # TODO
-        if only_use_ejected_captures:
-            capture_ejected = check_capture_ejection_by_read(f5, read_id)
-            if not capture_ejected:
-                passed_filters = False
-                return passed_filters
-    else:
-        only_use_ejected_captures = False  # could skip this, leaving to help read logic
+# def apply_filters_to_read(config, f5, read_id, filter_name):
+#     passed_filters = True
 
-    # Apply all the filters
-    get_raw_signal()
-    signal = raw_signal_utils.get_fractional_blockage_for_read(f5, read_id)
-    # print(config["filters"][filter_name])
-    # print(f"min = {np.min(signal)}")
-    passed_filters = apply_feature_filters(signal, config["filters"][filter_name])
-    return passed_filters
+#     # Check whether the capture was ejected
+#     if "ejected" in config["filters"][filter_name]:
+#         only_use_ejected_captures = config["filters"][filter_name]["ejected"]  # TODO
+#         if only_use_ejected_captures:
+#             capture_ejected = check_capture_ejection_by_read(f5, read_id)
+#             if not capture_ejected:
+#                 passed_filters = False
+#                 return passed_filters
+#     else:
+#         only_use_ejected_captures = False  # could skip this, leaving to help read logic
+
+#     # Apply all the filters
+#     get_raw_signal()
+#     signal = raw_signal_utils.get_fractional_blockage_for_read(f5, read_id)
+#     # print(config["filters"][filter_name])
+#     # print(f"min = {np.min(signal)}")
+#     passed_filters = apply_feature_filters(signal, config["filters"][filter_name])
+#     return passed_filters
 
 
 def filter_and_store_result(config, fast5_files, filter_name, overwrite=False):
@@ -474,7 +465,6 @@ def filter_like_existing(config, example_fast5, example_filter_path, fast5_files
 
 
 __DEFAULT_FILTER_PLUGINS = [
-    RangeFilter,
     MeanFilter,
     StandardDeviationFilter,
     MedianFilter,
@@ -510,7 +500,7 @@ class Filter:
     plugin: FilterPlugin
         
     def __call__(self, *args, **kwargs):
-        self.plugin(*args, **kwargs)
+        return self.plugin(*args, **kwargs)
 
     def apply(self, *args, **kwargs):
         self.plugin.apply(*args, **kwargs)
@@ -520,8 +510,6 @@ class Filter:
         return self.plugin.name()
 
 
-# 
-# 
 @dataclass
 class Filters:
     """A collection of callable filters and their names.
@@ -532,6 +520,9 @@ class Filters:
 
     """
     _filters: Dict[FilterName, Filter]
+    
+    def __init__(self, filters: Dict[FilterName, Filter]):
+        self._filters = filters
 
     def __getitem__(self, filter_name: str):
         return self._filters[filter_name]
@@ -539,23 +530,54 @@ class Filters:
     def __setitem__(self, filter_name: str):
         return self._filters[filter_name]
 
+    def values(self):
+        return self._filters.values()
+
     def items(self):
         return self._filters.items()
 
-def get_filters(filter_configs: FilterConfigs) -> Filters:
+    # def filters(self):
+    #     return self._filters.values()
+
+    # def __dask_tokenize__(self):
+    #     # For tokenize to work we want to return a value that fully
+    #     # represents this object. In this case it's the config dictionary.
+    #     return self._filters
+    
+
+    def __call__(self, capture: CaptureOrTimeSeries):
+        """
+        Check whether an array of values (e.g. a single nanopore capture)
+        passes a set of filters.
+
+        Parameters
+        ----------
+        capture : CaptureOrTimeSeries | NumpyArrayLike
+            Capture containing time series of nanopore current values for a single capture, or the signal itself.
+
+        Returns
+        -------
+        boolean
+            True if capture passes all filters; False otherwise.
+        """
+        return does_pass_filters(capture, self._filters.values())
+
+
+def get_filters(filter_configs: Optional[FilterConfigs] = None) -> Filters:
     """Creates Filters from a list of filter configurations.
 
     Parameters
     ----------
-    filter_configs :  FilterConfigs
-        A mapping of filter names to their configurations
+    filter_configs :  Optional[FilterConfigs]
+        A mapping of filter names to their configurations, None by default (i.e. no filtering).
 
     Returns
     -------
     Filters
         A set of callable/applyable filters.
     """
-    my_filters = { name : filter_from_config(filter_config) for name, filter_config in filter_configs.items() }
+    filter_configs = filter_configs if filter_configs is not None else {}
+    my_filters = Filters({ name : filter_from_config(filter_config) for name, filter_config in filter_configs.items() })
     return my_filters
 
 @dataclass(frozen=True)
@@ -583,15 +605,11 @@ class FilterSet:
         return cls.__new__(filter_set_name, filters)
     
     @classmethod
-    def from_filter_configs(cls, name: FilterSetId, filter_config: FilterConfigs = None):
-        filters: Filters = get_filters(my_filter_configs)
-        cls.__new__(name, filters)
-
-    def __setitem__(self, name, my_filter):
-          self.filters[name] = my_filter
-
-    def __getitem__(self, name):
-          return self.filters[name]
+    def from_filter_configs(cls, name: FilterSetId, filter_configs: FilterConfigs = None):
+        filters: Filters = get_filters(filter_configs)
+        filter_set = cls.__new__(cls)
+        filter_set.__init__(name, filter_configs)
+        return filter_set
 
 
 def filter_from_config(config: FilterConfig, log: Logger = getLogger()) -> Filter:
@@ -618,8 +636,9 @@ def filter_from_config(config: FilterConfig, log: Logger = getLogger()) -> Filte
         2) The plugin class inherits from the `FilterPlugin` abstract base class.
     """
     name = config.name
-    filepath = config.filepath
+    
     attributes: Dict[str, Any] = config.attributes
+    filepath = attributes.get("filepath", None)
 
     # TODO: For non-default FilterPlugins, load/unpickle the class from the filepath. https://github.com/uwmisl/poretitioner/issues/91
     plugin = None
@@ -688,3 +707,29 @@ class FilterJSONEncoder(JSONEncoder):
         # Best practice to let base class default raise the type error:
         # https://docs.python.org/3/library/json.html#json.JSONEncoder.default
         return super().default(obj)
+
+
+def does_pass_filters(capture: CaptureOrTimeSeries, filters: Filters) -> bool:
+    """
+    Check whether an array of values (e.g. a single nanopore capture)
+    passes a set of filters. Filters can be based on summary statistics
+    (e.g., mean) and/or a range of allowed values.
+
+    Parameters
+    ----------
+    capture : CaptureOrTimeSeries | NumpyArrayLike
+        Capture containing time series of nanopore current values for a single capture, or the signal itself.
+    filters : Filters
+        The set of filters to apply. Write your own filter by subclassing FilterPlugin.
+
+    Returns
+    -------
+    boolean
+        True if capture passes all filters; False otherwise.
+    """
+    # TODO: Parallelize? https://github.com/uwmisl/poretitioner/issues/67
+    all_passed = True 
+    for filter_out in filters.values(): 
+        if not filter_out(capture):
+            return False 
+    return True    

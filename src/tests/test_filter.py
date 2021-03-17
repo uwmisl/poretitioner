@@ -15,22 +15,22 @@ import src.poretitioner.utils.filtering as filtering
 import pytest
 
 # TODO: Restore Filter unit tests: https://github.com/uwmisl/poretitioner/issues/88
-# def apply_feature_filters_empty_test():
+# def does_pass_filters_empty_test():
 #     """Check for pass when no valid filters are provided."""
 #     # capture -- mean: 1; stdv: 0; median: 1; min: 1; max: 1; len: 6
 #     capture = [1, 1, 1, 1, 1, 1]
 #     filters = {}
 #     # No filter given -- pass
 #     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     pass_filters = True  # filtering.apply_feature_filters(capture, filters)
+#     pass_filters = True  # filtering.does_pass_filters(capture, filters)
 #     filters = {"not_a_filter": (0, 1)}
 #     # No *valid* filter given -- pass
 #     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     pass_filters = True  # filtering.apply_feature_filters(capture, filters)
+#     pass_filters = True  # filtering.does_pass_filters(capture, filters)
 #     assert pass_filters
 
 
-# def apply_feature_filters_length_test():
+# def does_pass_filters_length_test():
 #     """Test length filter function."""
 #     # capture -- mean: 1; stdv: 0; median: 1; min: 1; max: 1; len: 6
 #     capture = [1, 1, 1, 1, 1, 1]
@@ -38,54 +38,54 @@ import pytest
 #     # Only length filter -- pass (edge case, inclusive high)
 #     filters = {"length": (0, 6)}
 #     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     pass_filters = True  # filtering.apply_feature_filters(capture, filters)
+#     pass_filters = True  # filtering.does_pass_filters(capture, filters)
 #     assert pass_filters
 
 #     # Only length filter -- pass (edge case, inclusive low)
 #     filters = {"length": (6, 10)}
 #     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     pass_filters = True  # filtering.apply_feature_filters(capture, filters)
+#     pass_filters = True  # filtering.does_pass_filters(capture, filters)
 #     assert pass_filters
 
 #     # Only length filter -- fail (too short)
 #     filters = {"length": (8, 10)}
 #     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     pass_filters = True  # filtering.apply_feature_filters(capture, filters)
+#     pass_filters = True  # filtering.does_pass_filters(capture, filters)
 #     assert not pass_filters
 
 #     # Only length filter -- fail (too long)
 #     filters = {"length": (0, 5)}
 #     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     pass_filters = True  # filtering.apply_feature_filters(capture, filters)
+#     pass_filters = True  # filtering.does_pass_filters(capture, filters)
 #     assert not pass_filters
 
 #     # Only length filter -- pass (no filter actually given)
 #     filters = {"length": (None, None)}
 #     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     pass_filters = True  # filtering.apply_feature_filters(capture, filters)
+#     pass_filters = True  # filtering.does_pass_filters(capture, filters)
 #     assert pass_filters
 
 
-# def apply_feature_filters_mean_test():
+# def does_pass_filters_mean_test():
 #     """Test mean filter function. stdv, median, min, and max apply similarly."""
 #     # capture -- mean: 0.5; stdv: 0.07; median: 0.5; min: 0.4; max: 0.6; len: 5
 #     capture = [0.5, 0.5, 0.6, 0.4, 0.5]
 #     # Only mean filter -- pass
 #     filters = {"mean": (0, 1)}
 #     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     pass_filters = True  # filtering.apply_feature_filters(capture, filters)
+#     pass_filters = True  # filtering.does_pass_filters(capture, filters)
 #     assert pass_filters
 
 #     # Only mean filter -- fail (too high)
 #     filters = {"mean": (0, 0.4)}
 #     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     pass_filters = True  # filtering.apply_feature_filters(capture, filters)
+#     pass_filters = True  # filtering.does_pass_filters(capture, filters)
 #     assert not pass_filters
 
 #     # Only mean filter -- fail (too low)
 #     filters = {"mean": (0.6, 1)}
 #     # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#     pass_filters = True  # filtering.apply_feature_filters(capture, filters)
+#     pass_filters = True  # filtering.does_pass_filters(capture, filters)
 #     assert not pass_filters
 
 

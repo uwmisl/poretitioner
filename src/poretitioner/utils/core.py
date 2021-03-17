@@ -20,6 +20,7 @@ __all__ = [
     "NumpyArrayLike",
     "ReadId",
     "PathLikeOrString",
+    'ReadId',
     "Window",
     "WindowsByChannel",
 ]

@@ -85,5 +85,5 @@ FILTER_FAST5_FILE = (
 raw_signal = np.random.randn(10)
 raw = RawSignal(raw_signal, CHANNEL_NUMBER, CALIBRATION)
 
-classified = ClassifierFile(CLASSIFIED_10_MINS_4_CHANNELS)
+#classified = ClassifierFile(CLASSIFIED_10_MINS_4_CHANNELS)
 # Do whatever else you'd like!

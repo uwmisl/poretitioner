@@ -18,4 +18,19 @@
 with pkgs;
 let
   dependencies = callPackage ./dependencies.nix { inherit python cudaSupport; };
-in mkShell { buildInputs = dependencies.all; }
+
+  pythonEnv = python.withPackages (ps: (dependencies.getDependenciesForPython python).all );
+in mkShell { 
+  buildInputs = [
+    pkgs.zsh
+    pythonEnv
+  ]
+  ++  dependencies.all ;
+
+  shellHook = ''
+    exec env zsh
+  '';
+
+  MY_ENVIRONMENT_VARIABLE = "world";
+  propagatedBuildInputs = dependencies.all ++ [ pythonEnv ]; 
+}
