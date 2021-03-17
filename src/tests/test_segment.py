@@ -493,6 +493,7 @@ def find_captures_6_clog_no_open_channel_test():
     all_currents_within_bounds = all(
         (np.isclose(open_channel_pA, expected_open_channel_pA, atol=0.5))
     )
+
     assert (
         all_currents_within_bounds
     ), f"All calculated open channel currents should be close to {expected_open_channel_pA}"
@@ -611,6 +612,7 @@ def prep_capture_windows_test():
         assert count_by_channel[channel_number] == 4
 
 
+@pytest.mark.xfail(reason="Need to implement config (filters currently in progress).")
 class TestParallelFindCaptures:
     def parallel_find_captures_test(self):
         bulk_f5_fname = "src/tests/data/bulk_fast5_dummy.fast5"
@@ -637,6 +639,7 @@ class TestParallelFindCaptures:
         segment.parallel_find_captures(
             config, segment_config, overwrite=True, filters=filters
         )
+
         run_id = "d0befb838f5a9a966e3c559dc3a75a6612745849"
         actual_n_captures = 5
         n_captures = 0
