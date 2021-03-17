@@ -737,6 +737,7 @@ class Capture:
     """
 
     signal: PicoampereSignal
+    # channel_number: int
     window: Window
     signal_threshold_frac: float
     open_channel_pA_calculated: float
@@ -752,7 +753,7 @@ class Capture:
         return frac
 
     def __repr__(self):
-        string = f"duration: {self.signal.duration} window:{self.window!s} open_channel_pA:{self.open_channel_pA_calculated}"
+        string = f"duration: {self.signal.duration} channel_number:{self.signal.channel_number} window:{self.window!s} open_channel_pA:{self.open_channel_pA_calculated} ejected:{self.ejected}"
         return string
 
     def __len__(self):
@@ -830,7 +831,7 @@ def compute_fractional_blockage(
     [NumpyArrayLike]
         Array of fractionalized nanopore current in the range [0, 1]
     """
-    pico = np.frombuffer(picoamperes, dtype=float)
+    pico = np.array(picoamperes, dtype=float)
     pico /= open_channel
     frac = np.clip(pico, a_max=1.0, a_min=0.0)
     return frac

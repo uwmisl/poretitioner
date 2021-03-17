@@ -5,7 +5,7 @@ from typing import List
 
 import numpy as np
 
-from . import logger
+import logger
 from .getargs import ARG, COMMAND, get_args
 from .utils import segment
 from .utils.configuration import CONFIG, readconfig, SegmentConfiguration, GeneralConfiguration, FilterConfiguration
