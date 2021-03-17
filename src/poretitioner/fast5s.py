@@ -114,7 +114,7 @@ def channel_path_for_read_id(read_id: str, root: str = FAST5_ROOT) -> PathLikeOr
     channel_path = add_channel_id_to_path(read_id_path)
     channel_path = PurePosixPath(root, read_id, KEY.CHANNEL_ID)
 
-    return channel_path
+    return str(channel_path)
 
 
 def signal_path_for_read_id(read_id: str, root: str = FAST5_ROOT) -> PathLikeOrString:
@@ -133,7 +133,7 @@ def signal_path_for_read_id(read_id: str, root: str = FAST5_ROOT) -> PathLikeOrS
     read_id = format_read_id(read_id)
     signal_path = PurePosixPath(root, read_id, KEY.SIGNAL)
 
-    return signal_path
+    return str(signal_path)
 
 
 def add_signal_to_path(base: PathLikeOrString) -> PathLike:
@@ -819,6 +819,7 @@ class CaptureFile(BaseFile):
         f5[signal_path].attrs["duration"] = metadata.duration
         f5[signal_path].attrs["ejected"] = metadata.ejected
         f5[signal_path].attrs["voltage"] = metadata.voltage_threshold
+        f5[signal_path].attrs["channel_number"] = metadata.channel_number
         f5[signal_path].attrs[KEY.OPEN_CHANNEL_PA] = metadata.open_channel_pA
 
         channel_path = str(channel_path_for_read_id(read_id))

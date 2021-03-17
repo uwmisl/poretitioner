@@ -8,6 +8,7 @@ bulk fast5s.
 
 """
 import os
+from threading import local
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,7 +18,6 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
 import dask.bag as db
-import h5py
 import numpy as np
 from dask.diagnostics import ProgressBar
 
@@ -138,21 +138,32 @@ def find_captures(
     )
     del frac_current
 
-    captures = [
-        Capture(
+    captures = []
+    for potential_capture in potential_captures:
+        # If the translocation delay is longer than the capture, then skip it
+        if potential_capture.end <= (potential_capture.start + delay):
+            continue
+
+        # Figure out whether the capture was ejected
+        ejected = False
+        if (
+            np.abs(capture_window.end - (potential_capture.end + capture_window.start))
+            <= end_tol
+        ):
+            ejected = True
+
+        # Save the updated capture info
+        c = Capture(
             signal_pA[potential_capture.start + delay : potential_capture.end],
-            channel_number,
             Window(  # Relative to the run, not to the start of the capture window
                 potential_capture.start + capture_window.start + delay,
                 potential_capture.end + capture_window.start,
             ),
             signal_threshold_frac,
             open_channel_pA_calculated,
-            np.abs(capture_window.end - (potential_capture.end + capture_window.start))
-            <= end_tol,
+            ejected,
         )
-        for potential_capture in potential_captures
-    ]
+        captures.append(c)
 
     # If terminal_capture_only, reduce list of captures to only last
     if terminal_capture_only:
@@ -206,7 +217,7 @@ def find_captures_dask_wrapper(
     filters = [] if filters is None else filters
     return find_captures(
         unsegmented_signal.signal,  # TODO this is not yet a capture at this point! It's just a region in the time series where there *could* be captures.
-        unsegmented_signal.channel_number,
+        unsegmented_signal.signal.channel_number,
         unsegmented_signal.window,
         unsegmented_signal.signal_threshold_frac,
         unsegmented_signal.open_channel_pA_calculated,
@@ -314,6 +325,7 @@ def _prep_capture_windows(
                 channel_number, start=sub_run_start_seconds, end=sub_run_end_seconds
             )
             pico = raw_signal.to_picoamperes()
+            local_logger.debug(f"pico_in_dask:{np.mean(pico)}+/-{np.std(pico)}")
             open_channel_pA_calculated = find_open_channel_current(
                 pico,
                 open_channel_guess=open_channel_pA_prior,
@@ -322,10 +334,8 @@ def _prep_capture_windows(
             )
             for capture_window in capture_windows:
                 start, end = capture_window.start, capture_window.end
-
                 unsegmented_signal = Capture(
                     pico[start:end],
-                    channel_number,
                     capture_window,
                     signal_threshold_frac,
                     open_channel_pA_calculated,
@@ -399,10 +409,10 @@ def parallel_find_captures(
     segment_config: SegmentConfiguration,
     # Only supporting range filters for now (MVP). This should be expanded to all FilterPlugins: https://github.com/uwmisl/poretitioner/issues/67
     filters: List[filtering.FilterPlugin] = None,
-    save_location=None,
-    overwrite=False,
-    sub_run_start_seconds=0,
-    sub_run_end_seconds=None,
+    save_location: str = None,
+    overwrite: bool = False,
+    sub_run_start_seconds: int = 0,
+    sub_run_end_seconds: int = None,
 ) -> List[CaptureMetadata]:
     """Identify captures within the bulk fast5 file in the specified range
     (from sub_run_start_seconds to sub_run_end_seconds.)
@@ -441,7 +451,7 @@ def parallel_find_captures(
     """
     bulk_f5_fname = segment_config.bulkfast5
     local_logger = logger.getLogger()
-    local_logger.setLevel(0)
+    local_logger.setLevel(5)
     # TODO: Update with actual configuring https://github.com/uwmisl/poretitioner/issues/73
     n_workers = config.n_workers
     assert type(n_workers) is int
@@ -465,6 +475,7 @@ def parallel_find_captures(
         signal_threshold_frac,
         good_channels,
         open_channel_prior_mean,
+        open_channel_pA_prior_bound=segment_config.open_channel_prior_stdv,
         sub_run_start_seconds=sub_run_start_seconds,
         sub_run_end_seconds=sub_run_end_seconds,
     )
@@ -490,9 +501,6 @@ def parallel_find_captures(
     assert len(captures) == len(context)
 
     # Write captures to fast5
-    n_in_file = 0
-    file_no = 1
-    capture_metadatum = []
 
     def get_capture_metadata(
         read_id: str,
@@ -518,21 +526,19 @@ def parallel_find_captures(
         CaptureMetadata
             Metadata for the capture.
         """
-        window_start = metadata.window.start
+        # window_start = metadata.window.start
 
         capture_start = capture.window.start
 
         channel_number = capture.signal.channel_number
 
-        start_time_local = (
-            capture_start + window_start
-        )  # Start time relative to the start of the bulk f5 subsection
+        start_time_local = capture_start
         start_time_bulk = (
             start_time_local + sub_run_start_seconds
         )  # relative to the start of the entire bulk f5
         capture_duration = capture.duration
         ejected = capture.ejected
-        local_logger.debug(f"Capture duration: {capture_duration}")
+        local_logger.debug(f"\tCapture duration: {capture_duration}")
 
         open_channel_pA = capture.open_channel_pA_calculated
         calibration = capture.signal.calibration
@@ -550,89 +556,11 @@ def parallel_find_captures(
         )
         return capture_metadata
 
-    # with BulkFile(bulk_f5_fname, "r") as bulk:
-    #     for captures, metadata in zip(captures, context):
-    #         for cap in captures:
-    #             # Create a read ID, if this capture's signal doesn't already have one.
-    #             read_id = cap.signal.read_id
-    #             read_id = read_id if read_id is not None else generate_read_id()
-    #             print(read_id)
-    #             start, end = cap.window.start, cap.window.end
-    #             capture_metadata = get_capture_metadata(
-    #                 read_id,
-    #                 sampling_rate,
-    #                 voltage_threshold,
-    #                 cap,
-    #                 metadata,
-    #                 sub_run_start_seconds=sub_run_start_seconds,
-    #             )
+    n_in_file = 0
+    file_no = 1
+    capture_metadatum = []
 
-    #             capture_metadatum.append(capture_metadata)
-
-    #             if n_in_file >= n_per_file:
-    #                 n_in_file = 0
-    #                 file_no += 1
-
-    #             capture_f5_filepath = Path(save_location, f"{run_id}_{file_no}.fast5")
-    #             print(f"capture_fname:{capture_f5_filepath} n_in_file:{n_in_file}")
-
-    #             # Set writing mode (detailing cases explicitly here)
-    #             mode = ""
-    #             if (
-    #                 n_in_file == 0
-    #                 and os.path.exists(capture_f5_filepath)
-    #                 and not overwrite
-    #             ):
-    #                 # CASE:
-    #                 #   * We're on the first read to write for this file
-    #                 #   * The file already exists
-    #                 #   * We're not supposed to overwrite this file
-    #                 # RESULT: IOError
-    #                 # TODO Verify that the folder is empty waaay up top, not here.
-    #                 raise IOError(
-    #                     f"File ({capture_f5_filepath}) already exists and overwrite set to False."
-    #                 )
-    #             elif n_in_file == 0 and overwrite:
-    #                 # CASE:
-    #                 #   * We're on the first read to write for this file
-    #                 #   * Overwrite is set
-    #                 # RESULT: Create a new file, even if it means overwriting an existing file
-    #                 # TODO : This can actually create a bug, example scenario: what if we have overwrite=True and
-    #                 # this run only generates 3 files, but the previous generated 5? The last 2 files would still
-    #                 # be there. Should just delete everything in the save_location before writing
-    #                 mode = "w"  # Create new file, truncate if exists
-    #             else:
-    #                 # CASE:
-    #                 #   * We're on the nth read to write for this file
-    #                 #   * We already handled whether to open a new one, so just write to this file.
-    #                 # RESULT: Write to the existing file.
-    #                 mode = "r+"  # Read/write, file must exist
-
-    #             # TODO: The current loop constanly re-opens the capture_file! Replace with loop that keeps a
-    #             # file open until it fills up.
-
-    #             n_in_file += 1
-
-    #             picoamperes: PicoampereSignal = cap.signal
-    #             raw_signal = picoamperes.to_raw()[start:end]
-    #             local_logger.debug(f"\tLength of raw signal : {len(raw_signal)}")
-
-    #             local_logger.debug(f"\tWriting to file: {capture_f5_filepath}...")
-
-    #             # mode = "w" if overwrite else "r+"
-    #             print(mode)
-    #             with CaptureFile(capture_f5_filepath, mode=mode) as capture_file:
-    #                 print("#/reads in file before writing", len(capture_file.reads))
-    #                 capture_file.initialize_from_bulk(
-    #                     bulk, filters, segment_config, sub_run=None
-    #                 )
-    #                 print("HERE")
-    #                 capture_file.write_capture(raw_signal, capture_metadata)
-    #                 print("#/reads in file after writing", len(capture_file.reads))
-
-    #             local_logger.debug(f"\tWritten!")
-
-    # Delete existing files if they already exist
+    # Delete existing files if overwrite is True.
     if overwrite and len(os.listdir(save_location)) > 0:
         for f in os.listdir(save_location):
             if f.endswith("fast5"):
@@ -645,19 +573,20 @@ def parallel_find_captures(
         capture_file = CaptureFile(capture_f5_filepath, mode="w")
         capture_file.initialize_from_bulk(bulk, filters, segment_config, sub_run=None)
 
-        for captures, metadata in zip(captures, context):
+        for captures, signal_metadata in zip(captures, context):
             for cap in captures:
                 # Create a read ID, if this capture's signal doesn't already have one.
                 read_id = cap.signal.read_id
                 read_id = read_id if read_id is not None else generate_read_id()
-                print(read_id)
-                start, end = cap.window.start, cap.window.end
+                local_logger.info(f"read_id:{read_id}")
+
+                # Get capture metadata
                 capture_metadata = get_capture_metadata(
                     read_id,
                     sampling_rate,
                     voltage_threshold,
                     cap,
-                    metadata,
+                    signal_metadata,
                     sub_run_start_seconds=sub_run_start_seconds,
                 )
 
@@ -671,7 +600,9 @@ def parallel_find_captures(
                     capture_f5_filepath = Path(
                         save_location, f"{run_id}_{file_no}.fast5"
                     )
-                    print(f"capture_fname:{capture_f5_filepath} n_in_file:{n_in_file}")
+                    local_logger.info(
+                        f"capture_fname:{capture_f5_filepath} n_in_file:{n_in_file}"
+                    )
                     mode = "w"
                     capture_file = CaptureFile(capture_f5_filepath, mode=mode)
                     capture_file.initialize_from_bulk(
@@ -681,15 +612,20 @@ def parallel_find_captures(
                 n_in_file += 1
 
                 picoamperes: PicoampereSignal = cap.signal
-                raw_signal = picoamperes.to_raw()[start:end]
-                local_logger.debug(f"\tLength of raw signal : {len(raw_signal)}")
+                local_logger.debug(
+                    f"\tLength of picoamperes: {len(picoamperes)}, mean+/stdv: {np.mean(picoamperes):0.4f} +/- {np.std(picoamperes):0.4f}"
+                )
+                raw_signal = picoamperes.to_raw()
+                # [capture_start_relative_to_window:capture_end_relative_to_window]
+                local_logger.debug(
+                    f"\tLength of raw signal:  {len(raw_signal)}, mean+/stdv: {np.mean(raw_signal)} +/- {np.std(raw_signal)}"
+                )
 
-                local_logger.debug(f"\tWriting to file: {capture_f5_filepath}...")
+                local_logger.info(
+                    f"\tWriting read {read_id} to file: {capture_f5_filepath}..."
+                )
 
-                # with CaptureFile(capture_f5_filepath, mode=mode) as capture_file:
-                print("#/reads in file before writing", len(capture_file.reads))
                 capture_file.write_capture(raw_signal, capture_metadata)
-                print("#/reads in file after writing", len(capture_file.reads))
 
                 local_logger.debug(f"\tWritten!")
 

@@ -357,11 +357,12 @@ def find_captures_3_multicapture_nonterminal_test():
     data_file = "src/tests/data/capture_windows/test_data_capture_window_3.txt.gz"
     data = picoampere_signal_from_data_file(data_file)
     window = Window(1187841, 1280674)
+    actual_captures = [(1200088, 1201033, False), (1252611, 1280674, True)]
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = False
     filters = [filtering.LengthFilter(100, None)]
-    delay = 0
+    delay = 3
     end_tol = 0
     channel_number = 2
     captures = segment.find_captures(
@@ -375,7 +376,12 @@ def find_captures_3_multicapture_nonterminal_test():
         delay=delay,
         end_tol=end_tol,
     )
-    assert len(captures) == 2
+    assert len(captures) == len(actual_captures)
+    for test_capture in captures:
+        test_start = test_capture.window.start
+        test_end = test_capture.window.end
+        ejected = test_capture.ejected
+        assert (test_start, test_end, ejected) in actual_captures
 
 
 def find_captures_4_unfolded_terminal_test():
@@ -459,7 +465,7 @@ def find_captures_6_clog_no_open_channel_test():
     Tests: find_captures returns 1 capture; open pore returns alt value.
     """
     data_file = "src/tests/data/capture_windows/test_data_capture_window_6.txt.gz"
-    data = picoampere_signal_from_data_file(data_file)
+    data = picoampere_signal_from_data_file(data_file)[100:]
     window = Window(2769436, 2863265)
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
@@ -483,13 +489,10 @@ def find_captures_6_clog_no_open_channel_test():
     open_channel_pA = np.array(
         [capture.open_channel_pA_calculated for capture in captures]
     )
-    expected_open_channel_pA = 229
+    expected_open_channel_pA = 230
     all_currents_within_bounds = all(
         (np.isclose(open_channel_pA, expected_open_channel_pA, atol=0.5))
     )
-    # Rough check; should be ~229.05 & anything close is okay.
-    # The function is nondeterministic & should return this exact value, but if
-    # future changes are made, some tolerance can be allowed.
     assert (
         all_currents_within_bounds
     ), f"All calculated open channel currents should be close to {expected_open_channel_pA}"
@@ -602,8 +605,8 @@ def prep_capture_windows_test():
         open_channel_pA_prior_bound,
     )
     count_by_channel = {1: 0, 2: 0, 3: 0}
-    for window in prepped.captures:
-        count_by_channel[window.channel_number] += 1
+    for cap in prepped.captures:
+        count_by_channel[cap.signal.channel_number] += 1
     for channel_number in good_channels:
         assert count_by_channel[channel_number] == 4
 
@@ -624,7 +627,7 @@ class TestParallelFindCaptures:
             "translocation_delay": 20,
             "open_channel_prior_mean": 220,
             "open_channel_prior_stdv": 50,
-            "good_channels": [1, 2, 3],
+            "good_channels": [1, 3],
             "end_tolerance": 50,
             "terminal_capture_only": False,
             "n_captures_per_file": 1000,
@@ -632,9 +635,11 @@ class TestParallelFindCaptures:
         }
         segment_config = SegmentConfiguration(segment_config)
 
-        segment.parallel_find_captures(config, segment_config, overwrite=True)
+        segment.parallel_find_captures(
+            config, segment_config, overwrite=True, filters=filters
+        )
         run_id = "d0befb838f5a9a966e3c559dc3a75a6612745849"
-        actual_n_captures = 9
+        actual_n_captures = 5
         n_captures = 0
         capture_f5_fname = f"src/tests/{run_id}_1.fast5"
         with h5py.File(capture_f5_fname, "r") as f5:
@@ -654,6 +659,6 @@ class TestParallelFindCaptures:
 
                 voltage = a.get("voltage")
                 assert voltage == segment_config.voltage_threshold
-
+                print(duration, a.get("channel_number"))
         assert n_captures == actual_n_captures
         os.remove(capture_f5_fname)
