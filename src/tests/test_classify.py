@@ -145,7 +145,12 @@ def write_classifier_result_test():
     passed = True
     with h5py.File(test_f5_fname, "r+") as f5:
         classify.write_classifier_result(
-            f5, results_path, "c87905e6-fd62-4ac6-bcbd-c7f17ff4af14", pred_class, prob, passed
+            f5,
+            results_path,
+            "c87905e6-fd62-4ac6-bcbd-c7f17ff4af14",
+            pred_class,
+            prob,
+            passed,
         )
 
     # Read back the expected info
@@ -217,7 +222,9 @@ def classify_fast5_file_unfiltered_test():
 
     # Classify f5 file directly
     with h5py.File(test_f5_fname, "r+") as f5:
-        classify.classify_fast5_file(f5, clf_config, classifier, clf_name, "/", class_labels=None)
+        classify.classify_fast5_file(
+            f5, clf_config, classifier, clf_name, "/", class_labels=None
+        )
 
     # Evaluate output written to file
     with h5py.File(test_f5_fname, "r") as f5:
@@ -331,7 +338,10 @@ def filter_and_classify_test():
     # Define config dict that contains filter info
     config = {
         "compute": {"n_workers": 4},
-        "filters": {"base filter": {"length": (100, None)}, "test filter": {"min": (100, None)}},
+        "filters": {
+            "base filter": {"length": (100, None)},
+            "test filter": {"min": (100, None)},
+        },
         "output": {"capture_f5_dir": "src/tests/", "captures_per_f5": 1000},
         "classify": {
             "classifier": "NTER_cnn",

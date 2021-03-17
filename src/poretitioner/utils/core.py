@@ -20,7 +20,7 @@ __all__ = [
     "NumpyArrayLike",
     "ReadId",
     "PathLikeOrString",
-    'ReadId',
+    "ReadId",
     "Window",
     "WindowsByChannel",
 ]
@@ -30,6 +30,7 @@ class NumpyArrayLike(np.ndarray):
     # Generic wrapper type for array-like data. Normally we'd use numpy's arraylike type, but that won't be available until
     # Numpy 1.21: https://stackoverflow.com/questions/40378427/numpy-formal-definition-of-array-like-objects
     pass
+
 
 # Unique identifier for a nanopore read.
 ReadId = NewType("ReadId", str)

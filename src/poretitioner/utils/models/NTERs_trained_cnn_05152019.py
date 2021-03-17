@@ -97,8 +97,16 @@ def load_cnn(state_dict_path, device="cpu"):
     cnn.eval()
     return cnn
 
+
 class NTER_2018_CNN(PytorchClassifierPlugin):
-    def __init__(module: nn.Module, name: str, version: str, state_dict_filepath: PathLikeOrString, class_label_for_result: Optional[LabelForResult] = None, use_cuda: bool = False):
+    def __init__(
+        module: nn.Module,
+        name: str,
+        version: str,
+        state_dict_filepath: PathLikeOrString,
+        class_label_for_result: Optional[LabelForResult] = None,
+        use_cuda: bool = False,
+    ):
         super().__init__(module, name, version, state_dict_filepath, use_cuda=use_cuda)
         self.class_label_for_result = class_label_for_result
 
@@ -107,13 +115,13 @@ class NTER_2018_CNN(PytorchClassifierPlugin):
         # 2D --> 3D array (each obs in a capture becomes its own array)
         frac_3D = frac.reshape(len(frac), frac.shape[1], 1)
 
-        # Q: Why '19881'? 
+        # Q: Why '19881'?
         #
         # A: We only consider the first 19881 observations, as per the NTER paper [1, 2].
         #
         #    [1] - https://www.biorxiv.org/content/10.1101/837542v1
         #    [2] - https://github.com/uwmisl/NanoporeTERs/search?q=19881
-        
+
         if frac_3D.shape[1] < 19881:
             temp = np.zeros((frac_3D.shape[0], 19881, 1))
             temp[:, : frac_3D.shape[1], :] = frac_3D
@@ -133,7 +141,7 @@ class NTER_2018_CNN(PytorchClassifierPlugin):
         classifier = self.module
 
         # Ensures the model is in inference mode.
-        classifier.eval() 
+        classifier.eval()
 
         # Run the model.
         outputs = classifier(data)
@@ -147,7 +155,6 @@ class NTER_2018_CNN(PytorchClassifierPlugin):
         if class_labels is not None:
             label = class_labels[label]
         probability = prob[0][0].data
-        
+
         ClassificationResult(label, probability)
         return label, probability
-

@@ -32,7 +32,7 @@ from .core import ReadId
 use_cuda = False  # True
 # TODO : Don't hardcode use of CUDA : https://github.com/uwmisl/poretitioner/issues/41
 
-LabelForResult = Callable[ [torch.Tensor], ClassLabel ]
+LabelForResult = Callable[[torch.Tensor], ClassLabel]
 
 __all__ = [
     "predict_class",
@@ -45,6 +45,7 @@ __all__ = [
 ClassificationRunId = NewType("ClassificationRunId", str)
 ClassLabel = NewType("ClassLabel", str)
 
+
 @dataclass(frozen=True)
 class ClassifierDetails:
 
@@ -54,17 +55,17 @@ class ClassifierDetails:
 
     # Timestamp of when this classification occurred, in seconds from epoch (as a float).
     #
-    # Q: Why not date-time? 
+    # Q: Why not date-time?
     #
     # A: Sadly, as of 2020, h5py doesn't provide a good way of storing dates [1].
     #    Doing so would also be less precise than storing epoch time.
-    # 
+    #
     # Q: Why seconds (knowing it will be fractionalized)?
-    # 
+    #
     # A: On most modern machines, python time.time() provides micro-second precision.
     #    But this can't be guaranteed (on older machines, it might only provide second precision) [1].
-    #  
-    # If we really wanted an int, the alternative to guarantee an int would be to store 
+    #
+    # If we really wanted an int, the alternative to guarantee an int would be to store
     # the timestamp in nanoseconds [3], but that feels verbose to me.
     #
     # [1] - https://stackoverflow.com/questions/23570632/store-datetimes-in-hdf5-with-h5py
@@ -101,7 +102,7 @@ class CLASSIFICATION_PATH:
         CLASSICATION_RUN_PATH = cls.for_classification_run(classification_run)
         path = str(PosixPath(CLASSICATION_RUN_PATH, "pass"))
         return path
-    
+
     @classmethod
     def fail_path(cls, classification_run: ClassificationRunId) -> str:
         """Path to the group that contains the readIds that failed classification during this
@@ -121,8 +122,10 @@ class CLASSIFICATION_PATH:
         path = str(PosixPath(CLASSICATION_RUN_PATH, "fail"))
         return path
 
-    def read_id_path(cls, classification_run: ClassificationRunId, read_id: ReadId) -> str:
-        """Path to the group that contains the classification results for a given readId. 
+    def read_id_path(
+        cls, classification_run: ClassificationRunId, read_id: ReadId
+    ) -> str:
+        """Path to the group that contains the classification results for a given readId.
 
         Parameters
         ----------
@@ -135,7 +138,7 @@ class CLASSIFICATION_PATH:
         Returns
         -------
         str
-            Path to the group that contains the classification results for a given readId. 
+            Path to the group that contains the classification results for a given readId.
         """
         CLASSICATION_RUN_PATH = cls.for_classification_run(classification_run)
         path = str(PosixPath(CLASSICATION_RUN_PATH, f"{read_id}"))
@@ -149,10 +152,10 @@ class ClassificationResult:
     Fields
     ----------
     score : float
-        A value representing the 'score' of a label predicted by the classifier. 
+        A value representing the 'score' of a label predicted by the classifier.
         Abstractly, the score is a measure of confidence that this label is correct, as determined by the score being greater than some threshold.
- 
-        What exact values this score can take on depends on your classifier 
+
+        What exact values this score can take on depends on your classifier
         (e.g. if you pass the final result through a soft-max, this score will represent a probability from 0 to 1.0).
 
     label : ClassLabel
@@ -170,7 +173,6 @@ class ClassificationResult:
 
 # TODO: Finish writing Classifier plugin architecture: https://github.com/uwmisl/poretitioner/issues/91
 class ClassifierPlugin(metaclass=ABCMeta):
-
     @abstractmethod
     def model_name(self) -> str:
         raise NotImplementedError(
@@ -208,9 +210,7 @@ class ClassifierPlugin(metaclass=ABCMeta):
         NotImplementedError
             If this method hasn't been implemented.
         """
-        raise NotImplementedError(
-            "load hasn't been implemented for this classifier."
-        )
+        raise NotImplementedError("load hasn't been implemented for this classifier.")
 
     @abstractmethod
     def evaluate(self, capture) -> ClassificationResult:
@@ -232,7 +232,9 @@ class ClassifierFile:
         if self.classification_path not in f5:
             f5.create_group(self.classification_path)
 
-    def get_classification_for_read(self, model: str, read_id: ReadId) -> ClassificationResult:
+    def get_classification_for_read(
+        self, model: str, read_id: ReadId
+    ) -> ClassificationResult:
         """Gets the classification result for the read, if it's been classified,
         or NullClassificationResult, if it hasn't.
 
@@ -279,10 +281,14 @@ class ClassifierFile:
         return results_path
 
     def _get_results_path_for_model(self, model: str, read_id: ReadId) -> str:
-        results_path = str(PurePosixPath(self._get_classification_path_for_model(model), read_id))
+        results_path = str(
+            PurePosixPath(self._get_classification_path_for_model(model), read_id)
+        )
         return results_path
 
-    def write_details(self, classification_run: str, classifier_details: ClassifierDetails):
+    def write_details(
+        self, classification_run: str, classifier_details: ClassifierDetails
+    ):
         """Write metadata about the classifier that doesn't need to be repeated for
         each read.
 
@@ -296,7 +302,7 @@ class ClassifierFile:
         if model_path not in self.f5:
             self.f5.create_group(model_path)
 
-        for model_attribute, value for vars(classifier_details).items():
+        for model_attribute, value in vars(classifier_details).items():
             dtype = None if not isinstance(value, str) else f"S{len(value)}"
             self.f5[model_path].attrs.create(model_attribute, value, dtype=dtype)
 
@@ -309,6 +315,13 @@ class ClassifierFile:
         self.f5[results_path].attrs["assigned_class"] = (
             result.assigned_class if result.passed_classification else -1
         )
+
+
+class CaptureClassifierMixin:
+    def classify(
+        self,
+    ):
+        pass
 
 
 # TODO: Implement Classification with the new data model: https://github.com/uwmisl/poretitioner/issues/92
@@ -561,7 +574,9 @@ def predict_class(
 #     return result
 
 
-def write_classifier_details(f5, classifier_confidence_thresholdig: ClassifierConfiguration, results_path):
+def write_classifier_details(
+    f5, classifier_confidence_thresholdig: ClassifierConfiguration, results_path
+):
     """Write metadata about the classifier that doesn't need to be repeated for
     each read.
 
@@ -579,27 +594,40 @@ def write_classifier_details(f5, classifier_confidence_thresholdig: ClassifierCo
         f5.create_group(results_path)
     f5[results_path].attrs["model"] = classifier_confidence_thresholdig.classifier
     f5[results_path].attrs["model_version"] = classifier_confidence_thresholdig
-    f5[results_path].attrs["model_file"] = classifier_confidence_thresholdig["classification_path"]
-    f5[results_path].attrs["classification_threshold"] = classifier_confidence_thresholdig["min_confidence"]
+    f5[results_path].attrs["model_file"] = classifier_confidence_thresholdig[
+        "classification_path"
+    ]
+    f5[results_path].attrs[
+        "classification_threshold"
+    ] = classifier_confidence_thresholdig["min_confidence"]
 
 
-def write_classifier_result(f5, results_path, read_id, predicted_class, prob, passed_classification):
+def write_classifier_result(
+    f5, results_path, read_id, predicted_class, prob, passed_classification
+):
     results_path = f"{results_path}/{read_id}"
     if results_path not in f5:
         f5.create_group(results_path)
     f5[results_path].attrs["best_class"] = predicted_class
     f5[results_path].attrs["best_score"] = prob
-    f5[results_path].attrs["assigned_class"] = predicted_class if passed_classification else -1
+    f5[results_path].attrs["assigned_class"] = (
+        predicted_class if passed_classification else -1
+    )
 
 
 class PytorchClassifierPlugin(ClassifierPlugin):
-
-    def __init__(module: nn.Module, name: str, version: str, state_dict_filepath: PathLikeOrString, use_cuda: bool = False):
-        """An abstract class for classifier that are built from PyTorch. 
+    def __init__(
+        module: nn.Module,
+        name: str,
+        version: str,
+        state_dict_filepath: PathLikeOrString,
+        use_cuda: bool = False,
+    ):
+        """An abstract class for classifier that are built from PyTorch.
 
         Subclass this and implement `evaluate`
 
-        Optionally, if you'd like to do some special pre-processing on the data or load the PyTorch module in a specific way 
+        Optionally, if you'd like to do some special pre-processing on the data or load the PyTorch module in a specific way
         do so by writing `pre_process` and `load` functions as well, and call them before evaluating the module in `evalaute`.
 
         For an example of this in action, see the `models/NTERs_trained_cnn_05152019.py` module.
@@ -614,11 +642,13 @@ class PytorchClassifierPlugin(ClassifierPlugin):
             Version of the model. Useful for keeping track of differently learned parameters.
         state_dict_filepath : PathLikeOrString
             Path to the state_dict describing the module's parameters.
-            For more on PyTorch state_dicts, see https://pytorch.org/tutorials/recipes/recipes/what_is_state_dict.html. 
+            For more on PyTorch state_dicts, see https://pytorch.org/tutorials/recipes/recipes/what_is_state_dict.html.
         use_cuda : bool, optional
             Whether to use CUDA for GPU processing, by default False
         """
-        self.module = module if isinstance(module, nn.Module) else module() # Instantiate the module, if the user passed in the class rather than an instance.
+        self.module = (
+            module if isinstance(module, nn.Module) else module()
+        )  # Instantiate the module, if the user passed in the class rather than an instance.
         self.name = name
         self.version = version
 
@@ -626,11 +656,11 @@ class PytorchClassifierPlugin(ClassifierPlugin):
         self.use_cuda = cuda
 
     def load(self, filepath: str, use_cuda: bool = False):
-        """Loads the PyTorch module. This means instantiating it, 
+        """Loads the PyTorch module. This means instantiating it,
         setting its state dict [1], and setting it to evaluation mode [2].
 
         [1] - https://pytorch.org/tutorials/recipes/recipes/what_is_state_dict.html
-        [2] - 
+        [2] -
 
         Parameters
         ----------
@@ -640,9 +670,9 @@ class PytorchClassifierPlugin(ClassifierPlugin):
             [description], by default False
         """
         torch_module = module()
-        # For more on Torch devices, please see: 
+        # For more on Torch devices, please see:
         #   https://pytorch.org/docs/stable/tensor_attributes.html#torch-device
-        device = "cpu" if not use_cuda else "cuda" 
+        device = "cpu" if not use_cuda else "cuda"
 
         state_dict = torch.load(filepath, map_location=torch.device(device))
         torch_module.load_state_dict(state_dict, strict=True)
@@ -653,9 +683,9 @@ class PytorchClassifierPlugin(ClassifierPlugin):
         self.module = torch_module
 
     def pre_process(self, capture: Capture) -> torch.Tensor:
-        """Do some pre-processing on the data, if desired. 
+        """Do some pre-processing on the data, if desired.
 
-        Otherwise, this method just converts the fractionalized 
+        Otherwise, this method just converts the fractionalized
         capture to a torch Tensor.
 
         Parameters
@@ -672,7 +702,7 @@ class PytorchClassifierPlugin(ClassifierPlugin):
         if self.use_cuda:
             tensor = tensor.cuda()
         return tensor
-    
+
     @abstractmethod
     def evaluate(self, capture: Capture):
         raise NotImplementedError(

@@ -132,7 +132,8 @@ def find_captures(
             signal_threshold_frac,
             open_channel_pA_calculated,
             # Whether this capture was ejected from the pore:
-            np.abs(capture_window.end - (potential_capture.end + capture_window.start)) <= end_tol,
+            np.abs(capture_window.end - (potential_capture.end + capture_window.start))
+            <= end_tol,
         )
         for potential_capture in potential_captures
     ]
@@ -150,7 +151,7 @@ def find_captures(
         last_capture = captures[-1]
         capture_start, capture_end = last_capture.window
         potential_capture_candidate = frac_current[capture_start:capture_end]
-        
+
         filtered_captures = [
             capture
             for capture in captures
@@ -421,13 +422,13 @@ def _prep_capture_windows(
             for capture_window in capture_windows:
                 start, end = capture_window.start, capture_window.end
 
-                is_ejected = None # We don't know whether it was ejected yet.
+                is_ejected = None  # We don't know whether it was ejected yet.
                 unsegmented_signal = Capture(
                     pico[start:end],
                     capture_window,
                     signal_threshold_frac,
                     open_channel_pA_calculated,
-                    is_ejected
+                    is_ejected,
                 )
                 metadata = SignalMetadata(
                     channel_number=channel_number,
@@ -544,27 +545,19 @@ def parallel_find_captures(
     n_workers = config.n_workers
     assert type(n_workers) is int
     voltage_threshold = segment_config.voltage_threshold
-    signal_threshold_frac = (
-        segment_config.signal_threshold_frac
-    ) 
+    signal_threshold_frac = segment_config.signal_threshold_frac
     delay = segment_config.translocation_delay
-    open_channel_prior_mean = (
-        segment_config.open_channel_prior_mean
-    )  
+    open_channel_prior_mean = segment_config.open_channel_prior_mean
     # TODO: get good channels
     good_channels = [1]
     end_tol = segment_config.end_tolerance
-    terminal_capture_only = (
-        segment_config.terminal_capture_only
-    )
+    terminal_capture_only = segment_config.terminal_capture_only
 
-    save_location = (
-        save_location if save_location else config.capture_directory
-    ) 
+    save_location = save_location if save_location else config.capture_directory
     n_per_file = segment_config.n_captures_per_file
 
     save_location = Path(save_location)
-    
+
     if not save_location.exists():
         log.info(f"Creating capture directory at: {save_location!s}")
         save_location.mkdir(parents=True, exist_ok=True)
@@ -696,8 +689,10 @@ def parallel_find_captures(
 
                 mode = "w" if overwrite else "r+"
                 with CaptureFile(capture_f5_filepath, mode=mode) as capture_file:
-                    # TODO: SUBRUNS support 
-                    capture_file.initialize_from_bulk(bulk, capture_criteria, segment_config, sub_run=None)
+                    # TODO: SUBRUNS support
+                    capture_file.initialize_from_bulk(
+                        bulk, capture_criteria, segment_config, sub_run=None
+                    )
 
                     capture_files.append(capture_file)
                     capture_file.write_capture(raw_signal, capture_metadata)

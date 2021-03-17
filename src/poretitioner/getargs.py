@@ -58,9 +58,7 @@ class ARG:
     VERBOSE = "verbose"
 
     # Segmenter
-    CAPTURE_DIRECTORY = (
-        "capture_directory"  # Argument on the command line has a dash, but the attribute.
-    )
+    CAPTURE_DIRECTORY = "capture_directory"  # Argument on the command line has a dash, but the attribute.
 
     class SEGMENT:
         BULKFAST5 = "bulkfast5"
@@ -287,12 +285,11 @@ FILTER_ARGS = {
         "help": "A unique identifier for a collection of filters, ideally describing why the collection was chosen, like 'NTER_PAPER_FINAL_2018_10_09'.",
         "type": str,
     },
-
     ARG.FILTER.LENGTH_MIN: {
         "action": "store",
         "help": "Exclude potential captures that have fewer than this many observations in the nanopore current trace.",
         "type": int,
-    }
+    },
 }
 
 SEGMENTATION_ARGS = {

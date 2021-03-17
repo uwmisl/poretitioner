@@ -40,12 +40,12 @@ __all__ = [
     "FilterConfig",
     "Filter",
     "Filters",
-    "DEFAULT_FILTER_PLUGINS"
-    "FilterSet",
+    "DEFAULT_FILTER_PLUGINS" "FilterSet",
     "FilterConfigs",
     "FilterPlugin",
     "PATH",
 ]
+
 
 @dataclass(frozen=True)
 class PATH:
@@ -65,22 +65,24 @@ class PATH:
         path = str(PosixPath(PATH.ROOT, "pass"))
         return path
 
+
 @dataclass(frozen=True)
 class FilterConfig:
     """A blueprint for how to construct a FilterPlugin.
 
     Note on terminology:
-    
+
         - FilterConfig: A high-level description of a filter.
-    
+
         - FilterPlugin: An actual, callable, implementation of a FilterConfig.
 
 
     For custom plugins, make sure "filepath" is an attribute that points to the file to laod
     """
+
     name: str
     attributes: Dict[str, Any]
-    
+
 
 # Mapping of a FilterName to filter configurations.
 FilterConfigs = NewType("FilterConfigs", Dict[FilterName, FilterConfig])
@@ -172,8 +174,9 @@ class FilterPlugin(metaclass=ABCMeta):
 
 
 class RangeFilter(FilterPlugin):
-
-    def __init__(self, minimum: Optional[float] = None, maximum: Optional[float] = None):
+    def __init__(
+        self, minimum: Optional[float] = None, maximum: Optional[float] = None
+    ):
         """A filter that filters based on whether a signal falls between a maximum and a minimum.
 
         Parameters
@@ -216,8 +219,7 @@ class RangeFilter(FilterPlugin):
 
 
 class StandardDeviationFilter(RangeFilter):
-    """ Filters for captures with standard deviations in some range.
-    """
+    """Filters for captures with standard deviations in some range."""
 
     @classmethod
     def name(cls) -> str:
@@ -233,8 +235,7 @@ class StandardDeviationFilter(RangeFilter):
 
 
 class MeanFilter(RangeFilter):
-    """Filters for captures with an arithmetic mean within a range.
-    """
+    """Filters for captures with an arithmetic mean within a range."""
 
     @classmethod
     def name(cls) -> str:
@@ -292,8 +293,7 @@ class MaximumFilter(RangeFilter):
 
 
 class LengthFilter(RangeFilter):
-    """Filters captures based on their length.
-    """
+    """Filters captures based on their length."""
 
     @classmethod
     def name(cls) -> str:
@@ -395,7 +395,6 @@ def check_capture_ejection(end_capture, voltage_ends, tol_obs=20):
     return False
 
 
-
 # def apply_filters_to_read(config, f5, read_id, filter_name):
 #     passed_filters = True
 
@@ -458,7 +457,9 @@ def filter_and_store_result(config, fast5_files, filter_name, overwrite=False):
 #             f5[filter_read_path] = read_grp
 
 
-def filter_like_existing(config, example_fast5, example_filter_path, fast5_files, new_filter_path):
+def filter_like_existing(
+    config, example_fast5, example_filter_path, fast5_files, new_filter_path
+):
     # Filters a set of fast5 files exactly the same as an existing filter
     # TODO : #68 : implement
     raise NotImplementedError()
@@ -473,7 +474,11 @@ __DEFAULT_FILTER_PLUGINS = [
     LengthFilter,
 ]
 
-DEFAULT_FILTER_PLUGINS = { filter_plugin_class.name() : filter_plugin_class for filter_plugin_class in __DEFAULT_FILTER_PLUGINS }
+DEFAULT_FILTER_PLUGINS = {
+    filter_plugin_class.name(): filter_plugin_class
+    for filter_plugin_class in __DEFAULT_FILTER_PLUGINS
+}
+
 
 @dataclass
 class Filter:
@@ -493,18 +498,18 @@ class Filter:
         A description of this filter's configuration (e.g. where it was loaded from).
     plugin : FilterPlugin
         The actual implementation of this filter.
-        We have this class defined with 
+        We have this class defined with
     """
 
     config: FilterConfig
     plugin: FilterPlugin
-        
+
     def __call__(self, *args, **kwargs):
         return self.plugin(*args, **kwargs)
 
     def apply(self, *args, **kwargs):
         self.plugin.apply(*args, **kwargs)
-    
+
     @property
     def name(self) -> FilterName:
         return self.plugin.name()
@@ -514,19 +519,20 @@ class Filter:
 class Filters:
     """A collection of callable filters and their names.
 
-    Use this like a dictionary of 
+    Use this like a dictionary of
 
     This is probably what you want to use and pass around.
 
     """
+
     _filters: Dict[FilterName, Filter]
-    
+
     def __init__(self, filters: Dict[FilterName, Filter]):
         self._filters = filters
 
     def __getitem__(self, filter_name: str):
         return self._filters[filter_name]
-    
+
     def __setitem__(self, filter_name: str):
         return self._filters[filter_name]
 
@@ -543,7 +549,6 @@ class Filters:
     #     # For tokenize to work we want to return a value that fully
     #     # represents this object. In this case it's the config dictionary.
     #     return self._filters
-    
 
     def __call__(self, capture: CaptureOrTimeSeries):
         """
@@ -577,16 +582,23 @@ def get_filters(filter_configs: Optional[FilterConfigs] = None) -> Filters:
         A set of callable/applyable filters.
     """
     filter_configs = filter_configs if filter_configs is not None else {}
-    my_filters = Filters({ name : filter_from_config(filter_config) for name, filter_config in filter_configs.items() })
+    my_filters = Filters(
+        {
+            name: filter_from_config(filter_config)
+            for name, filter_config in filter_configs.items()
+        }
+    )
     return my_filters
+
 
 @dataclass(frozen=True)
 class FilterSet:
     """
     A collection of filters with a name for easy
-    identification. 
+    identification.
     Mapping of filter_set_name to its filters.
     """
+
     name: FilterSetId
     filters: Filters
 
@@ -600,12 +612,15 @@ class FilterSet:
     @classmethod
     def from_json(cls, filter_set_name: FilterSetId, filters_dict: Dict):
         filters = {
-            filter_config.get("name"): FilterConfig(**filter_config) for filter_config in json_dict["filters"] 
+            filter_config.get("name"): FilterConfig(**filter_config)
+            for filter_config in json_dict["filters"]
         }
         return cls.__new__(filter_set_name, filters)
-    
+
     @classmethod
-    def from_filter_configs(cls, name: FilterSetId, filter_configs: FilterConfigs = None):
+    def from_filter_configs(
+        cls, name: FilterSetId, filter_configs: FilterConfigs = None
+    ):
         filters: Filters = get_filters(filter_configs)
         filter_set = cls.__new__(cls)
         filter_set.__init__(name, filter_configs)
@@ -613,8 +628,8 @@ class FilterSet:
 
 
 def filter_from_config(config: FilterConfig, log: Logger = getLogger()) -> Filter:
-    """Creates a Filter from a config spefication. If no "filename" is present in the FilterConfig, it's 
-    assumed to be one of the default filtesr 
+    """Creates a Filter from a config spefication. If no "filename" is present in the FilterConfig, it's
+    assumed to be one of the default filtesr
 
     Parameters
     ----------
@@ -636,7 +651,7 @@ def filter_from_config(config: FilterConfig, log: Logger = getLogger()) -> Filte
         2) The plugin class inherits from the `FilterPlugin` abstract base class.
     """
     name = config.name
-    
+
     attributes: Dict[str, Any] = config.attributes
     filepath = attributes.get("filepath", None)
 
@@ -693,7 +708,9 @@ def plugin_from_file(name: str, filepath: PathLikeOrString):
         [description]
     """
     # TODO: For non-default FilterPlugins, load/unpickle the class from the filepath. https://github.com/uwmisl/poretitioner/issues/91
-    raise NotImplementedError("Plugin from file has not been implemented! This method should take in a filepath and filter name, and return a runnable FilterPlugin!")
+    raise NotImplementedError(
+        "Plugin from file has not been implemented! This method should take in a filepath and filter name, and return a runnable FilterPlugin!"
+    )
 
 
 class FilterJSONEncoder(JSONEncoder):
@@ -728,8 +745,8 @@ def does_pass_filters(capture: CaptureOrTimeSeries, filters: Filters) -> bool:
         True if capture passes all filters; False otherwise.
     """
     # TODO: Parallelize? https://github.com/uwmisl/poretitioner/issues/67
-    all_passed = True 
-    for filter_out in filters.values(): 
+    all_passed = True
+    for filter_out in filters.values():
         if not filter_out(capture):
-            return False 
-    return True    
+            return False
+    return True
