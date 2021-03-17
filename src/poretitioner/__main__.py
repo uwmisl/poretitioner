@@ -1,3 +1,3 @@
-from poretitioner import main
+from .poretitioner import main
 
 main()
