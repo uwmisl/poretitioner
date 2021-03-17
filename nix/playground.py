@@ -44,13 +44,15 @@ from src.poretitioner.utils import *
 from src.poretitioner.application_info import *
 from src.poretitioner.getargs import *
 import src.poretitioner.logger as logger
-from src.poretitioner.utils.classify import ClassifierFile
+from src.poretitioner.utils.classify import *
 from src.poretitioner.utils.configuration import (
     GeneralConfiguration,
     SegmentConfiguration,
     readconfig,
 )
 
+from src import poretitioner
+from src.poretitioner import CONFIG
 
 LOG_VERBOSITY = 3
 logger.configure_root_logger(verbosity=LOG_VERBOSITY, debug=True)
@@ -84,6 +86,25 @@ FILTER_FAST5_FILE = (
 
 raw_signal = np.random.randn(10)
 raw = RawSignal(raw_signal, CHANNEL_NUMBER, CALIBRATION)
+
+bulky = BulkFile(BULK_FAST5_FILE, "a")
+
+config = poretitioner.default_config(
+        {
+           poretitioner.ARG.GENERAL.BULK_FAST5: "/Users/dna/Developer/poretitioner/src/tests/data/bulk_fast5_dummy.fast5",
+           poretitioner.ARG.GENERAL.CAPTURE_DIRECTORY: "/tmp/captures",
+        }
+)
+
+general_config = config[CONFIG.GENERAL]
+segmentation_config = config[CONFIG.SEGMENTATION]
+filter_config = config[CONFIG.FILTER]
+classifier_config = config[CONFIG.CLASSIFICATION]
+
+capture_files = poretitioner.segment(general_config, segmentation_config)
+
+
+cappy = CaptureFile(CLASSIFIED_FAST5_FILE, "a")
 
 # classified = ClassifierFile(CLASSIFIED_10_MINS_4_CHANNELS)
 # Do whatever else you'd like!

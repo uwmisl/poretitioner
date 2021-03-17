@@ -13,24 +13,41 @@
 ###########################################################################################
 
 { pkgs ? import <nixpkgs> { config = import ./config.nix; }
-, python ? pkgs.callPackage ./python.nix { inherit pkgs; }, cudaSupport ? false
+, python ? pkgs.callPackage ./python.nix { inherit pkgs; }
+, cudaSupport ? false
+, postShellHook ? ""
 }:
 with pkgs;
 let
   dependencies = callPackage ./dependencies.nix { inherit python cudaSupport; };
 
-  pythonEnv = python.withPackages (ps: (dependencies.getDependenciesForPython python).all );
-in mkShell { 
+  poretitionerPath="../src/poretitioner";
+
+  pythonEnv = python.buildEnv.override {
+    extraLibs=dependencies.pythonDeps.all
+     ++ [ poretitionerPath ];
+  };
+
+
+in mkShell {
+  shellHook = ''
+    PYTHONPATH="${poretitionerPath}:$PYTHONPATH";
+  ''
+  + postShellHook
+  ;
+
   buildInputs = [
+    pkgs.bash
+    pkgs.bashInteractive
+    pkgs.locale
+    pkgs.xtermcontrol
+    pkgs.xterm
     pkgs.zsh
     pythonEnv
+    pythonEnv.pkgs.bpython
   ]
   ++  dependencies.all ;
 
-  shellHook = ''
-    exec env zsh
-  '';
 
-  MY_ENVIRONMENT_VARIABLE = "world";
-  propagatedBuildInputs = dependencies.all ++ [ pythonEnv ]; 
+  propagatedBuildInputs = dependencies.all ++ [ pythonEnv ];
 }

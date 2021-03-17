@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections import namedtuple
 from dataclasses import dataclass
 from os import PathLike
-from typing import Dict, List, Optional, NewType, Union, Sequence
+from typing import Dict, Iterable, List, Optional, NewType, Union, Sequence
 
 import numpy as np
 
@@ -35,7 +35,7 @@ class NumpyArrayLike(np.ndarray):
 # Unique identifier for a nanopore read.
 ReadId = NewType("ReadId", str)
 
-# Represent a path or a string representing a path.
+# Represents a path or a string representing a path. Having this union-type lets you use paths from Python's built-in pathib module (which is vastly superior to os.path)
 PathLikeOrString = Union[str, PathLike]
 
 
@@ -170,7 +170,7 @@ class WindowsByChannel:
         return self.by_channel.keys()
 
 
-def stripped_by_keys(dictionary: Optional[Dict], keys_to_keep: Sequence) -> Dict:
+def stripped_by_keys(dictionary: Optional[Dict], keys_to_keep: Iterable) -> Dict:
     """Returns a dictionary containing keys and values from dictionary,
     but only keeping the keys in `keys_to_keep`.
 
@@ -180,7 +180,7 @@ def stripped_by_keys(dictionary: Optional[Dict], keys_to_keep: Sequence) -> Dict
     ----------
     dictionary : Optional[Dict]
         Dictionary to strip down by keys.
-    keys_to_keep : Sequence
+    keys_to_keep : Iterable
         Which keys of the dictionary to keep.
 
     Returns

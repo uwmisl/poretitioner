@@ -1,11 +1,16 @@
 import math as m
 
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..classify import ClassLabel, ClassificationResult, LabelForResult
+from typing import Optional
+from ..classify import PytorchClassifierPlugin, LabelForResult, ClassificationResult
 
+
+from poretitioner import Capture
 
 class CNN(nn.Module):
     def __init__(self):
@@ -100,10 +105,11 @@ def load_cnn(state_dict_path, device="cpu"):
 
 class NTER_2018_CNN(PytorchClassifierPlugin):
     def __init__(
+        self,
         module: nn.Module,
         name: str,
         version: str,
-        state_dict_filepath: PathLikeOrString,
+        state_dict_filepath: str,
         class_label_for_result: Optional[LabelForResult] = None,
         use_cuda: bool = False,
     ):
@@ -130,7 +136,7 @@ class NTER_2018_CNN(PytorchClassifierPlugin):
         # Break capture into 141x141 (19881 total data points)
         frac_3D = frac_3D.reshape(len(frac_3D), 1, 141, 141)
         tensor = torch.from_numpy(frac_3D)
-        if use_cuda:
+        if self.use_cuda:
             tensor = tensor.cuda()
         return tensor
 

@@ -50,15 +50,14 @@ class COMMAND:
 class ARG:
     """Available Poretitioner arguments. e.g. config, output, file"""
 
-    CONFIG = "config"
-    DEBUG = "debug"
-    FILE = "file"
-    BULK_FAST5 = "bulkfast5"
-    OUTPUT = "output"
-    VERBOSE = "verbose"
+    class GENERAL:
+        CONFIG = "config"
+        DEBUG = "debug"
+        BULK_FAST5 = "bulkfast5"
+        VERBOSE = "verbose"
 
-    # Segmenter
-    CAPTURE_DIRECTORY = "capture_directory"  # Argument on the command line has a dash, but the attribute.
+        # Segmenter
+        CAPTURE_DIRECTORY = "capture_directory"  # Argument on the command line has a dash, but the attribute uses underscore.
 
     class SEGMENT:
         BULKFAST5 = "bulkfast5"
@@ -112,6 +111,14 @@ class ARG:
 
 
 def get_args(commandline_args: List = None) -> Namespace:
+    parser = get_parser(commandline_args=commandline_args)
+    args = parser.parse_args(commandline_args)
+    return args
+
+def get_help():
+    return get_args(["--help"])
+
+def get_parser(commandline_args: List = None) -> ArgumentParser:
     """Gets the command line arguments passed to the application.
 
     Parameters
@@ -127,7 +134,7 @@ def get_args(commandline_args: List = None) -> Namespace:
     """
 
     # TODO: Add a description string: https://github.com/uwmisl/poretitioner/issues/27
-    DESCRIPTION = ""
+    DESCRIPTION = "Poretitioner is a powerful library and command line tool for parsing and interpreting nanopore data."
     # TODO: Add a usage string: https://github.com/uwmisl/poretitioner/issues/27
     USAGE = ""
 
@@ -145,7 +152,7 @@ def get_args(commandline_args: List = None) -> Namespace:
         """
         parser.add_argument(
             "-v",
-            f"--{ARG.VERBOSE}",
+            f"--{ARG.GENERAL.VERBOSE}",
             action="count",
             default=0,
             help="Increase the program's verbosity. Can be used multiple times to increase the logging level (e.g. -vvv for very verbose logging). Should be added after the subcommand (if any).",
@@ -161,7 +168,7 @@ def get_args(commandline_args: List = None) -> Namespace:
         """
         parser.add_argument(
             "-d",
-            f"--{ARG.DEBUG}",
+            f"--{ARG.GENERAL.DEBUG}",
             action="store_true",
             default=False,
             help="Whether to run in debug mode. Turned off by default. Should be added after the subcommand (if any) if desired.",
@@ -177,24 +184,9 @@ def get_args(commandline_args: List = None) -> Namespace:
         """
         parser.add_argument(
             "-f",
-            f"--{ARG.BULK_FAST5}",
+            f"--{ARG.GENERAL.BULK_FAST5}",
             action="store",
             help="The fast5 file to run poretitioner on.",
-        )
-
-    def add_output_option_to_parser(parser: ArgumentParser):
-        """Adds an output option to a parser.
-
-        Parameters
-        ----------
-        parser : ArgumentParser
-            Parser to give an output file option
-        """
-        parser.add_argument(
-            "-o",
-            f"--{ARG.OUTPUT}",
-            action="store",
-            help="Where to store this command's output.",
         )
 
     def add_configuration_option_to_parser(parser: ArgumentParser):
@@ -206,7 +198,7 @@ def get_args(commandline_args: List = None) -> Namespace:
             Parser to give an output file option
         """
         parser.add_argument(
-            f"--{ARG.CONFIG}",
+            f"--{ARG.GENERAL.CONFIG}",
             action="store",
             default=".",
             help="Configuration file to configure Poretitioner.",
@@ -234,12 +226,10 @@ def get_args(commandline_args: List = None) -> Namespace:
     for subparser in parsers:
         add_input_to_parser(subparser)
         add_configuration_option_to_parser(subparser)
-        add_output_option_to_parser(subparser)
         add_debug_option_to_parser(subparser)
         add_verbosity_option_to_parser(subparser)
 
-    args = parser.parse_args(commandline_args)
-    return args
+    return parser
 
 
 # Segmenter
@@ -253,7 +243,7 @@ def add_capture_directory_option_to_parser(parser: ArgumentParser):
     parser : ArgumentParser
         Parser to give an output directory option. This is where capture files will be saved.
     """
-    arg = as_cli_arg(ARG.CAPTURE_DIRECTORY)
+    arg = as_cli_arg(ARG.GENERAL.CAPTURE_DIRECTORY)
     parser.add_argument(
         f"--{arg}",
         action="store",
@@ -262,21 +252,20 @@ def add_capture_directory_option_to_parser(parser: ArgumentParser):
 
 
 # Filters
-def add_capture_directory_option_to_parser(parser: ArgumentParser):
-    """Adds output directory option to a parser.
 
-    Parameters
-    ----------
-    parser : ArgumentParser
-        Parser to give an output directory option. This is where capture files will be saved.
-    """
-    arg = as_cli_arg(ARG.CAPTURE_DIRECTORY)
-    parser.add_argument(
-        f"--{arg}",
-        action="store",
-        help="Which directory to store the segmented capture fast5 files.",
-    )
-
+# Mapping from command line option "--foo" to all its args and kwa
+GENERAL_ARGS = {
+    ARG.FILTER.FILTER_SET_NAME: {
+        "action": "store",
+        "help": "A unique identifier for a collection of filters, ideally describing why the collection was chosen, like 'NTER_PAPER_FINAL_2018_10_09'.",
+        "type": str,
+    },
+    ARG.FILTER.LENGTH_MIN: {
+        "action": "store",
+        "help": "Exclude potential captures that have fewer than this many observations in the nanopore current trace.",
+        "type": int,
+    },
+}
 
 # Mapping from command line option "--foo" to all its args and kwa
 FILTER_ARGS = {

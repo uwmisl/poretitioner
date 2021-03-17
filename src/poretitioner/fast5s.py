@@ -14,7 +14,7 @@ from typing import Dict, List, NewType, Optional, Set, Union
 
 import h5py
 from .utils.filtering import PATH as FILTER_PATH
-from .utils.filtering import FilterSet, FilterPlugin, RangeFilter
+from .utils.filtering import Filters, FilterSet, FilterPlugin, RangeFilter
 
 from .utils.classify import CLASSIFICATION_PATH
 from .application_info import get_application_info
@@ -323,7 +323,7 @@ class BulkFile(BaseFile):
             raise OSError(
                 f"Bulk fast5 file does not exist at path: {bulk_filepath}. Make sure the bulk file is in this location."
             )
-        self.validate(log=logger)
+        #  self.validate(log=logger)
 
     def validate(self, log: Logger = getLogger()):
         """Make sure this represents a valid bulk poretitioner file.
@@ -579,8 +579,8 @@ class CaptureFile(BaseFile):
     def initialize_from_bulk(
         self,
         bulk_f5: BulkFile,
-        capture_criteria: List[RangeFilter],
         segment_config: SegmentConfiguration,
+        capture_criteria: Optional[Filters] = None,
         sub_run: Optional[SubRun] = None,
     ):
         """[summary]
@@ -589,8 +589,8 @@ class CaptureFile(BaseFile):
         ----------
         bulk_f5 : BulkFile
             Bulk Fast5 file, generated from an Oxford Nanopore experiment.
-        capture_criteria : List[RangeFilter]
-            Filters that define what signals could even potentially be a capture.
+        capture_criteria : Optional[Filters]
+            Filters that define what signals could even potentially be a capture, by default None.
         segment_config : SegmentConfiguration
             [description]
         sub_run : Optional[SubRun], optional
@@ -668,9 +668,8 @@ class CaptureFile(BaseFile):
                     save_value = json.dumps({k: v.__dict__ for k, v in value.items()})
                 context_id_group.create_dataset(key, data=save_value)
 
-        for filter_plugin in capture_criteria:
-            name = filter_plugin.name()
-
+        for name, my_filter in capture_criteria.items():
+            filter_plugin = my_filter.plugin
             # `isinstance` is an anti-pattern, pls don't use in production.
             if isinstance(filter_plugin, RangeFilter):
                 maximum = filter_plugin.maximum
@@ -795,10 +794,10 @@ class CaptureFile(BaseFile):
         """
         signal_path = signal_path_for_read_id(read_id)
         channel_path = channel_path_for_read_id(read_id)
-        open_channel_pA = self.f5[signal_path].attrs[KEY.OPEN_CHANNEL_PA]
+        open_channel_pA = self.f5[str(signal_path)].attrs[KEY.OPEN_CHANNEL_PA]
         calibration = self.get_channel_calibration_for_read(read_id)
-        raw_signal: RawSignal = self.f5.get(signal_path)[start:end]
-        channel_number = self.f5.get(channel_path).attrs["channel_number"]
+        raw_signal: RawSignal = self.f5.get(str(signal_path))[start:end]
+        channel_number = self.f5.get(str(channel_path)).attrs["channel_number"]
         fractionalized = FractionalizedSignal(
             raw_signal,
             channel_number,

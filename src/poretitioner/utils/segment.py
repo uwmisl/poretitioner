@@ -453,7 +453,7 @@ def segment(
     overwrite=True,
     sub_run_start_observations=0,
     sub_run_end_observations=None,
-) -> List[CaptureMetadata]:
+) -> Iterable[CaptureFile]:
     """Identifies the capture regions in a nanopore ionic current signal.
 
     Parameters
@@ -470,8 +470,13 @@ def segment(
     sub_run_end_observations : int, optional
         Where to stop segmenting in the run (if anywhere). This is useful in cases
         where the run is continuous, but you added a different analyte or wash at some known point in time, by default None
+
+    Returns
+    ----------
+    Iterable[CaptureFile]
+        An iterable of capture files. This can be used like a list of the segmented captures.
+
     """
-    capture_criteria = {} if capture_criteria is None else capture_criteria
     local_logger = logger.getLogger()
 
     local_logger.debug(
@@ -504,7 +509,7 @@ def parallel_find_captures(
     sub_run_start_observations: int = 0,
     sub_run_end_observations: Optional[int] = None,
     log=None,
-) -> List[CaptureMetadata]:
+) -> Iterable[CaptureFile]:
     """Identify captures within the bulk fast5 file in the specified range
     (from sub_run_start_observations to sub_run_end_observations.)
 
@@ -531,8 +536,8 @@ def parallel_find_captures(
 
     Returns
     -------
-    List[]
-        Metadata about the captures. To be used for diagnostic purposes.
+    Iterable[CaptureFile]
+        An iterable of capture files. This can be used like a list of the segmented captures.
 
     Raises
     ------
@@ -691,7 +696,7 @@ def parallel_find_captures(
                 with CaptureFile(capture_f5_filepath, mode=mode) as capture_file:
                     # TODO: SUBRUNS support
                     capture_file.initialize_from_bulk(
-                        bulk, capture_criteria, segment_config, sub_run=None
+                        bulk, segment_config, capture_criteria=capture_criteria, sub_run=None
                     )
 
                     capture_files.append(capture_file)
@@ -699,4 +704,4 @@ def parallel_find_captures(
 
                 local_logger.debug(f"\tWritten!")
 
-    return capture_metadatum
+    return capture_files

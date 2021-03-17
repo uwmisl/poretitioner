@@ -42,6 +42,14 @@ let
   test_pkgs = dependencies.test;
   run_tests_and_coverage = "echo Running tests:  ${tests.coverage};"
     + tests.coverage;
+
+  shell = callPackage ./nix/shell.nix {
+    inherit python cudaSupport;
+    postShellHook = ''
+    '';
+  };
+
+
   src = ./.;
 
   # How to develop/release python packages with Nix:
@@ -91,16 +99,10 @@ in
   test = poretitioner { doCheck = true; };
   app = app { doCheck = true; };
   lib = poretitioner { doCheck = false; };
-  
+
   # Note: Shell can only be run by using "nix-shell" (i.e. "nix-shell -A shell ./default.nix").
   # Here's an awesome, easy-to-read overview of nix shells: https://ghedam.at/15978/an-introduction-to-nix-shell
-  shell = mkShell {
-    #  [ (poretitioner { doCheck = false; }) ] ++
-    shellHook = ''
-      PYTHONPATH="./src/poretitioner:$PYTHONPATH"
-    '';
-    propagatedBuildInputs = all_pkgs;
-  };
+  shell = shell;
 }
 //
 # Docker support

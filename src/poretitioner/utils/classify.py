@@ -8,42 +8,47 @@ This module contains functionality for classifying nanopore captures.
 """
 import os
 import re
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from pathlib import PurePosixPath
+from pathlib import PosixPath
 from typing import List
-from typing import NewType
+from typing import NewType, Callable
 
 import numpy as np
 import torch
 import torch.nn as nn
 
-from .. import fast5s, logger
 from ..logger import Logger, getLogger
-from ..signals import FractionalizedSignal, RawSignal
+from ..signals import Capture, FractionalizedSignal, RawSignal
 
 # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-from .model import NTERs_trained_cnn_05152019 as pretrained_model
+#from .models import NTERs_trained_cnn_05152019 as pretrained_model
 from . import filtering
 from .configuration import ClassifierConfiguration
 from .core import PathLikeOrString
 from .core import ReadId
+from .core import NumpyArrayLike
 
 use_cuda = False  # True
 # TODO : Don't hardcode use of CUDA : https://github.com/uwmisl/poretitioner/issues/41
 
-LabelForResult = Callable[[torch.Tensor], ClassLabel]
+ClassLabel = NewType("ClassLabel", str)
+
+# Maps a numpy array like (some vector encoding that represents a label) to a the label string.
+LabelForResult = Callable[[NumpyArrayLike], ClassLabel]
 
 __all__ = [
     "predict_class",
+    "ClassificationRunId",
     "ClassifierDetails",
+    "ClassifierPlugin",
+    "CLASSIFICATION_PATH",
     "ClassificationResult",
-    "ClassifierFile",
+    "PytorchClassifierPlugin",
 ]
 
 # Uniquely identifies a classification run that happened (e.g. 'NTER_2018_RandomForest_Attempt_3').
 ClassificationRunId = NewType("ClassificationRunId", str)
-ClassLabel = NewType("ClassLabel", str)
 
 
 @dataclass(frozen=True)
@@ -81,7 +86,7 @@ class CLASSIFICATION_PATH:
 
     @classmethod
     def for_classification_run(cls, classification_run: ClassificationRunId) -> str:
-        path = str(PosixPath(CLASSIFICATION_PATH.ROOT, ClassificationRunId))
+        path = str(PosixPath(CLASSIFICATION_PATH.ROOT, classification_run))
         return path
 
     @classmethod
@@ -172,7 +177,7 @@ class ClassificationResult:
 
 
 # TODO: Finish writing Classifier plugin architecture: https://github.com/uwmisl/poretitioner/issues/91
-class ClassifierPlugin(metaclass=ABCMeta):
+class ClassifierPlugin(ABC):
     @abstractmethod
     def model_name(self) -> str:
         raise NotImplementedError(
@@ -192,7 +197,7 @@ class ClassifierPlugin(metaclass=ABCMeta):
         )
 
     @abstractmethod
-    def load(self, filepath: str, use_cuda: bool = False):
+    def load(self, use_cuda: bool = False):
         """Loads a model for classification.
 
         This method is where you should do any pre processing needed.
@@ -200,8 +205,7 @@ class ClassifierPlugin(metaclass=ABCMeta):
 
         Parameters
         ----------
-        filepath : str
-            Path to a classifier model.
+
         use_cuda : bool
             Whether to use cuda.
 
@@ -217,111 +221,6 @@ class ClassifierPlugin(metaclass=ABCMeta):
         raise NotImplementedError(
             "Evaluate hasn't been implemented for this classifier."
         )
-
-
-class ClassifierFile:
-    def __init__(
-        self,
-        capture_filepath: PathLikeOrString,
-        mode: str = "r",
-        logger: Logger = getLogger(),
-    ):
-        super().__init__(capture_filepath, mode, logger=logger)
-
-        f5 = self.f5
-        if self.classification_path not in f5:
-            f5.create_group(self.classification_path)
-
-    def get_classification_for_read(
-        self, model: str, read_id: ReadId
-    ) -> ClassificationResult:
-        """Gets the classification result for the read, if it's been classified,
-        or NullClassificationResult, if it hasn't.
-
-        Parameters
-        ----------
-        mode: str
-            Identifier for the model that did the classification.
-        read_id : str
-            Read ID of the read to get the classification for.
-
-        Returns
-        -------
-        ClassificationResult
-            Gets the result of a read's classification
-        """
-        result_path = self._get_results_path_for_model(model, read_id)
-        f5 = self.f5
-        result = NULL_CLASSIFICATION_RESULT
-        if result_path not in f5:
-            self.log.info(
-                f"Read {read_id} has not been classified yet, or result"
-                f"is not stored at {result_path} in file {f5.filename}."
-            )
-            return result
-        predict_class = f5[result_path].attrs["best_class"]
-        score = f5[result_path].attrs["best_score"]
-        assigned_class = f5[result_path].attrs["assigned_class"]
-        result = ClassificationResult(predict_class, probability, assigned_class)
-        return result
-
-    @property
-    def models(self) -> List[str]:
-        f5 = self.f5
-        models = sorted(f5[self.classification_path].keys())
-        return models
-
-    @property
-    def classification_path(self):
-        classification_root = str(PurePosixPath(self.ROOT, "Classification"))
-        return classification_root
-
-    def _get_classification_path_for_model(self, model: str) -> str:
-        results_path = str(PurePosixPath(self.classification_path, model))
-        return results_path
-
-    def _get_results_path_for_model(self, model: str, read_id: ReadId) -> str:
-        results_path = str(
-            PurePosixPath(self._get_classification_path_for_model(model), read_id)
-        )
-        return results_path
-
-    def write_details(
-        self, classification_run: str, classifier_details: ClassifierDetails
-    ):
-        """Write metadata about the classifier that doesn't need to be repeated for
-        each read.
-
-        Parameters
-        ----------
-        classifier_confidence_threshold : dict
-            Subset of the configuration parameters that belong to the classifier.
-        """
-        model = classifier_details.model
-        model_path = CLASSIFICATION_PATH.for_classification_run(classification_run)
-        if model_path not in self.f5:
-            self.f5.create_group(model_path)
-
-        for model_attribute, value in vars(classifier_details).items():
-            dtype = None if not isinstance(value, str) else f"S{len(value)}"
-            self.f5[model_path].attrs.create(model_attribute, value, dtype=dtype)
-
-    def write_result(self, model: str, read_id: ReadId, result: ClassificationResult):
-        results_path = self._get_results_path_for_model(model, read_id)
-        if results_path not in self.f5:
-            self.f5.create_group(results_path)
-        self.f5[results_path].attrs["best_class"] = result.predicted
-        self.f5[results_path].attrs["best_score"] = result.probability
-        self.f5[results_path].attrs["assigned_class"] = (
-            result.assigned_class if result.passed_classification else -1
-        )
-
-
-class CaptureClassifierMixin:
-    def classify(
-        self,
-    ):
-        pass
 
 
 # TODO: Implement Classification with the new data model: https://github.com/uwmisl/poretitioner/issues/92
@@ -617,6 +516,7 @@ def write_classifier_result(
 
 class PytorchClassifierPlugin(ClassifierPlugin):
     def __init__(
+        self,
         module: nn.Module,
         name: str,
         version: str,
@@ -646,6 +546,7 @@ class PytorchClassifierPlugin(ClassifierPlugin):
         use_cuda : bool, optional
             Whether to use CUDA for GPU processing, by default False
         """
+        super().__init__()
         self.module = (
             module if isinstance(module, nn.Module) else module()
         )  # Instantiate the module, if the user passed in the class rather than an instance.
@@ -653,33 +554,34 @@ class PytorchClassifierPlugin(ClassifierPlugin):
         self.version = version
 
         self.state_dict_filepath = state_dict_filepath
-        self.use_cuda = cuda
+        self.use_cuda = use_cuda
 
-    def load(self, filepath: str, use_cuda: bool = False):
+    def load(self, use_cuda: bool = False):
         """Loads the PyTorch module. This means instantiating it,
-        setting its state dict [1], and setting it to evaluation mode [2].
+        setting its state dict [1], and setting it to evaluation mode (so we perform an inference)[2].
 
         [1] - https://pytorch.org/tutorials/recipes/recipes/what_is_state_dict.html
-        [2] -
+        [2] - https://pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module.eval
 
         Parameters
         ----------
         filepath : str
-            [description]
+            Filepath to a PyTorch state dict.
         use_cuda : bool, optional
-            [description], by default False
+            Whether to use CUDA, by default False
         """
-        torch_module = module()
+        torch_module = self.module
         # For more on Torch devices, please see:
         #   https://pytorch.org/docs/stable/tensor_attributes.html#torch-device
         device = "cpu" if not use_cuda else "cuda"
 
-        state_dict = torch.load(filepath, map_location=torch.device(device))
+        state_dict = torch.load(str(state_dict_filepath), map_location=torch.device(device))
         torch_module.load_state_dict(state_dict, strict=True)
 
         # Sets the model to inference mode
         torch_module.eval()
 
+        # Ensures subsequent uses of self.module are correctly configured.
         self.module = torch_module
 
     def pre_process(self, capture: Capture) -> torch.Tensor:

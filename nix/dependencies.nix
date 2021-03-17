@@ -24,9 +24,9 @@
 , cudaSupport ? false
 }:
 with pkgs;
-let 
+let
   # Takes in a python version, spits out run, build, test, and all packages for it.
-  getDependenciesForPython = myPython: 
+  getDependenciesForPython = myPython:
     with myPython.pkgs;
     let
       debugpy = (callPackage ./pkgs/debugpy/debugpy.nix) { python=myPython; };
@@ -95,7 +95,7 @@ rec {
   #
   ###########################################################################################
 
-  
+
 
   run = [ ]
         ++ pythonDeps.run
@@ -126,7 +126,7 @@ rec {
   ###########################################################################################
 
   test = [
-    
+
   ]
     ++ pythonDeps.test
   ;

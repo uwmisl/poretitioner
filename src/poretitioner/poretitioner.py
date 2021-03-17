@@ -19,6 +19,7 @@ from .utils.configuration import (
 from .utils.filtering import (
     get_filters,
     FilterConfig,
+    FilterConfigs,
     Filters,
     FilterSet,
 )
@@ -34,28 +35,28 @@ def run(args):
     # Get the command line args as a dictionary.
     command_line_args = vars(args)
     if "capture_directory" not in command_line_args and getattr(
-        args, ARG.CAPTURE_DIRECTORY, False
+        args, ARG.GENERAL.CAPTURE_DIRECTORY, False
     ):
         command_line_args["capture_directory"] = command_line_args[
-            ARG.CAPTURE_DIRECTORY
+            ARG.GENERAL.CAPTURE_DIRECTORY
         ]
 
     # Read configuration file, if it exists.
     try:
-        configuration_path = Path(command_line_args[ARG.CONFIG]).resolve()
+        configuration_path = Path(command_line_args[ARG.GENERAL.CONFIG]).resolve()
     except KeyError as e:
-        log.info(f"No config file found from arg: {ARG.CONFIG}.")
+        log.info(f"No config file found from arg: {ARG.GENERAL.CONFIG}.")
         raise e
     configuration = readconfig(
         configuration_path, command_line_args=command_line_args, log=log
     )
-    bulk_f5_filepath = Path(command_line_args[ARG.BULK_FAST5]).resolve()
+    bulk_f5_filepath = Path(command_line_args[ARG.GENERAL.BULK_FAST5]).resolve()
 
     seg_config = configuration[CONFIG.SEGMENTATION]
     filter_set: FilterSet = configuration[CONFIG.FILTER]
     config = configuration[CONFIG.GENERAL]
 
-    save_location = Path(getattr(args, ARG.CAPTURE_DIRECTORY)).resolve()
+    save_location = Path(getattr(args, ARG.GENERAL.CAPTURE_DIRECTORY)).resolve()
 
     log.info(f"bulk_f5_filepath: {bulk_f5_filepath}")
     log.info(f"\n\nSave location: {save_location}")
@@ -64,9 +65,9 @@ def run(args):
         segmentation_config_str = pprint.pformat(seg_config.__dict__)
         general_config_str = pprint.pformat(config.__dict__)
 
-        capture_criteria_filter_configs = {
+        capture_criteria_filter_configs: FilterConfigs = {
             name: FilterConfig(name, attributes)
-            for name, attributes in seg_config.capture_criteria.items()
+            for name, attributes in seg_config["capture_criteria"].items()
         }
         capture_criteria = get_filters(capture_criteria_filter_configs)
 
