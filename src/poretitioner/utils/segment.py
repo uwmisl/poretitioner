@@ -393,6 +393,14 @@ def segment(
     local_logger.debug(
         f"Segmenting configuration '{bulk_f5_filepath}' and saving results at location '{save_location}' "
     )
+    good_channels = judge_channels(
+        bulk_f5_filepath,
+        segment_config.open_channel_prior_mean,
+        segment_config.open_channel_prior_stdv,
+    )
+
+    object.__setattr__(segment_config, "good_channels", good_channels)
+
     return parallel_find_captures(
         config,
         segment_config,
