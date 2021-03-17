@@ -8,7 +8,7 @@ import numpy as np
 import logger
 from .getargs import ARG, COMMAND, get_args
 from .utils import segment
-from .utils.configuration import CONFIG, readconfig, SegmentConfiguration, GeneralConfiguration
+from .utils.configuration import CONFIG, readconfig, SegmentConfiguration, GeneralConfiguration, FilterConfiguration
 from .utils.filtering import (
     get_plugins,
     LengthFilter,
@@ -19,33 +19,6 @@ from .utils.filtering import (
     RangeFilter,
     StandardDeviationFilter,
 )
-
-class Poretitoner:
-    general_config: GeneralConfiguration
-    segment_config: SegmentConfiguration
-
-    def __init__(self, config):
-        pass
-
-    def segment(self):
-        pass
-
-    def filter(self):
-        pass
-
-    def classify(self):
-        pass
-
-    def quantify(self):
-        pass
-
-
-from poretitioner import Poretitoner
-
-porty = Poretitoner("../path/tpo/config.toml")
-
-porty.segment()
-
 
 def run(args):
     # Configures the root application logger.
@@ -71,13 +44,13 @@ def run(args):
         bulk_f5_filepath = Path(command_line_args[ARG.BULK_FAST5]).resolve()
 
         seg_config = configuration[CONFIG.SEGMENTATION]
-        filter_config = configuration[CONFIG.FILTER]
+        filter_config: FilterConfiguration = configuration[CONFIG.FILTER]
         config = configuration[CONFIG.GENERAL]
 
-        filters = get_plugins(filter_configs)
+        filters = get_plugins(filter_config)
 
         save_location = Path(getattr(args, ARG.CAPTURE_DIRECTORY)).resolve()
-        
+
         segmentation_config_str = pprint.pformat(seg_config.__dict__)
         general_config_str = pprint.pformat(config.__dict__)
         log.warning(f"bulk_f5_filepath: {bulk_f5_filepath}")
@@ -135,6 +108,3 @@ def main():
         args = get_args()
     # test_fast5()
     run(args)
-
-if __name__ == "__main__":
-    main()

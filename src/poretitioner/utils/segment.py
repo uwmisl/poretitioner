@@ -334,6 +334,7 @@ def _prep_capture_windows(
             )
             for capture_window in capture_windows:
                 start, end = capture_window.start, capture_window.end
+
                 unsegmented_signal = Capture(
                     pico[start:end],
                     capture_window,
@@ -452,7 +453,7 @@ def parallel_find_captures(
     bulk_f5_fname = segment_config.bulkfast5
     local_logger = logger.getLogger()
     local_logger.setLevel(5)
-    # TODO: Update with actual configuring https://github.com/uwmisl/poretitioner/issues/73
+
     n_workers = config.n_workers
     assert type(n_workers) is int
     voltage_threshold = segment_config.voltage_threshold
@@ -462,6 +463,7 @@ def parallel_find_captures(
     good_channels = segment_config.good_channels
     end_tol = segment_config.end_tolerance
     terminal_capture_only = segment_config.terminal_capture_only
+
     save_location = save_location if save_location else config.capture_directory
     n_per_file = segment_config.n_captures_per_file
     filters = [] if filters is None else filters
@@ -626,6 +628,7 @@ def parallel_find_captures(
                 )
 
                 capture_file.write_capture(raw_signal, capture_metadata)
+
 
                 local_logger.debug(f"\tWritten!")
 

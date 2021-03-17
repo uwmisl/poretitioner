@@ -226,6 +226,12 @@ class FilterConfiguration:
         }
         return cls.__new__(filters)
 
+    def __setitem__(self, name, my_filter):
+          self.filters[name] = my_filter
+
+    def __getitem__(self, name):
+          return self.filters[name]
+
 
 @dataclass(frozen=True)
 class GeneralConfiguration(BaseConfiguration):
