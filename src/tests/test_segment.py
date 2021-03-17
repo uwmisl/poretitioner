@@ -662,6 +662,62 @@ class TestParallelFindCaptures:
         assert n_captures == actual_n_captures
         os.remove(capture_f5_fname)
 
+    def parallel_find_captures_overflow_file_test(self):
+        bulk_f5_fname = "src/tests/data/bulk_fast5_dummy.fast5"
+
+        filters = [filtering.LengthFilter(100, None)]
+        config = GeneralConfiguration(
+            config={"n_workers": 2, "capture_directory": "src/tests"}
+        )
+
+        segment_config = {
+            "voltage_threshold": -180,
+            "signal_threshold_frac": 0.7,
+            "translocation_delay": 20,
+            "open_channel_prior_mean": 220,
+            "open_channel_prior_stdv": 50,
+            "good_channels": [1, 3],
+            "end_tolerance": 50,
+            "terminal_capture_only": False,
+            "n_captures_per_file": 2,
+            "bulkfast5": bulk_f5_fname,
+        }
+        segment_config = SegmentConfiguration(segment_config)
+
+        segment.parallel_find_captures(
+            config, segment_config, overwrite=True, filters=filters
+        )
+        run_id = "d0befb838f5a9a966e3c559dc3a75a6612745849"
+        actual_n_captures = 5
+        n_captures = 0
+        capture_f5_fnames = [
+            os.path.join("src/tests/", x)
+            for x in os.listdir("src/tests/")
+            if run_id in x
+        ]
+        assert len(capture_f5_fnames) == 3
+        for capture_f5_fname in capture_f5_fnames:
+            with h5py.File(capture_f5_fname, "r") as f5:
+                for grp in f5.get("/"):
+                    if "read" not in grp:
+                        continue
+                    n_captures += 1
+                    d = f5[grp]
+                    a = d["Signal"].attrs
+                    start_time_local = a.get("start_time_local")
+                    start_time_bulk = a.get("start_time_bulk")
+                    assert start_time_local == start_time_bulk  # No offset here
+
+                    duration = a.get("duration")
+                    len_signal = len(d["Signal"][()])
+                    assert len_signal == duration
+
+                    voltage = a.get("voltage")
+                    assert voltage == segment_config.voltage_threshold
+                    print(duration, a.get("channel_number"))
+            os.remove(capture_f5_fname)
+        assert n_captures == actual_n_captures
+
 
 class TestSegment:
     def segment_test(self):
