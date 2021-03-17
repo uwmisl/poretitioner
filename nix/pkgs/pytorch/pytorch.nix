@@ -1,10 +1,10 @@
 ###########################################################################################
 #
-# debugpy.nix
+# pytorch.nix
 #
 ###########################################################################################
 #
-# This provides a python debugger that's friendly with VSCode.
+# This provides a stable version of pytorch.
 # Details on how to use it can be found here [1, 2].
 #
 # Why are we building it in manually instead of downloading it from the Nix store?
@@ -15,9 +15,10 @@
 #
 ###########################################################################################
 
-{ pkgs ? import <nixpkgs> { }, lib ? pkgs.lib
-, python ?  pkgs.python39
-
+{ pkgs ? import <nixpkgs> { config = (import ../../config.nix); overlays = [ (import "../../overlays.nix") ];  }
+, lib ? pkgs.lib
+, python ?  pkgs.python38
+, cudaSupport ? false
 }:
 with python.pkgs;
-callPackage ./default.nix { }
+callPackage ./default.nix { inherit python cudaSupport; }

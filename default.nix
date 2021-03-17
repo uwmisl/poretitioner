@@ -15,7 +15,7 @@
 #
 ###########################################################################################
 
-{ pkgs ? import <nixpkgs> { config = (import ./nix/config.nix); }
+{ pkgs ? import <nixpkgs> { config = (import ./nix/config.nix); overlays = [ (import ./nix/overlays.nix) ]; }
 , cudaSupport ? false
 , python ? (pkgs.callPackage ./nix/python.nix) { inherit pkgs; }
 }:
@@ -71,6 +71,7 @@ let
   #
   ####################################################################
 
+  supportsDocker = pkgs.stdenv.isLinux;
   # Currently can't build docker images on Mac OS (Darwin): https://github.com/NixOS/nixpkgs/blob/f5a90a7aab126857e9cac4f048930ddabc720c55/pkgs/build-support/docker/default.nix#L620
   dockerImage = { app }: dockerTools.buildImage {
     name = "${name}";
@@ -84,14 +85,13 @@ let
       Entrypoint = [ "${app.outPath}/bin/${app.pname}" ];
     };
   };
-
 in
 {
   app-no-test = app { doCheck = false; };
   test = poretitioner { doCheck = true; };
   app = app { doCheck = true; };
   lib = poretitioner { doCheck = false; };
-  docker = dockerImage { app = (app { doCheck = false; }); };
+  
   # Note: Shell can only be run by using "nix-shell" (i.e. "nix-shell -A shell ./default.nix").
   # Here's an awesome, easy-to-read overview of nix shells: https://ghedam.at/15978/an-introduction-to-nix-shell
   shell = mkShell {
@@ -101,4 +101,9 @@ in
     '';
     propagatedBuildInputs = all_pkgs;
   };
+}
+//
+# Docker support
+pkgs.lib.optionalAttrs (supportsDocker) {
+  docker = dockerImage { app = (app { doCheck = false; }); };
 }

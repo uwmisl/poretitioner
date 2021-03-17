@@ -129,9 +129,9 @@ class BaseConfiguration(metaclass=ABCMeta):
         names = {field.name for field in dataclasses.fields(self.__class__)}
         return names
 
-    def initialize_fields(self, command_line_args: Dict = None, config: Dict = None):
+    def initialize_fields(self, command_line_args: Dict = None, config: Dict = None, log: Logger = None):
         """[summary]
-
+        #TODO 
         Parameters
         ----------
         command_line_args : Dict, optional
@@ -139,6 +139,9 @@ class BaseConfiguration(metaclass=ABCMeta):
         config : Dict, optional
             [description], by default None
         """
+
+        log = log if log is not None else getLogger()
+
         command_line_args = command_line_args if command_line_args is not None else {}
         config = config if config is not None else {}
         # Command line args take precidence over configuration files in the event of a conflict.
@@ -223,6 +226,12 @@ class FilterConfiguration:
         }
         return cls.__new__(filters)
 
+    def __setitem__(self, name, my_filter):
+          self.filters[name] = my_filter
+
+    def __getitem__(self, name):
+          return self.filters[name]
+
 
 @dataclass(frozen=True)
 class GeneralConfiguration(BaseConfiguration):
@@ -245,18 +254,7 @@ class GeneralConfiguration(BaseConfiguration):
             [description], by default None
         """
         self.initialize_fields(command_line_args=command_line_args, config=config)
-        # command_line_args = command_line_args if command_line_args is not None else {}
-        # config = config if config is not None else {}
-        # # Command line args take precidence over configuration files in the event of a conflict.
-        # combined = {**config, **command_line_args}
 
-        # valid_fields = self.valid_field_names
-        # for field, value in combined.items():
-        #     if field in valid_fields:
-        #         object.__setattr__(self, field, value)
-        #         log.debug(f"{self.__class__.__name__!s}[{field}] = {value}")
-        #     else:
-        #         log.debug(f"'{field}' is not a valid field for configuration {self.__class__.__name__!s}. Ignoring...")
 
     def validate(self):
         raise NotImplementedError("Not implemented configuration")
@@ -289,18 +287,6 @@ class SegmentConfiguration(BaseConfiguration):
         """
         command_line_args = stripped_by_keys(command_line_args, self.valid_field_names) # Only keep filter-related command line args
         self.initialize_fields(command_line_args=command_line_args, config=config)
-
-        # config = config if config is not None else {}
-        # # Command line args take precidence over configuration files in the event of a conflict.
-        # combined = {**config, **command_line_args}
-        # valid_fields = self.valid_field_names
-        # # TODO: Sanitize input 
-        # for field, value in combined.items():
-        #     if field in valid_fields:
-        #         object.__setattr__(self, field, value)
-        #         log.debug(f"{self.__class__.__name__!s}[{field}] = {value}")
-        #     else:
-        #         log.debug(f"'{field}' is not a valid field for configuration {self.__class__.__name__!s}. Ignoring...")
 
     def validate(self):
         # TODO: Validation

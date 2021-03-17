@@ -17,7 +17,7 @@
 #
 ###########################################################################################
 
-{ pkgs ? import <nixpkgs> { config = (import ./config.nix); }
+{ pkgs ? import <nixpkgs> { config = (import ./nix/config.nix); overlays = [ (import "./nix/overlays.nix") ]; }
 , python ? (pkgs.callPackage ./python.nix) { inherit pkgs; }
 , lib ? pkgs.lib
 , stdenv ? pkgs.stdenv
@@ -26,8 +26,8 @@
 with pkgs;
 with python.pkgs;
 let
-  precommit = (import ./pkgs/pre-commit/pre-commit.nix) { inherit python; };
   debugpy = (callPackage ./pkgs/debugpy/debugpy.nix) { inherit python; };
+  pytorch = (callPackage ./pkgs/pytorch/pytorch.nix) { inherit python cudaSupport; };
 in
 rec {
 
@@ -59,9 +59,8 @@ rec {
     # For interactive builds
     jupyter
     # Neural networks
-    torchvision
-  ] ++ lib.optional (cudaSupport) pytorchWithCuda
-  ++ lib.optional (!cudaSupport) pytorchWithoutCuda;
+    #torchvision
+  ] ++ [ pytorch ];
 
   ###########################################################################################
   #
@@ -73,7 +72,7 @@ rec {
 
   build = [
     # Git hooks
-    precommit
+    pre-commit
     # Import sorter
     isort
     # Highly opinionated code-formatter

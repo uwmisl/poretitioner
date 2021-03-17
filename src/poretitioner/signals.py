@@ -78,9 +78,10 @@ class ChannelCalibration:
     digitisation: int
 
 
-class SignalMetadata(namedtuple("SignalMetadata", ["channel_number", "window", "calibration"])):
-    """Metadata around a signal.
-    """
+class SignalMetadata(
+    namedtuple("SignalMetadata", ["channel_number", "window", "calibration"])
+):
+    """Metadata around a signal."""
 
 
 @dataclass(frozen=True)
@@ -105,45 +106,45 @@ class BaseSignalSerializationInfo:
 
 class BaseSignal(NumpyArrayLike):
     """Base class for signals (time series data generated from a nanopore channel).
-        Do not use this class directly, instead subclass it.
+    Do not use this class directly, instead subclass it.
 
-        Subclasses must implement:
-        `def __array_finalize__(self, obj):` and `def __reduce__(self):`. See `FractionalizedSignal` for an example.
+    Subclasses must implement:
+    `def __array_finalize__(self, obj):` and `def __reduce__(self):`. See `FractionalizedSignal` for an example.
 
-        You can instances of subclasses of this class exactly like numpy arrays.
+    You can instances of subclasses of this class exactly like numpy arrays.
 
-        Parameters
-        ----------
-        signal : NumpyArrayLike
-            Numpy array of the signal.
-        channel_number : int
-            Which nanopore channel generated the data. Must be 1 or greater.
-        calibration: ChannelCalibration
-            How to convert the nanopore device's analog-to-digital converter (ADC) raw signal to picoAmperes of current.
-        read_id : str, optional
-            ReadID that generated this signal, by default None
+    Parameters
+    ----------
+    signal : NumpyArrayLike
+        Numpy array of the signal.
+    channel_number : int
+        Which nanopore channel generated the data. Must be 1 or greater.
+    calibration: ChannelCalibration
+        How to convert the nanopore device's analog-to-digital converter (ADC) raw signal to picoAmperes of current.
+    read_id : str, optional
+        ReadID that generated this signal, by default None
 
-        Returns
-        -------
-        [BaseSignal]
-            Signal instance.
+    Returns
+    -------
+    [BaseSignal]
+        Signal instance.
 
-        Notes
-        -------
+    Notes
+    -------
 
-        Here are some examples about how this classes subclasses can be used exactly like numpy arrays:
+    Here are some examples about how this classes subclasses can be used exactly like numpy arrays:
 
-        ```
-        class MySignal(BaseSignal):
-            # ...
-        # Later...
-        signal = MySignal(np.array([1, 2, 3]), channel_number, calibration, read_id="oo")
+    ```
+    class MySignal(BaseSignal):
+        # ...
+    # Later...
+    signal = MySignal(np.array([1, 2, 3]), channel_number, calibration, read_id="oo")
 
-        assert np.median(signal) == 2 # We can calculuate the median, just like a numpy array.
-        assert np.mean(signal) == 2 # We can calculuate the median, just like a numpy array.
-        assert all(signal < 10) # We can do filtering...
-        assert signal[0:-1] # And even slicing!
-        ```
+    assert np.median(signal) == 2 # We can calculuate the median, just like a numpy array.
+    assert np.mean(signal) == 2 # We can calculuate the median, just like a numpy array.
+    assert all(signal < 10) # We can do filtering...
+    assert signal[0:-1] # And even slicing!
+    ```
     """
 
     def __new__(cls, signal: NumpyArrayLike):
@@ -324,7 +325,9 @@ class FractionalizedSignal(CurrentSignal):
         self.open_channel_pA = getattr(obj, "open_channel_pA", None)
 
     def __reduce__(self):
-        reconstruct, arguments, object_state = super(FractionalizedSignal, self).__reduce__()
+        reconstruct, arguments, object_state = super(
+            FractionalizedSignal, self
+        ).__reduce__()
         # Create a custom state to pass to __setstate__ when this object is deserialized.
         info = self.serialize_info(open_channel_pA=self.open_channel_pA)
         new_state = object_state + (info,)
@@ -469,7 +472,10 @@ class PicoampereSignal(CurrentSignal):
         read_id = self.read_id
 
         raw = RawSignal(
-            digitize_current(self, calibration), channel_number, calibration, read_id=read_id
+            digitize_current(self, calibration),
+            channel_number,
+            calibration,
+            read_id=read_id,
         )
 
         return raw
@@ -649,7 +655,10 @@ class Channel:
         """
 
         open_channel_median_pA = find_open_channel_current(
-            picoamperes, open_channel_guess, open_channel_bound, default=open_channel_default
+            picoamperes,
+            open_channel_guess,
+            open_channel_bound,
+            default=open_channel_default,
         )
         self = cls.__new__(cls)
         # We're using this esoteric __setattr__ method so we can keep the dataclass frozen while setting its initial attributes
@@ -674,7 +683,7 @@ class CaptureMetadata:
         file.
     start_time_local : int
         Starting time of the capture relative to the beginning of the segmented
-        region. (Relative to f5_subsection_start in parallel_find_captures().)
+        region. (Relative to sub_run_start_seconds in parallel_find_captures().)
     duration : int
         Number of data points in the capture.
     ejected : boolean
@@ -722,21 +731,20 @@ class Capture:
 
     open_channel_pA_calculated : float
         Calculated open channel current value.
+
+    ejected: bool
+        Whether or not the capture was ejected from the pore.
     """
 
     signal: PicoampereSignal
     window: Window
     signal_threshold_frac: float
     open_channel_pA_calculated: float
-
-    @property
-    def ejected(self, end_tol=0):
-        ejected = np.abs(self.window.end - self.signal.duration) <= end_tol
-        return ejected
+    ejected: Optional[bool]
 
     @property
     def duration(self):
-        return self.window.duration
+        return len(self.signal)
 
     @property
     def fractionalized(self, start=None, end=None) -> FractionalizedSignal:
@@ -746,6 +754,9 @@ class Capture:
     def __repr__(self):
         string = f"duration: {self.signal.duration} window:{self.window!s} open_channel_pA:{self.open_channel_pA_calculated}"
         return string
+
+    def __len__(self):
+        return self.duration
 
 
 ###############
@@ -826,7 +837,7 @@ def compute_fractional_blockage(
 
 
 def compute_picoamperes_from_fractional_blockage(
-    fractional: FractionalizedSignal
+    fractional: FractionalizedSignal,
 ) -> NumpyArrayLike:
     """Converts a fractional signal  in the range (0, 1) to Picoampere current
 
@@ -884,9 +895,9 @@ def find_open_channel_current(
         open_channel_bound = 0.1 * open_channel_guess
     upper_bound = open_channel_guess + open_channel_bound
     lower_bound = open_channel_guess - open_channel_bound
-    ix_in_range = np.where(np.logical_and(picoamperes <= upper_bound, picoamperes > lower_bound))[
-        0
-    ]
+    ix_in_range = np.where(
+        np.logical_and(picoamperes <= upper_bound, picoamperes > lower_bound)
+    )[0]
     if len(ix_in_range) == 0:
         channel_number = getattr(picoamperes, "channel_number", "N/A")
         log.info(
@@ -946,7 +957,9 @@ def find_signal_off_regions(
         return []
 
 
-def find_segments_below_threshold(time_series: NumpyArrayLike, threshold: float) -> List[Window]:
+def find_segments_below_threshold(
+    time_series: NumpyArrayLike, threshold: float
+) -> List[Window]:
     """
     Find regions where the time series data points drop at or below the
     specified threshold.
@@ -965,11 +978,15 @@ def find_segments_below_threshold(time_series: NumpyArrayLike, threshold: float)
         Each window in the list represents the (start, end) points of regions
         where the input array drops at or below the threshold.
     """
-    diff_points = np.where(np.abs(np.diff(np.where(time_series <= threshold, 1, 0))) == 1)[0]
+    diff_points = np.where(
+        np.abs(np.diff(np.where(time_series <= threshold, 1, 0))) == 1
+    )[0]
     if time_series[0] <= threshold:
         diff_points = np.hstack([[0], diff_points])
     if time_series[-1] <= threshold:
         diff_points = np.hstack([diff_points, [len(time_series)]])
 
-    windows = [Window(start, end) for start, end in zip(diff_points[::2], diff_points[1::2])]
+    windows = [
+        Window(start, end) for start, end in zip(diff_points[::2], diff_points[1::2])
+    ]
     return windows

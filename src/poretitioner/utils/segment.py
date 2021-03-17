@@ -11,6 +11,7 @@ import os
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+
 # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
 # from . import filter
 from typing import Dict, Iterable, List, Optional
@@ -63,11 +64,12 @@ def generate_read_id(*args, **kwargs) -> str:
 
 def find_captures(
     signal_pA: PicoampereSignal,
+    capture_window: Window,
     signal_threshold_frac: float,
     open_channel_pA_calculated: float,
     terminal_capture_only: bool = False,
     # TODO: Katie Q: DANGER! Mutable obj reference as default
-    filters: Optional[List[filtering.FilterPlugin]]=None,
+    filters: Optional[List[filtering.FilterPlugin]] = None,
     delay=50,
     end_tol=0,
 ) -> List[Capture]:
@@ -112,59 +114,57 @@ def find_captures(
 
     filters = [] if filters is None else filters
 
+    # Try to locally recalculate open_channel_pA (if not possible, default to input)
+    open_channel_pA_calculated = find_open_channel_current(
+        signal_pA, open_channel_pA_calculated, 35, open_channel_pA_calculated
+    )
+
     # Convert to frac current
     frac_current = signal_pA.to_fractionalized(open_channel_pA_calculated)
-    del signal_pA
+
     # Apply signal threshold & get list of captures
-    capture_windows = find_windows_below_threshold(
+    potential_captures = find_windows_below_threshold(
         frac_current, signal_threshold_frac
-    )  # find_segments_below_threshold(frac_current, signal_threshold_frac)
+    )
+    del frac_current
 
     captures = [
         Capture(
-            frac_current[window.start : window.end],
-            window,
+            signal_pA[potential_capture.start + delay : potential_capture.end],
+            Window(  # Relative to the run, not to the start of the capture window
+                potential_capture.start + capture_window.start + delay,
+                potential_capture.end + capture_window.start,
+            ),
             signal_threshold_frac,
             open_channel_pA_calculated,
+            np.abs(capture_window.end - (potential_capture.end + capture_window.start))
+            <= end_tol,
         )
-        for window in capture_windows
+        for potential_capture in potential_captures
     ]
+
     # If terminal_capture_only, reduce list of captures to only last
     if terminal_capture_only:
-        if len(captures) > 1 and captures[-1].ejected:
+        if len(captures) >= 1 and captures[-1].ejected:
             captures = [captures[-1]]
         else:
             captures = []
 
-    if delay > 0:
-        for i, capture in enumerate(captures):
-            capture_start, capture_end = capture.window
-            if capture.window.duration > delay:
-                delayed_window = Window(capture_start + delay, capture_end)
-                captures[i] = Capture(
-                    capture.signal,
-                    delayed_window,
-                    signal_threshold_frac,
-                    open_channel_pA_calculated,
-                )
-
     # Apply filters to remaining capture(s)
-    filtered_captures = []
-    if len(captures) > 0:
-        last_capture = captures[-1]
-        capture_start, capture_end = last_capture.window
-        # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-        # filtered = [capture for capture in captures if filter.apply_feature_filters(frac_current[capture_start:capture_end], filters)]
-        filtered_captures = [
-            capture
-            for capture in captures
-            if filtering.apply_feature_filters(frac_current[capture_start:capture_end], filters)
-        ]
+    filtered_captures = [
+        capture
+        for capture in captures
+        if filtering.apply_feature_filters(capture.fractionalized, filters)
+    ]
     return filtered_captures
 
 
 def find_captures_dask_wrapper(
-    capture: Capture, terminal_capture_only=False, filters: Optional[List[filtering.FilterPlugin]]=None, delay=50, end_tol=0
+    unsegmented_signal: Capture,
+    terminal_capture_only=False,
+    filters: Optional[List[filtering.FilterPlugin]] = None,
+    delay=50,
+    end_tol=0,
 ):
     """Wrapper for find_captures since dask bag can only take one arg as input,
     plus kwargs. See find_captures() for full description.
@@ -194,9 +194,10 @@ def find_captures_dask_wrapper(
     """
     filters = [] if filters is None else filters
     return find_captures(
-        capture.signal,
-        capture.signal_threshold_frac,
-        capture.open_channel_pA_calculated,
+        unsegmented_signal.signal,  # TODO this is not yet a capture at this point! It's just a region in the time series where there *could* be captures.
+        unsegmented_signal.window,
+        unsegmented_signal.signal_threshold_frac,
+        unsegmented_signal.open_channel_pA_calculated,
         terminal_capture_only=terminal_capture_only,
         filters=filters,
         delay=delay,
@@ -265,7 +266,9 @@ def create_capture_fast5(
             g = capture_f5.create_group("/Meta/context_tags")
             for k, v in attrs.items():
                 g.attrs.create(k, v)
-            g.attrs.create("bulk_filename", bulk_f5_fname, dtype=f"S{len(bulk_f5_fname)}")
+            g.attrs.create(
+                "bulk_filename", bulk_f5_fname, dtype=f"S{len(bulk_f5_fname)}"
+            )
             sample_frequency = bulk_f5.get("Meta").attrs["sample_rate"]
             g.attrs.create("sample_frequency", sample_frequency)
 
@@ -278,7 +281,9 @@ def create_capture_fast5(
             if sub_run is not None:
                 sub_run_id, sub_run_offset, sub_run_duration = sub_run
                 if sub_run_id is not None:
-                    g.attrs.create("sub_run_id", sub_run_id, dtype=f"S{len(sub_run_id)}")
+                    g.attrs.create(
+                        "sub_run_id", sub_run_id, dtype=f"S{len(sub_run_id)}"
+                    )
                 if sub_run_offset is not None:
                     g.attrs.create("sub_run_offset", sub_run_offset)
                 if sub_run_duration is not None:
@@ -291,7 +296,9 @@ def create_capture_fast5(
             g = capture_f5.create_group("/Meta/Segmentation")
             # print(__name__)
             g.attrs.create("segmenter", __name__, dtype=f"S{len(__name__)}")
-            g.attrs.create("segmenter_version", __version__, dtype=f"S{len(__version__)}")
+            g.attrs.create(
+                "segmenter_version", __version__, dtype=f"S{len(__version__)}"
+            )
             g_filt = capture_f5.create_group("/Meta/Segmentation/filters")
             g_seg = capture_f5.create_group("/Meta/Segmentation/context_id")
             segment_config = config.get("segment")
@@ -303,7 +310,9 @@ def create_capture_fast5(
                         if len(filt_vals) == 2:
                             (min_filt, max_filt) = filt_vals
                             # Create compound dset for filters
-                            local_logger.debug("filt types", type(min_filt), type(max_filt))
+                            local_logger.debug(
+                                "filt types", type(min_filt), type(max_filt)
+                            )
                             if min_filt is None:
                                 min_filt = -1
                             if max_filt is None:
@@ -317,7 +326,7 @@ def create_capture_fast5(
 
 @dataclass
 class PreppedCaptureCandidates:
-    """ A series of captures ready to be processed in paralllel.
+    """A series of captures ready to be processed in paralllel.
 
     Parameters
     ----------
@@ -343,8 +352,8 @@ def _prep_capture_windows(
     signal_threshold_frac: float,
     good_channels: List[int],
     open_channel_pA_calculated: float,
-    f5_subsection_start: int = 0,
-    f5_subsection_end: Optional[int] = None,
+    sub_run_start_seconds: int = 0,
+    sub_run_end_seconds: Optional[int] = None,
 ) -> PreppedCaptureCandidates:
     """Helper function to extract raw data from the bulk fast5 for segmentation.
 
@@ -352,9 +361,9 @@ def _prep_capture_windows(
     ----------
     bulk_f5_fname : str
         Filename of the bulk fast5, to be segmented into captures.
-    f5_subsection_start : int
+    sub_run_start_seconds : int
         Time point at which to start segmenting, by default 0
-    f5_subsection_end : int, optional
+    sub_run_end_seconds : int, optional
         Time point at which to stop segmenting, by default None
     voltage_threshold : int
         Voltage must be at or below this value to be considered a capture window.
@@ -382,7 +391,9 @@ def _prep_capture_windows(
     local_logger = logger.getLogger()
     with BulkFile(bulk_f5_fname) as bulk_f5:
         local_logger.info(f"Reading in signals for bulk file: {bulk_f5_fname}")
-        voltage = bulk_f5.get_voltage(start=f5_subsection_start, end=f5_subsection_end)
+        voltage = bulk_f5.get_voltage(
+            start=sub_run_start_seconds, end=sub_run_end_seconds
+        )
         local_logger.debug(f"voltage: {voltage}")
 
         run_id = bulk_f5.run_id
@@ -398,31 +409,35 @@ def _prep_capture_windows(
             f"#/capture windows: {len(capture_windows)}"
         )
         local_logger.debug("Prepping raw signals for parallel processing.")
-        captures = []  # Input data to find_captures_dask_wrapper
+        unsegmented_signals = []  # Input data to find_captures_dask_wrapper
         signal_metadata = []  # Metadata -- no need to pass through the segmenter
         for channel_number in good_channels:
             calibration = bulk_f5.get_channel_calibration(channel_number)
 
             raw_signal: RawSignal = bulk_f5.get_raw_signal(
-                channel_number, start=f5_subsection_start, end=f5_subsection_end
+                channel_number, start=sub_run_start_seconds, end=sub_run_end_seconds
             )
             pico = raw_signal.to_picoamperes()
             for capture_window in capture_windows:
                 start, end = capture_window.start, capture_window.end
 
-                capture = Capture(
+                unsegmented_signal = Capture(
                     pico[start:end],
                     capture_window,
                     signal_threshold_frac,
                     open_channel_pA_calculated,
                 )
                 metadata = SignalMetadata(
-                    channel_number=channel_number, window=capture_window, calibration=calibration
+                    channel_number=channel_number,
+                    window=capture_window,
+                    calibration=calibration,
                 )
 
-                captures.append(capture)
+                unsegmented_signals.append(unsegmented_signal)
                 signal_metadata.append(metadata)
-        prepped = PreppedCaptureCandidates(captures, signal_metadata, run_id, sampling_rate)
+        prepped = PreppedCaptureCandidates(
+            unsegmented_signals, signal_metadata, run_id, sampling_rate
+        )
         return prepped
 
 
@@ -433,23 +448,27 @@ def segment(
     save_location=None,
     filters: Optional[List[filtering.FilterPlugin]] = None,
     overwrite=True,
-    f5_subsection_start=0,
-    f5_subsection_end=None,
+    sub_run_start_seconds=0,
+    sub_run_end_seconds=None,
 ) -> List[CaptureMetadata]:
-    """[summary]
+    """Identifies the capture regions in a nanopore ionic current signal.
 
     Parameters
     ----------
-    bulk_f5_filepath : [type]
-        [description]
+    bulk_f5_filepath : str
+        Path to the bulk fast5 file, likely generated by the MinKnow software.
     save_location : str
         Directory to save the segmentation results (results will often be saved to more than one file).
-    config : Dict
-        Segmentaiotn configuration # TODO: Pipe through the configuration here: https://github.com/uwmisl/poretitioner/issues/73
-    f5_subsection_start : [type], optional
-        [description], by default None
-    f5_subsection_end : [type], optional
-        [description], by default None
+    config : GeneralConfiguration
+        General run configuration.
+    segment_config : SegmentConfiguration
+        Segmentation configuration.
+    sub_run_start_seconds : int, optional
+        Where to start in the run (e.g. start segmenting after 10 seconds). This is useful in cases
+        where the run is continuous, but you added a different analyte or wash at some known point in time, by default 0
+    sub_run_end_seconds : int, optional
+        Where to stop segmenting in the run (if anywhere). This is useful in cases
+        where the run is continuous, but you added a different analyte or wash at some known point in time, by default None
     """
     filters = [] if filters is None else filters
     local_logger = logger.getLogger()
@@ -467,8 +486,8 @@ def segment(
         filters=filters,
         save_location=save_location,
         overwrite=overwrite,
-        f5_subsection_start=f5_subsection_start,
-        f5_subsection_end=f5_subsection_end,
+        sub_run_start_seconds=sub_run_start_seconds,
+        sub_run_end_seconds=sub_run_end_seconds,
     )
 
 
@@ -480,11 +499,11 @@ def parallel_find_captures(
     filters: List[filtering.FilterPlugin] = None,
     save_location=None,
     overwrite=False,
-    f5_subsection_start=0,
-    f5_subsection_end=None,
+    sub_run_start_seconds=0,
+    sub_run_end_seconds=None,
 ) -> List[CaptureMetadata]:
     """Identify captures within the bulk fast5 file in the specified range
-    (from f5_subsection_start to f5_subsection_end.)
+    (from sub_run_start_seconds to sub_run_end_seconds.)
 
     If f5_subsection_{start|end} are not specified, the default is to use the
     range of current starting from the beginning and/or end of the bulk fast5.
@@ -500,9 +519,9 @@ def parallel_find_captures(
     config : dict
         Configuration parameters for the segmenter.
         # TODO : document allowed values : https://github.com/uwmisl/poretitioner/issues/27 https://github.com/uwmisl/poretitioner/issues/73
-    f5_subsection_start : int, optional
+    sub_run_start_seconds : int, optional
         Time point at which to start segmenting, by default None
-    f5_subsection_end : int, optional
+    sub_run_end_seconds : int, optional
         Time point at which to stop segmenting, by default None
     overwrite : bool, optional
         If segmented files already exist, overwrite them if True, otherwise.
@@ -521,13 +540,17 @@ def parallel_find_captures(
 
     local_logger = logger.getLogger()
     # TODO: Update with actual configuring https://github.com/uwmisl/poretitioner/issues/73
-    n_workers = config.n_workers# config["compute"]["n_workers"]
+    n_workers = config.n_workers  # config["compute"]["n_workers"]
     assert type(n_workers) is int
-    voltage_threshold = segment_config.voltage_threshold  # config["segment"]["voltage_threshold"]
+    voltage_threshold = (
+        segment_config.voltage_threshold
+    )  # config["segment"]["voltage_threshold"]
     signal_threshold_frac = (
         segment_config.signal_threshold_frac
     )  # config["segment"]["signal_threshold"]
-    delay = segment_config.translocation_delay  # config["segment"]["translocation_delay"]
+    delay = (
+        segment_config.translocation_delay
+    )  # config["segment"]["translocation_delay"]
     open_channel_prior_mean = (
         segment_config.open_channel_prior_mean
     )  # config["segment"]["open_channel_prior_mean"]
@@ -537,12 +560,8 @@ def parallel_find_captures(
         segment_config.terminal_capture_only
     )  # config["segment"]["terminal_capture_only"]
     # filters = config.get("filters")
-    save_location = (
-        save_location if save_location else config.capture_directory
-    )  # TODO: Verify exists; don't create (handle earlier)
-    n_per_file = segment_config.n_captures_per_file # config["output"]["captures_per_f5"]
-    # if f5_subsection_start is None:
-    #     f5_subsection_start = 0
+    save_location = save_location if save_location else config.capture_directory
+    n_per_file = segment_config.n_captures_per_file
     filters = [] if filters is None else filters
 
     if not os.path.exists(save_location):
@@ -554,8 +573,8 @@ def parallel_find_captures(
         signal_threshold_frac,
         good_channels,
         open_channel_prior_mean,
-        f5_subsection_start=f5_subsection_start,
-        f5_subsection_end=f5_subsection_end,
+        sub_run_start_seconds=sub_run_start_seconds,
+        sub_run_end_seconds=sub_run_end_seconds,
     )
 
     local_logger.debug("Loading up the bag with signals.")
@@ -589,7 +608,7 @@ def parallel_find_captures(
         voltage_threshold: int,
         capture: Capture,
         metadata: SignalMetadata,
-        f5_subsection_start: int = 0,
+        sub_run_start_seconds: int = 0,
     ) -> CaptureMetadata:
         """Summarizes a capture in metadata.
 
@@ -617,7 +636,7 @@ def parallel_find_captures(
             capture_start + window_start
         )  # Start time relative to the start of the bulk f5 subsection
         start_time_bulk = (
-            start_time_local + f5_subsection_start
+            start_time_local + sub_run_start_seconds
         )  # relative to the start of the entire bulk f5
         capture_duration = capture.duration
         ejected = capture.ejected
@@ -652,7 +671,7 @@ def parallel_find_captures(
                     voltage_threshold,
                     cap,
                     metadata,
-                    f5_subsection_start=f5_subsection_start,
+                    sub_run_start_seconds=sub_run_start_seconds,
                 )
 
                 capture_metadatum.append(capture_metadata)
@@ -670,12 +689,11 @@ def parallel_find_captures(
 
                 local_logger.debug(f"\tWriting to file: {capture_f5_filepath}...")
 
-                # TODO: Katie Q: Is it okay to use "a" mode here,
-
                 mode = "w" if overwrite else "r+"
                 with CaptureFile(capture_f5_filepath, mode=mode) as capture_file:
-                    # TODO: Katie Q: When should sub-run be used?
-                    capture_file.initialize_from_bulk(bulk, filters, segment_config, sub_run=None)
+                    capture_file.initialize_from_bulk(
+                        bulk, filters, segment_config, sub_run=None
+                    )
                     capture_file.write_capture(raw_signal, capture_metadata)
 
                 local_logger.debug(f"\tWritten!")

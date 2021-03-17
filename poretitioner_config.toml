@@ -4,6 +4,7 @@ capture_directory = "."
 
 # Segmentation
 [segmentation]
+  bulkfast5 = ""
   n_captures_per_file = 10
   voltage_threshold = 0.1
   signal_threshold_frac = 0.700000
@@ -12,26 +13,31 @@ capture_directory = "."
   terminal_capture_only = false
   open_channel_prior_mean = 230
   open_channel_prior_stdv = 15
-  good_channels = [1,
-                2,
-                3,
-                ]
+  [capture_criteria]
+    # Before even getting to the Filter step, we do some initial 
+    # what can even potentially count as a capture.
+    # You can think of the items in this section as the following 
+    # "A signal may or may not be a capture, but for it to even 
+    # *possibly* be a capture, it must have the following characteristics:
+    #
+    length_min = 100
+    #length_max = 100000000
 
 
 [filters]
 # Whether to filter based on the signal mean.
-    [filters.mean]
-        # Minimum signal mean to pass. Defaults to -∞ if no value is provided.
-        # minimum = 0
-        # Maximum signal mean to pass. Defaults to +∞ if no value is provided.
-        # maximum = 100
-    [filters.min]
-        # minimum = 0
-        # maximum = 100
+  [filters.mean]
+    # Minimum signal mean to pass. Defaults to -∞ if no value is provided.
+    # minimum = 0
+    # Maximum signal mean to pass. Defaults to +∞ if no value is provided.
+    # maximum = 100
+  [filters.min]
+    # minimum = 0
+    # maximum = 100
 
-    [filters.length]
-        minimum = 100
-        #maximum = 100
+  [filters.length]
+    minimum = 100
+    #maximum = 100
 
 [classifier]
   name = "foo"
