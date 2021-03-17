@@ -399,6 +399,7 @@ def segment(
         segment_config.open_channel_prior_stdv,
     )
 
+    # TODO #102 Save good channels to fast5 in segment.py
     object.__setattr__(segment_config, "good_channels", good_channels)
 
     return parallel_find_captures(
