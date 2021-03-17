@@ -8,7 +8,13 @@ import numpy as np
 from . import logger
 from .getargs import ARG, COMMAND, get_args
 from .utils import segment
-from .utils.configuration import CONFIG, readconfig, SegmentConfiguration, GeneralConfiguration, FilterConfiguration
+from .utils.configuration import (
+    CONFIG,
+    readconfig,
+    SegmentConfiguration,
+    GeneralConfiguration,
+    FilterConfiguration,
+)
 from .utils.filtering import (
     get_plugins,
     LengthFilter,
@@ -20,6 +26,7 @@ from .utils.filtering import (
     StandardDeviationFilter,
 )
 
+
 def run(args):
     # Configures the root application logger.
     # After these line, it's safe to log using src.poretitioner.logger.getLogger() throughout the application.
@@ -29,8 +36,12 @@ def run(args):
 
     # Get the command line args as a dictionary.
     command_line_args = vars(args)
-    if "capture_directory" not in command_line_args and getattr(args, ARG.CAPTURE_DIRECTORY, False):
-        command_line_args["capture_directory"] = command_line_args[ARG.CAPTURE_DIRECTORY]
+    if "capture_directory" not in command_line_args and getattr(
+        args, ARG.CAPTURE_DIRECTORY, False
+    ):
+        command_line_args["capture_directory"] = command_line_args[
+            ARG.CAPTURE_DIRECTORY
+        ]
 
     # Read configuration file, if it exists.
     try:
@@ -38,7 +49,9 @@ def run(args):
     except KeyError as e:
         log.info(f"No config file found from arg: {ARG.CONFIG}.")
         raise e
-    configuration = readconfig(configuration_path, command_line_args=command_line_args, log=log)
+    configuration = readconfig(
+        configuration_path, command_line_args=command_line_args, log=log
+    )
 
     if args.command == COMMAND.SEGMENT:
         bulk_f5_filepath = Path(command_line_args[ARG.BULK_FAST5]).resolve()
@@ -99,8 +112,7 @@ def main():
             "--output-dir",
             "./out/data/",
             "--config",
-            "./poretitioner_config.toml"
-            " ",
+            "./poretitioner_config.toml" " ",
             "-vvvvv",
         ]
         args = get_args(command_line)

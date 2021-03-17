@@ -9,7 +9,11 @@ namely getting the application name and version.
 """
 import logging
 
-from src.poretitioner.logger import configure_root_logger, getLogger, verbosity_to_log_level
+from src.poretitioner.logger import (
+    configure_root_logger,
+    getLogger,
+    verbosity_to_log_level,
+)
 
 #################################
 #
@@ -19,14 +23,12 @@ from src.poretitioner.logger import configure_root_logger, getLogger, verbosity_
 
 
 def logger_large_verbosity_goes_to_debug_test():
-    """Test that large verbosity cap to DEBUG.
-    """
+    """Test that large verbosity cap to DEBUG."""
     assert verbosity_to_log_level(10000) == logging.DEBUG
 
 
 def logger_zero_verbosity_goes_to_error_test():
-    """Test that large verbosity cap to DEBUG.
-    """
+    """Test that large verbosity cap to DEBUG."""
     assert verbosity_to_log_level(0) == logging.ERROR
 
 

@@ -5,8 +5,7 @@ from src.poretitioner.utils.core import Window
 
 class WindowTest:
     def window_duration_test(self):
-        """Test that window duration is the difference between end and start times.
-        """
+        """Test that window duration is the difference between end and start times."""
         start = 5
         end = 11
         expected_duration = 6  # 11 - 5
@@ -14,8 +13,7 @@ class WindowTest:
         assert window.duration == expected_duration
 
     def window_invalid_start_end_test(self):
-        """Test that windows with start times after end times have invalid durations.
-        """
+        """Test that windows with start times after end times have invalid durations."""
         start = 10
         end = 5  # Can't go back in time!
         with pytest.raises(ValueError):

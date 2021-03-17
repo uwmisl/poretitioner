@@ -10,17 +10,18 @@ from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass
 from typing import List
 
+
 def as_cli_arg(property: str) -> str:
-    """We'd like to match command line arguments to their 
-    corresponding python variables, but sadly python doesn't 
+    """We'd like to match command line arguments to their
+    corresponding python variables, but sadly python doesn't
     allow variable/field names with hyphens. As such,
-    we convert the underscores to hyphens when using 
+    we convert the underscores to hyphens when using
     command line args.
 
     Parameters
     ----------
     property : Variable or field name with underscores.
-        
+
     Returns
     -------
     str
@@ -31,8 +32,7 @@ def as_cli_arg(property: str) -> str:
 
 @dataclass(frozen=True)
 class COMMAND:
-    """Available Poretitioner commands. e.g. poretitioner segment
-    """
+    """Available Poretitioner commands. e.g. poretitioner segment"""
 
     # Only run the 'segment' step.
     SEGMENT = "segment"
@@ -48,8 +48,7 @@ class COMMAND:
 
 @dataclass(frozen=True)
 class ARG:
-    """Available Poretitioner arguments. e.g. config, output, file
-    """
+    """Available Poretitioner arguments. e.g. config, output, file"""
 
     CONFIG = "config"
     DEBUG = "debug"
@@ -59,7 +58,10 @@ class ARG:
     VERBOSE = "verbose"
 
     # Segmenter
-    CAPTURE_DIRECTORY = "output_dir"  # Argument on the command line has a dash, but the attribute.
+    CAPTURE_DIRECTORY = (
+        "output_dir"  # Argument on the command line has a dash, but the attribute.
+    )
+
     class SEGMENT:
         BULKFAST5 = "bulkfast5"
         N_CAPTURES_PER_FILE = "n_captures_per_file"
@@ -108,6 +110,7 @@ class ARG:
             MIN,
         ]
 
+
 def get_args(commandline_args: List = None) -> Namespace:
     """Gets the command line arguments passed to the application.
 
@@ -122,7 +125,7 @@ def get_args(commandline_args: List = None) -> Namespace:
     Namespace
         Namespace containing the command line arguments.
     """
-    
+
     # TODO: Add a description string: https://github.com/uwmisl/poretitioner/issues/27
     DESCRIPTION = ""
     # TODO: Add a usage string: https://github.com/uwmisl/poretitioner/issues/27
@@ -173,7 +176,10 @@ def get_args(commandline_args: List = None) -> Namespace:
             Parser to give a file input option.
         """
         parser.add_argument(
-            "-f", f"--{ARG.BULK_FAST5}", action="store", help="The fast5 file to run poretitioner on."
+            "-f",
+            f"--{ARG.BULK_FAST5}",
+            action="store",
+            help="The fast5 file to run poretitioner on.",
         )
 
     def add_output_option_to_parser(parser: ArgumentParser):
@@ -185,7 +191,10 @@ def get_args(commandline_args: List = None) -> Namespace:
             Parser to give an output file option
         """
         parser.add_argument(
-            "-o", f"--{ARG.OUTPUT}", action="store", help="Where to store this command's output."
+            "-o",
+            f"--{ARG.OUTPUT}",
+            action="store",
+            help="Where to store this command's output.",
         )
 
     def add_configuration_option_to_parser(parser: ArgumentParser):
@@ -197,7 +206,10 @@ def get_args(commandline_args: List = None) -> Namespace:
             Parser to give an output file option
         """
         parser.add_argument(
-            f"--{ARG.CONFIG}", action="store", default=".", help="Configuration file to configure Poretitioner."
+            f"--{ARG.CONFIG}",
+            action="store",
+            default=".",
+            help="Configuration file to configure Poretitioner.",
         )
 
     # Creates subparsers for each poretitioner command (e.g.`poretitioner segment`).
@@ -205,12 +217,18 @@ def get_args(commandline_args: List = None) -> Namespace:
     subparser = parser.add_subparsers(dest="command")
 
     # Segmenter
-    parser_segment = subparser.add_parser(COMMAND.SEGMENT, description="Segment captures")
+    parser_segment = subparser.add_parser(
+        COMMAND.SEGMENT, description="Segment captures"
+    )
     add_capture_directory_option_to_parser(parser_segment)
 
     parser_filter = subparser.add_parser(COMMAND.FILTER, description="Filter captures")
-    parser_classify = subparser.add_parser(COMMAND.CLASSIFY, description="Classify captures")
-    parser_quantify = subparser.add_parser(COMMAND.QUANTIFY, description="Quantify captures")
+    parser_classify = subparser.add_parser(
+        COMMAND.CLASSIFY, description="Classify captures"
+    )
+    parser_quantify = subparser.add_parser(
+        COMMAND.QUANTIFY, description="Quantify captures"
+    )
 
     parsers = [parser, parser_filter, parser_segment, parser_classify, parser_quantify]
     for subparser in parsers:
@@ -227,7 +245,6 @@ def get_args(commandline_args: List = None) -> Namespace:
 # Segmenter
 
 
-
 def add_capture_directory_option_to_parser(parser: ArgumentParser):
     """Adds output directory option to a parser.
 
@@ -242,6 +259,7 @@ def add_capture_directory_option_to_parser(parser: ArgumentParser):
         action="store",
         help="Which directory to store the segmented capture fast5 files.",
     )
+
 
 # Filters
 def add_capture_directory_option_to_parser(parser: ArgumentParser):
@@ -259,6 +277,7 @@ def add_capture_directory_option_to_parser(parser: ArgumentParser):
         help="Which directory to store the segmented capture fast5 files.",
     )
 
+
 # Mapping from command line option "--foo" to all its args and kwa
 FILTER_ARGS = {
     ARG.FILTER.LENGTH_MIN: {
@@ -275,34 +294,20 @@ SEGMENTATION_ARGS = {
         "help": "How many captures to store in a file. When the number of captures founds exceeds this number (n), new files will be created to house the other n+1 through 2n, 2n+1 through 3n +1, ... and so on.",
         "type": int,
     },
-
     ARG.SEGMENT.OPEN_CHANNEL_PRIOR_MEAN: {
         "action": "store",
         # Katie Q: I don't feel like I'm phrasing this well, any ideas on better phrasing?
         "help": "Average open channel current in picoAmperes (e.g. 235).",
         "type": int,
     },
-
     ARG.SEGMENT.OPEN_CHANNEL_PRIOR_STDV: {
         "action": "store",
         # Katie Q: I don't feel like I'm phrasing this well, any ideas on better phrasing?
         "help": "Average open channel current in picoAmperes (e.g. 25).",
         "type": int,
     },
-
-    ARG.SEGMENT.SIGNAL_THRESHOLD_FRAC: {
-
-    },
-
-    ARG.SEGMENT.TERMINAL_CAPTURE_ONLY: {
-
-    },
-
-    ARG.SEGMENT.TRANSLOCATION_DELAY: {
-
-    },
-
-    ARG.SEGMENT.VOLTAGE_THRESHOLD: {
-        
-    }
+    ARG.SEGMENT.SIGNAL_THRESHOLD_FRAC: {},
+    ARG.SEGMENT.TERMINAL_CAPTURE_ONLY: {},
+    ARG.SEGMENT.TRANSLOCATION_DELAY: {},
+    ARG.SEGMENT.VOLTAGE_THRESHOLD: {},
 }
