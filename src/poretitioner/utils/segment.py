@@ -394,6 +394,7 @@ def segment(
     local_logger.debug(
         f"Segmenting configuration '{bulk_f5_filepath}' and saving results at location '{save_location}' "
     )
+
     good_channels = judge_channels(
         bulk_f5_filepath,
         segment_config.open_channel_prior_mean,
