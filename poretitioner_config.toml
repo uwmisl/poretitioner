@@ -25,7 +25,9 @@ capture_directory = "."
 
 
 [filters]
-# Whether to filter based on the signal mean.
+  # A unique name of your choice for this collection of filters, e.g. "NTER paper section 1"
+  name = "ProfessorJeffs_NTER_paper_draft_0"
+  # Whether to filter based on the signal mean.
   [filters.mean]
     # Minimum signal mean to pass. Defaults to -∞ if no value is provided.
     # minimum = 0

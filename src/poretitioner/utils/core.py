@@ -11,13 +11,14 @@ from __future__ import annotations
 from collections import namedtuple
 from dataclasses import dataclass
 from os import PathLike
-from typing import Dict, List, Optional, TypeVar, Union, Sequence
+from typing import Dict, List, Optional, NewType, Union, Sequence
 
 import numpy as np
 
 __all__ = [
     "find_windows_below_threshold",
     "NumpyArrayLike",
+    "ReadId",
     "PathLikeOrString",
     "Window",
     "WindowsByChannel",
@@ -29,6 +30,8 @@ class NumpyArrayLike(np.ndarray):
     # Numpy 1.21: https://stackoverflow.com/questions/40378427/numpy-formal-definition-of-array-like-objects
     pass
 
+# Unique identifier for a nanopore read.
+ReadId = NewType("ReadId", str)
 
 # Represent a path or a string representing a path.
 PathLikeOrString = Union[str, PathLike]

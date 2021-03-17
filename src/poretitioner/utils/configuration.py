@@ -19,8 +19,7 @@ from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
-
-from json import JSONEncoder
+import pprint
 
 import numpy as np
 
@@ -29,6 +28,7 @@ from ..logger import getLogger, Logger
 
 from .core import stripped_by_keys, PathLikeOrString
 
+from .filtering import FilterSet
 
 @dataclass(frozen=True)
 class CONFIG:
@@ -125,17 +125,14 @@ class BaseConfiguration(metaclass=ABCMeta):
     All configuration classes should include a `validate` method, which will throw an exception
     for invalid data.
     """
-
     @property
     def valid_field_names(self):
         names = {field.name for field in dataclasses.fields(self.__class__)}
         return names
 
-    def initialize_fields(
-        self, command_line_args: Dict = None, config: Dict = None, log: Logger = None
-    ):
+    def initialize_fields(self, command_line_args: Dict = None, config: Dict = None, log: Logger = None):
         """[summary]
-        #TODO
+        #TODO 
         Parameters
         ----------
         command_line_args : Dict, optional
@@ -157,9 +154,8 @@ class BaseConfiguration(metaclass=ABCMeta):
                 object.__setattr__(self, field, value)
                 log.debug(f"{self.__class__.__name__!s}[{field}] = {value}")
             else:
-                log.warning(
-                    f"'{field}' is not a valid field for configuration {self.__class__.__name__!s}. Ignoring..."
-                )
+                log.warning(f"'{field}' is not a valid field for configuration {self.__class__.__name__!s}. Ignoring...")
+
 
     @abstractmethod
     def validate(self) -> bool:
@@ -174,79 +170,6 @@ class BaseConfiguration(metaclass=ABCMeta):
         raise ValueError("Configuration was invalid.")
 
 
-class FilterJSONEncoder(JSONEncoder):
-    def default(self, obj):
-        try:
-            return vars(obj)
-        except TypeError:
-            pass
-        # Best practice to let base class default raise the type error:
-        # https://docs.python.org/3/library/json.html#json.JSONEncoder.default
-        return super().default(obj)
-
-
-@dataclass(frozen=True)
-class FilterConfig:
-    name: str
-    attributes: Dict[str, Any]
-    filepath: Optional[str] = None
-
-
-@dataclass(frozen=True)
-class FilterConfiguration:
-    """
-    Mapping of name to filter configuration.
-    """
-
-    filters: Dict[str, FilterConfig]
-
-    def __init__(
-        self,
-        command_line_args: Dict = None,
-        filter_config: Dict = None,
-        log: Logger = getLogger(),
-    ) -> None:
-        # Rule of 3, this needs to be a helper of some kind
-        filter_command_line_args = stripped_by_keys(
-            command_line_args, ARG.FILTER.ALL
-        )  # Only keep filter-related command line args
-
-        filter_config = filter_config if filter_config is not None else {}
-
-        object.__setattr__(self, "filters", {})
-        # Command line args take precidence over configuration files in the event of a conflict.
-        combined = {**filter_config, **filter_command_line_args}
-        log.debug(f"\nFilters: {combined!s}")
-
-        for filter_name, filter_attributes in combined.items():
-            # TODO: Filter Plugin should allow filepaths. https://github.com/uwmisl/poretitioner/issues/91
-            filepath = None
-            filter_config = FilterConfig(filter_name, filter_attributes, filepath)
-            log.debug(f"\nFilters[{filter_name}] = {filter_config!r}")
-            self.filters[filter_name] = filter_config
-
-    def validate(self):
-        raise NotImplementedError("Implement validation for filters!")
-
-    def json_encoder(self) -> JSONEncoder:
-        encoder = FilterJSONEncoder()
-        return encoder
-
-    @classmethod
-    def from_json(cls, json_dict: Dict):
-        filters = {
-            filter_config.get("name"): FilterConfig(**filter_config)
-            for filter_config in json_dict["filters"]
-        }
-        return cls.__new__(filters)
-
-    def __setitem__(self, name, my_filter):
-        self.filters[name] = my_filter
-
-    def __getitem__(self, name):
-        return self.filters[name]
-
-
 @dataclass(frozen=True)
 class GeneralConfiguration(BaseConfiguration):
     n_workers: int
@@ -257,12 +180,7 @@ class GeneralConfiguration(BaseConfiguration):
         # assert self.captures_per_f5 > 0
         pass
 
-    def __init__(
-        self,
-        command_line_args: Dict = None,
-        config: Dict = None,
-        log: Logger = getLogger(),
-    ) -> None:
+    def __init__(self, command_line_args: Dict = None, config: Dict = None, log: Logger = getLogger()) -> None:
         """[summary]
 
         Parameters
@@ -273,6 +191,7 @@ class GeneralConfiguration(BaseConfiguration):
             [description], by default None
         """
         self.initialize_fields(command_line_args=command_line_args, config=config)
+
 
     def validate(self):
         raise NotImplementedError("Not implemented configuration")
@@ -292,25 +211,18 @@ class SegmentConfiguration(BaseConfiguration):
     open_channel_prior_stdv: int
     terminal_capture_only: bool
 
-    def __init__(
-        self,
-        command_line_args: Dict = None,
-        config: Dict = None,
-        log: Logger = getLogger(),
-    ) -> None:
+    def __init__(self, command_line_args: Dict = None, config: Dict = None, log: Logger = getLogger()) -> None:
         """[summary]
 
         Parameters
         ----------
         command_line_args : Dict, optional
-            Command line arguments for filters, by default None. Any keys outside of
-            ARG.FILTER are ignored.
+            Command line arguments for filters, by default None. Any keys outside of 
+            ARG.FILTER are ignored. 
         config : Dict, optional
             Segmentation configuration, by default None
         """
-        command_line_args = stripped_by_keys(
-            command_line_args, self.valid_field_names
-        )  # Only keep filter-related command line args
+        command_line_args = stripped_by_keys(command_line_args, self.valid_field_names) # Only keep filter-related command line args
         self.initialize_fields(command_line_args=command_line_args, config=config)
 
     def validate(self):
@@ -335,6 +247,35 @@ class ClassifierConfiguration(BaseConfiguration):
     def validate(self):
         raise NotImplementedError("Not implemented configuration")
 
+def get_filter_configuration(filter_command_line_args: Dict = None, filter_config_from_file: Dict = None, log = None):
+
+    filter_config_from_file = filter_config_from_file if filter_config_from_file is not None else {}
+    filter_command_line_args = filter_command_line_args if filter_command_line_args is not None else {}
+    # Command line args take precidence over configuration files in the event of a conflict.
+    combined = {**filter_config, **filter_command_line_args}
+    log.debug(f"\nFilters: {combined!s}")
+
+    try:
+        # Get the filter set name, then remove it from the dictionary so we know everything else in `combined `refers to actual filters.
+        filter_set_name = combined.pop(ARG.FILTER.FILTER_SET_NAME)
+    except AttributeError as e:
+        error_msg = f"Uh oh, we couldn't find the argument {ARG.FILTER.FILTER_SET_NAME} in either the config file or the command line. Please be sure to specify it in the config file, or on the command line."
+        log.error(error_msg)
+        raise e
+    
+    
+    log.debug(f"\nFilters[{filter_name}] = {filter_config!r}")
+    filter_configs = {}
+    for filter_name, filter_attributes in combined.items():
+        # TODO: Filter Plugin should allow filepaths. https://github.com/uwmisl/poretitioner/issues/91
+        filepath = None
+
+        my_filter_configs = { filter_name: FilterConfig(filter_name, filter_attributes, filepath) for filter_name, filter_attributes in combined.items() }
+
+        FilterSet.from_filter_configs(filter_set_name )
+        pprint.p
+        log.debug(f"\nFilters[{filter_name}] = {filter_config!r}")
+        my_filter_configs[filter_name] = filter_config
 
 def readconfig(path, command_line_args=None, log: Logger = getLogger()):
     """Read configuration from the path.
@@ -347,40 +288,35 @@ def readconfig(path, command_line_args=None, log: Logger = getLogger()):
     path : Pathlike
         Path to the Poretitioner configuration file.
     """
-    config_path = str(
-        get_absolute_path(path)
-    ).strip()  # Strip any trailing/leading whitespace.
+    config_path = str(get_absolute_path(path)).strip() # Strip any trailing/leading whitespace.
 
     read_config = toml.load(config_path)
-    # config = ConfigParser()
+    #config = ConfigParser()
 
     gen_config = read_config[CONFIG.GENERAL]
     seg_config = read_config[CONFIG.SEGMENTATION]
     filter_config = read_config[CONFIG.FILTER]
-
-    # config.read(config_path)
-    # config = config
+ 
+    #config.read(config_path)
+    #config = config
     log.debug(f"\n\ngen_config: {gen_config!s}\n\n")
     log.debug(f"\n\nseg_config: {seg_config!s}\n\n")
     log.debug(f"\n\ncommand_line_args: {command_line_args!s}\n\n")
     log.debug(f"\n\nfilter_config: {filter_config!s}\n\n")
 
-    filter_commandline_args = {}
-    filter_configuration = FilterConfiguration(
-        filter_config=filter_config, command_line_args=command_line_args, log=log
-    )
+    filter_command_line_args = stripped_by_keys(command_line_args, ARG.FILTER.ALL) # Only keep filter-related command line args
+    
+    FilterSet.from_filter_configs()
+    filter_set = FilterSet(filter_config=filter_config, command_line_args=filter_command_line_args, log=log)
 
-    segmentation_configuration = SegmentConfiguration(
-        config=seg_config, command_line_args=command_line_args, log=log
-    )
-    general_configuration = GeneralConfiguration(
-        config=gen_config, command_line_args=command_line_args, log=log
-    )
+    segmentation_configuration = SegmentConfiguration(config=seg_config, command_line_args=command_line_args, log=log)
+    general_configuration = GeneralConfiguration(config=gen_config, command_line_args=command_line_args, log=log)
+
 
     configs = {
         CONFIG.GENERAL: general_configuration,
         CONFIG.SEGMENTATION: segmentation_configuration,
-        CONFIG.FILTER: filter_configuration,
+        CONFIG.FILTER: filter_set,
     }
 
     return configs
