@@ -1,0 +1,10 @@
+; The MANIFEST.in just controls which non-python files get included in our packages.
+;
+; For this to work, please make sure we have include_package_data=True in setup.py or setup.cfg.
+;
+; https://packaging.python.org/guides/using-manifest-in/
+; https://python-packaging.readthedocs.io/en/latest/non-code-files.html
+;
+include README.md
+include poretitioner_config.toml
+

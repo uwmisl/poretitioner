@@ -26,13 +26,12 @@ let
   # use them in in bpython immediately.
   playground_py = ''./nix/playground.py'';
   dependencies = callPackage ./dependencies.nix { inherit python cudaSupport; };
+  shell = callPackage ./shell.nix {
+    inherit python cudaSupport;
+    postShellHook = ''
+      ${python.pkgs.bpython.pname} --interactive ${playground_py}
+    '';
+  };
 in
-mkShell {
-  buildInputs = dependencies.all ++ [ bpython ];
-  shellHook = ''
-    ${bpython.pname} --interactive ${playground_py}
-  '';
-
-}
-
+shell
 #{ pkgs ? import <nixpkgs> { config = (import ./nix/config.nix); } , python ? (pkgs.callPackage ./nix/python.nix) { inherit pkgs; } }:

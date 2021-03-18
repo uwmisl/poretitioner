@@ -13,8 +13,8 @@ set -e
 
 NIX_TRUSTED_PUBLIC_KEYS="uwmisl.cachix.org-1:/moWZqhprjtkmTCI9/yIidsJlOrJT5lhlay+9hKZTcA= cachix.cachix.org-1:eWNHQldwUO7G2VkjpnjDbWwy4KQ/HNxht7H4SSoMckM= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.nixos.org-1:CNHJZBh9K4tP3EKF6FkkgeVYsS3ohTl+oS0Qa8bezVs= nix-linter.cachix.org-1:BdTne5LEHQfIoJh4RsoVdgvqfObpyHO5L0SCjXFShlE= "
 
-# To learn more about Nix configs, please check out: 
-# https://nixos.org/manual/nix/unstable/command-ref/conf-file.html 
+# To learn more about Nix configs, please check out:
+# https://nixos.org/manual/nix/unstable/command-ref/conf-file.html
 NIX_CONFIG_FILES=( "/etc/nix/nix.conf" )
 
 # Here are the profile files that Nix may modify
@@ -220,10 +220,10 @@ install_nix () {
     bold "Installing Nix..."
 
     # Nix installer for Darwin uses the diskutil command.
-    # Not every MacOS install has /usr/sbin/ in the PATH, which is where diskutil lives. 
+    # Not every MacOS install has /usr/sbin/ in the PATH, which is where diskutil lives.
     # This will be fixed with:
     # https://github.com/NixOS/nix/issues/4488
-    if isDarwin && ! $(echo $PATH | grep "/usr/sbin" &> /dev/null); then 
+    if isDarwin && ! $(echo $PATH | grep "/usr/sbin" &> /dev/null); then
         echo "Adding /usr/sbin to PATH..."
         PATH="${PATH}:/usr/sbin"
         echo "Added /usr/sbin to PATH. New PATH: ${PATH}"
@@ -250,11 +250,11 @@ patch_shell_profiles () {
     # search paths, which results in some confusing results: https://github.com/NixOS/nix/issues/2033
     PER_USER_NIX_PKGS="/nix/var/nix/profiles/per-user/$(whoami)/channels/nixpkgs:/nix/var/nix/profiles/per-user/$(whoami)/channels"
     NIX_PATH_INCLUDES_USER_NIX_PKGS=$(echo $NIX_PATH | grep "${user_nix_pkgs}")
-    if ! ${NIX_PATH_INCLUDES_USER_NIX_PKGS}; then 
+    if ! ${NIX_PATH_INCLUDES_USER_NIX_PKGS}; then
         echo "\tNIX_PATH is: ${NIX_PATH}"
-        export 
+        export
         echo "\tNow, NIX_PATH is ${NIX_PATH}"
-    fi    
+    fi
 }
 
 configure_nix_channel () {
@@ -266,7 +266,7 @@ configure_nix_channel () {
     if ! $(nix-channel --list | grep "$PINNED_NIX_CHANNEL" --silent); then
         # Don't have this nix channel added.
         printf "\tNot found, adding...\n"
-        nix-channel --add "$PINNED_NIX_CHANNEL" #--trusted-public-keys "$NIX_TRUSTED_PUBLIC_KEYS" 
+        nix-channel --add "$PINNED_NIX_CHANNEL" #--trusted-public-keys "$NIX_TRUSTED_PUBLIC_KEYS"
         printf "\tAdded.\n"
         echo ""
     fi
@@ -300,7 +300,7 @@ configure_nix () {
 
         echo ""
 
-        # Nix conf info comment 
+        # Nix conf info comment
         # This is just to help future users understand where these values come from.
         add_info_line () {
             # Nix Configuration info: https://www.mankier.com/5/nix.conf
@@ -313,7 +313,7 @@ configure_nix () {
                     sudo cat "$NIX_CONFIG_FILE" | sudo tee -a "$TEMP_FILE"
                     sudo mv "$TEMP_FILE" "$NIX_CONFIG_FILE"
                     echo "Added Nix conf info line."
-            else 
+            else
                     echo "Found Nix conf info line. Moving on..."
             fi
         }
@@ -328,7 +328,7 @@ configure_nix () {
                 echo "Adding builders-use-substitutes = true..."
                 echo "builders-use-substitutes = true" | sudo tee -a "$NIX_CONFIG_FILE"
                 echo "Added builders-use-substitutes = true."
-            else 
+            else
                 echo "Found builders-use-substitutes. Moving on..."
         fi
 
@@ -348,7 +348,7 @@ configure_nix () {
         echo ""
 
         # Trusted Public Keys
-    
+
         echo "Checking Trusted Public Keys configuration...."
         if ! $(grep "trusted-public-keys =.*" "$NIX_CONFIG_FILE" --silent); then
             echo "Adding trusted users to $NIX_CONFIG_FILE"
@@ -379,7 +379,7 @@ configure_nix () {
                 echo "Adding trusted substituter '$trusted_subby'..."
                 sudo sed -i -e "${trusted_substituters_line_number}s,$, ${trusted_subby},g" "$NIX_CONFIG_FILE"
                 echo "Added trusted substituter '$trusted_subby'."
-            else 
+            else
                 echo "Found trusted substituter '$trusted_subby'. Moving on..."
             fi
         done
@@ -404,7 +404,7 @@ configure_nix () {
                 echo "Adding allowed uri '$allowed_uri'..."
                 sudo sed -i -e "${uri_line_number}s,$, ${allowed_uri},g" "$NIX_CONFIG_FILE"
                 echo "Added allowed uri '$allowed_uri'."
-            else 
+            else
                 echo "Found allowed uri '$allowed_uri'. Moving on..."
             fi
         done
@@ -421,7 +421,7 @@ configure_nix () {
             echo "substituters =" | sudo tee -a $NIX_CONFIG_FILE
             echo "Substituteters configuration added."
         fi
- 
+
         VALID_SUBSTITUTERS=( 'https://cache.nixos.org' 'https://cachix.cachix.org' 'https://uwmisl.cachix.org' 'https://nix-linter.cachix.org' )
         substituters_line_number=$(grep -n "^substituters =.*" $NIX_CONFIG_FILE | awk -F':' '{print $1}' | xargs )
         for subby in ${VALID_SUBSTITUTERS[@]}; do
@@ -430,7 +430,7 @@ configure_nix () {
                 echo "Adding substituter '$subby'..."
                 sudo sed -i -e "${substituters_line_number}s,$, ${subby},g" $NIX_CONFIG_FILE
                 echo "Added substituter '$subby'."
-            else 
+            else
                 echo "Found substituter '$subby'. Moving on..."
             fi
         done
@@ -438,11 +438,11 @@ configure_nix () {
         echo ""
 
 
-        # max Http connections 
+        # max Http connections
         if ! $(grep "^http-connections =.*" $NIX_CONFIG_FILE --silent); then
             # Adding substituters configuration.
             echo "http-connections not found, adding..."
-            # Using 0 means there's no limit on the maximum number of parallel HTTP connections. 
+            # Using 0 means there's no limit on the maximum number of parallel HTTP connections.
             echo "http-connections = 0" | sudo tee -a $NIX_CONFIG_FILE
             echo "http-connections configuration added."
         fi
@@ -452,20 +452,20 @@ configure_nix () {
         if ! $(grep "^max-jobs =.*" $NIX_CONFIG_FILE --silent); then
             # Adding substituters configuration.
             echo "max-jobs not found, adding..."
-            # Using 0 means there's no limit on the maximum number of parallel HTTP connections. 
+            # Using 0 means there's no limit on the maximum number of parallel HTTP connections.
             echo "max-jobs = auto" | sudo tee -a $NIX_CONFIG_FILE
             echo "max-jobs configuration added."
         fi
         echo ""
 
-        # Auto optimize store 
+        # Auto optimize store
         if ! $(grep "^auto-optimise-store =.*" $NIX_CONFIG_FILE --silent); then
             # Adding substituters configuration.
             echo "auto-optimise-store not found, adding..."
-            # Using 0 means there's no limit on the maximum number of parallel HTTP connections. 
+            # Using 0 means there's no limit on the maximum number of parallel HTTP connections.
             echo "auto-optimise-store = true" | sudo tee -a $NIX_CONFIG_FILE
             echo "auto-optimise-store configuration added."
-        fi 
+        fi
         echo ""
 
         # Keep outputs
@@ -473,7 +473,7 @@ configure_nix () {
             echo "keep-outputs not found, adding..."
             echo "keep-outputs = true" | sudo tee -a $NIX_CONFIG_FILE
             echo "keep-outputs configuration added."
-        fi 
+        fi
         echo ""
 
         # Keep derivations
@@ -481,12 +481,12 @@ configure_nix () {
             echo "keep-derivations not found, adding..."
             echo "keep-derivations = true" | sudo tee -a $NIX_CONFIG_FILE
             echo "keep-derivations configuration added."
-        fi 
+        fi
         echo ""
 
         green "\nDone configuring nix. Let's look at the config file:\n"
         print_nix_config $NIX_CONFIG_FILE
-    done 
+    done
 }
 
 
@@ -509,7 +509,7 @@ install_cachix () {
 install_misl_env () {
     # Installs developer dependencies
     bold "Installing MISL env..."
-    
+
     # Ensures sure we have bash >= 4.0 ready to go.
     # As of 2021, the default bash version on MacOS is 3.2 (released in 2007)
     # But Nix needs bash 4.0+ to work.
@@ -545,7 +545,7 @@ main () {
             echo ""
             green "To continue, close this shell and open a new one, then run this script again."
             echo ""
-            if isDarwin; then 
+            if isDarwin; then
                 echo "Pro-tip: To get back to the same directory in the new shell, run the following in the current shell:"
                 echo ""
                 printf "\tpwd | pbcopy \n"
@@ -555,7 +555,7 @@ main () {
                 printf "\tpbpaste && cd \$(pbpaste) \n"
                 echo ""
             fi
-            
+
             echo ""
             green "See you soon :)"
             exit 0
@@ -579,7 +579,7 @@ uninstall_nix_daemon () {
     yellow "Uninstalling Nix daemon..."
     # MacOS
     MAC_OS_NIX_DAEMON_PLIST="/Library/LaunchDaemons/org.nixos.nix-daemon.plist"
-    if $(command -v launchctl &> /dev/null) && [ -e "${MAC_OS_NIX_DAEMON_PLIST}" ]; then 
+    if $(command -v launchctl &> /dev/null) && [ -e "${MAC_OS_NIX_DAEMON_PLIST}" ]; then
         yellow "\tRunning 'sudo launchctl unload ${MAC_OS_NIX_DAEMON_PLIST}'..."
         sudo launchctl unload "${MAC_OS_NIX_DAEMON_PLIST}"
         green "\tRan 'sudo launchctl unload ${MAC_OS_NIX_DAEMON_PLIST}'."
@@ -588,7 +588,7 @@ uninstall_nix_daemon () {
         sudo rm "${MAC_OS_NIX_DAEMON_PLIST}"
         green "\tRan 'sudo rm ${MAC_OS_NIX_DAEMON_PLIST}'."
     fi
-   
+
     # Linux
     if $(command -v systemd &> /dev/null); then
         yellow "\tRunning 'sudo systemctl stop, disable, and daemon-reload for nix-daemon.socket and nix-daemon.socket..."
@@ -619,7 +619,7 @@ restore_old_shell_profiles () {
 uninstall_clean () {
     readonly NIX_ROOT="/nix"
     readonly ROOT_HOME=$(echo ~root)
-    
+
     # Uninstalls all Nix and dev dependencies.
     # Doesn't modify the shell .rc or .profile files, which might have lingering Nix references. These can be deleted manually.
     green "Uninstalling..."
@@ -659,7 +659,7 @@ uninstall_clean () {
             sudo rm -rf "${nix_profile_or_config}"
             green "\tRan: sudo rm -rf ${nix_profile_or_config}"
         fi
-    done    
+    done
     green "Cleaned up profile and per-user Nix files."
     echo ""
 

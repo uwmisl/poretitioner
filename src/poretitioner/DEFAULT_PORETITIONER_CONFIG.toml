@@ -17,8 +17,8 @@ n_workers = 5
   [segmentation.capture_criteria]
     # Before even getting to the Filter step, we do some initial 'filtering' about
     # what can even potentially count as a capture.
-    # You can think of the items in this section as the following: 
-    # "A signal may or may not be a capture, but for it to even 
+    # You can think of the items in this section as the following:
+    # "A signal may or may not be a capture, but for it to even
     # *possibly* be a capture, it must have the following characteristics:
     #
     [segmentation.capture_criteria.length]

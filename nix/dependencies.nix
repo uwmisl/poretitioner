@@ -24,12 +24,69 @@
 , cudaSupport ? false
 }:
 with pkgs;
-with python.pkgs;
 let
-  debugpy = (callPackage ./pkgs/debugpy/debugpy.nix) { inherit python; };
-  pytorch = (callPackage ./pkgs/pytorch/pytorch.nix) { inherit python cudaSupport; };
+  # Takes in a python version, spits out run, build, test, and all packages for it.
+  getDependenciesForPython = myPython:
+    with myPython.pkgs;
+    let
+      debugpy = (callPackage ./pkgs/debugpy/debugpy.nix) { python=myPython; };
+      pytorch = (callPackage ./pkgs/pytorch/pytorch.nix) { python=myPython; inherit cudaSupport; };
+    in
+    rec {
+      run = [
+        # Reading/writing TOML documents.
+        toml
+        # Numerical computation library
+        numpy
+        # Data manipulation and analysis
+        pandas
+        # Hierarchical Data Format utilities
+        h5py
+        # Parallel computing library
+        dask
+        # Charts and plotting library
+        matplotlib
+        tkinter
+        # Data visualization
+        seaborn
+        # Interactive computing
+        notebook
+        # For interactive builds
+        jupyter
+        # Neural networks
+        #torchvision
+      ] ++ [ pytorch ];
+
+      build = [
+        # Import sorter
+        isort
+        # Highly opinionated code-formatter
+        black
+        # Style-guide enforcer
+        flake8
+        # Docstring static analyzer
+        pydocstyle
+      ];
+
+      test = [
+        # Testing suite
+        pytest
+        # Test runner
+        pytestrunner
+        # Test code coverage generator
+        pytestcov
+        # Debugpy (Used for debugging in VSCode: https://code.visualstudio.com/docs/python/debugging#_command-line-debugging)
+        debugpy
+      ];
+
+      all = run ++ build ++ test;
+  };
+
+  pythonDeps = (getDependenciesForPython python);
 in
 rec {
+
+  inherit getDependenciesForPython pythonDeps;
 
   ###########################################################################################
   #
@@ -38,29 +95,11 @@ rec {
   #
   ###########################################################################################
 
-  run = [
-    # Reading/writing TOML documents.
-    toml
-    # Numerical computation library
-    numpy
-    # Data manipulation and analysis
-    pandas
-    # Hierarchical Data Format utilities
-    h5py
-    # Parallel computing library
-    dask
-    # Charts and plotting library
-    matplotlib
-    tkinter
-    # Data visualization
-    seaborn
-    # Interactive computing
-    notebook
-    # For interactive builds
-    jupyter
-    # Neural networks
-    #torchvision
-  ] ++ [ pytorch ];
+
+
+  run = [ ]
+        ++ pythonDeps.run
+  ;
 
   ###########################################################################################
   #
@@ -73,17 +112,11 @@ rec {
   build = [
     # Git hooks
     pre-commit
-    # Import sorter
-    isort
-    # Highly opinionated code-formatter
-    black
-    # Style-guide enforcer
-    flake8
-    # Docstring static analyzer
-    pydocstyle
     # Nix file style enforcer
-    pkgs.nixpkgs-fmt
-  ];
+    nixpkgs-fmt
+  ]
+    ++ pythonDeps.build
+  ;
 
   ###########################################################################################
   #
@@ -93,15 +126,10 @@ rec {
   ###########################################################################################
 
   test = [
-    # Testing suite
-    pytest
-    # Test runner
-    pytestrunner
-    # Test code coverage generator
-    pytestcov
-    # Debugpy (Used for debugging in VSCode: https://code.visualstudio.com/docs/python/debugging#_command-line-debugging)
-    debugpy
-  ];
+
+  ]
+    ++ pythonDeps.test
+  ;
 
   ###########################################################################################
   #

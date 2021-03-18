@@ -10,17 +10,18 @@ from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass
 from typing import List
 
+
 def as_cli_arg(property: str) -> str:
-    """We'd like to match command line arguments to their 
-    corresponding python variables, but sadly python doesn't 
+    """We'd like to match command line arguments to their
+    corresponding python variables, but sadly python doesn't
     allow variable/field names with hyphens. As such,
-    we convert the underscores to hyphens when using 
+    we convert the underscores to hyphens when using
     command line args.
 
     Parameters
     ----------
     property : Variable or field name with underscores.
-        
+
     Returns
     -------
     str
@@ -31,8 +32,7 @@ def as_cli_arg(property: str) -> str:
 
 @dataclass(frozen=True)
 class COMMAND:
-    """Available Poretitioner commands. e.g. poretitioner segment
-    """
+    """Available Poretitioner commands. e.g. poretitioner segment"""
 
     # Only run the 'segment' step.
     SEGMENT = "segment"
@@ -48,18 +48,17 @@ class COMMAND:
 
 @dataclass(frozen=True)
 class ARG:
-    """Available Poretitioner arguments. e.g. config, output, file
-    """
+    """Available Poretitioner arguments. e.g. config, output, file"""
 
-    CONFIG = "config"
-    DEBUG = "debug"
-    FILE = "file"
-    BULK_FAST5 = "bulkfast5"
-    OUTPUT = "output"
-    VERBOSE = "verbose"
+    class GENERAL:
+        CONFIG = "config"
+        DEBUG = "debug"
+        BULK_FAST5 = "bulkfast5"
+        VERBOSE = "verbose"
 
-    # Segmenter
-    CAPTURE_DIRECTORY = "output_dir"  # Argument on the command line has a dash, but the attribute.
+        # Segmenter
+        CAPTURE_DIRECTORY = "capture_directory"  # Argument on the command line has a dash, but the attribute uses underscore.
+
     class SEGMENT:
         BULKFAST5 = "bulkfast5"
         N_CAPTURES_PER_FILE = "n_captures_per_file"
@@ -74,6 +73,8 @@ class ARG:
 
     # Filtration
     class FILTER:
+        FILTER_SET_NAME = "filter_set_name"
+
         LENGTH_MAX = "filter_length_max"
         LENGTH_MIN = "filter_length_min"
 
@@ -108,7 +109,16 @@ class ARG:
             MIN,
         ]
 
+
 def get_args(commandline_args: List = None) -> Namespace:
+    parser = get_parser(commandline_args=commandline_args)
+    args = parser.parse_args(commandline_args)
+    return args
+
+def get_help():
+    return get_args(["--help"])
+
+def get_parser(commandline_args: List = None) -> ArgumentParser:
     """Gets the command line arguments passed to the application.
 
     Parameters
@@ -122,9 +132,9 @@ def get_args(commandline_args: List = None) -> Namespace:
     Namespace
         Namespace containing the command line arguments.
     """
-    
+
     # TODO: Add a description string: https://github.com/uwmisl/poretitioner/issues/27
-    DESCRIPTION = ""
+    DESCRIPTION = "Poretitioner is a powerful library and command line tool for parsing and interpreting nanopore data."
     # TODO: Add a usage string: https://github.com/uwmisl/poretitioner/issues/27
     USAGE = ""
 
@@ -142,7 +152,7 @@ def get_args(commandline_args: List = None) -> Namespace:
         """
         parser.add_argument(
             "-v",
-            f"--{ARG.VERBOSE}",
+            f"--{ARG.GENERAL.VERBOSE}",
             action="count",
             default=0,
             help="Increase the program's verbosity. Can be used multiple times to increase the logging level (e.g. -vvv for very verbose logging). Should be added after the subcommand (if any).",
@@ -158,7 +168,7 @@ def get_args(commandline_args: List = None) -> Namespace:
         """
         parser.add_argument(
             "-d",
-            f"--{ARG.DEBUG}",
+            f"--{ARG.GENERAL.DEBUG}",
             action="store_true",
             default=False,
             help="Whether to run in debug mode. Turned off by default. Should be added after the subcommand (if any) if desired.",
@@ -173,19 +183,10 @@ def get_args(commandline_args: List = None) -> Namespace:
             Parser to give a file input option.
         """
         parser.add_argument(
-            "-f", f"--{ARG.BULK_FAST5}", action="store", help="The fast5 file to run poretitioner on."
-        )
-
-    def add_output_option_to_parser(parser: ArgumentParser):
-        """Adds an output option to a parser.
-
-        Parameters
-        ----------
-        parser : ArgumentParser
-            Parser to give an output file option
-        """
-        parser.add_argument(
-            "-o", f"--{ARG.OUTPUT}", action="store", help="Where to store this command's output."
+            "-f",
+            f"--{ARG.GENERAL.BULK_FAST5}",
+            action="store",
+            help="The fast5 file to run poretitioner on.",
         )
 
     def add_configuration_option_to_parser(parser: ArgumentParser):
@@ -197,7 +198,10 @@ def get_args(commandline_args: List = None) -> Namespace:
             Parser to give an output file option
         """
         parser.add_argument(
-            f"--{ARG.CONFIG}", action="store", default=".", help="Configuration file to configure Poretitioner."
+            f"--{ARG.GENERAL.CONFIG}",
+            action="store",
+            default=".",
+            help="Configuration file to configure Poretitioner.",
         )
 
     # Creates subparsers for each poretitioner command (e.g.`poretitioner segment`).
@@ -205,29 +209,32 @@ def get_args(commandline_args: List = None) -> Namespace:
     subparser = parser.add_subparsers(dest="command")
 
     # Segmenter
-    parser_segment = subparser.add_parser(COMMAND.SEGMENT, description="Segment captures")
+    parser_segment = subparser.add_parser(
+        COMMAND.SEGMENT, description="Segment captures"
+    )
     add_capture_directory_option_to_parser(parser_segment)
 
     parser_filter = subparser.add_parser(COMMAND.FILTER, description="Filter captures")
-    parser_classify = subparser.add_parser(COMMAND.CLASSIFY, description="Classify captures")
-    parser_quantify = subparser.add_parser(COMMAND.QUANTIFY, description="Quantify captures")
+    parser_classify = subparser.add_parser(
+        COMMAND.CLASSIFY, description="Classify captures"
+    )
+    parser_quantify = subparser.add_parser(
+        COMMAND.QUANTIFY, description="Quantify captures"
+    )
 
     parsers = [parser, parser_filter, parser_segment, parser_classify, parser_quantify]
     for subparser in parsers:
         add_input_to_parser(subparser)
         add_configuration_option_to_parser(subparser)
-        add_output_option_to_parser(subparser)
         add_debug_option_to_parser(subparser)
         add_verbosity_option_to_parser(subparser)
 
-    args = parser.parse_args(commandline_args)
-    return args
+    return parser
 
 
 # Segmenter
 
 
-
 def add_capture_directory_option_to_parser(parser: ArgumentParser):
     """Adds output directory option to a parser.
 
@@ -236,36 +243,42 @@ def add_capture_directory_option_to_parser(parser: ArgumentParser):
     parser : ArgumentParser
         Parser to give an output directory option. This is where capture files will be saved.
     """
-    arg = as_cli_arg(ARG.CAPTURE_DIRECTORY)
+    arg = as_cli_arg(ARG.GENERAL.CAPTURE_DIRECTORY)
     parser.add_argument(
         f"--{arg}",
         action="store",
         help="Which directory to store the segmented capture fast5 files.",
     )
+
 
 # Filters
-def add_capture_directory_option_to_parser(parser: ArgumentParser):
-    """Adds output directory option to a parser.
-
-    Parameters
-    ----------
-    parser : ArgumentParser
-        Parser to give an output directory option. This is where capture files will be saved.
-    """
-    arg = as_cli_arg(ARG.CAPTURE_DIRECTORY)
-    parser.add_argument(
-        f"--{arg}",
-        action="store",
-        help="Which directory to store the segmented capture fast5 files.",
-    )
 
 # Mapping from command line option "--foo" to all its args and kwa
-FILTER_ARGS = {
+GENERAL_ARGS = {
+    ARG.FILTER.FILTER_SET_NAME: {
+        "action": "store",
+        "help": "A unique identifier for a collection of filters, ideally describing why the collection was chosen, like 'NTER_PAPER_FINAL_2018_10_09'.",
+        "type": str,
+    },
     ARG.FILTER.LENGTH_MIN: {
         "action": "store",
         "help": "Exclude potential captures that have fewer than this many observations in the nanopore current trace.",
         "type": int,
-    }
+    },
+}
+
+# Mapping from command line option "--foo" to all its args and kwa
+FILTER_ARGS = {
+    ARG.FILTER.FILTER_SET_NAME: {
+        "action": "store",
+        "help": "A unique identifier for a collection of filters, ideally describing why the collection was chosen, like 'NTER_PAPER_FINAL_2018_10_09'.",
+        "type": str,
+    },
+    ARG.FILTER.LENGTH_MIN: {
+        "action": "store",
+        "help": "Exclude potential captures that have fewer than this many observations in the nanopore current trace.",
+        "type": int,
+    },
 }
 
 SEGMENTATION_ARGS = {
@@ -275,34 +288,20 @@ SEGMENTATION_ARGS = {
         "help": "How many captures to store in a file. When the number of captures founds exceeds this number (n), new files will be created to house the other n+1 through 2n, 2n+1 through 3n +1, ... and so on.",
         "type": int,
     },
-
     ARG.SEGMENT.OPEN_CHANNEL_PRIOR_MEAN: {
         "action": "store",
         # Katie Q: I don't feel like I'm phrasing this well, any ideas on better phrasing?
         "help": "Average open channel current in picoAmperes (e.g. 235).",
         "type": int,
     },
-
     ARG.SEGMENT.OPEN_CHANNEL_PRIOR_STDV: {
         "action": "store",
         # Katie Q: I don't feel like I'm phrasing this well, any ideas on better phrasing?
         "help": "Average open channel current in picoAmperes (e.g. 25).",
         "type": int,
     },
-
-    ARG.SEGMENT.SIGNAL_THRESHOLD_FRAC: {
-
-    },
-
-    ARG.SEGMENT.TERMINAL_CAPTURE_ONLY: {
-
-    },
-
-    ARG.SEGMENT.TRANSLOCATION_DELAY: {
-
-    },
-
-    ARG.SEGMENT.VOLTAGE_THRESHOLD: {
-        
-    }
+    ARG.SEGMENT.SIGNAL_THRESHOLD_FRAC: {},
+    ARG.SEGMENT.TERMINAL_CAPTURE_ONLY: {},
+    ARG.SEGMENT.TRANSLOCATION_DELAY: {},
+    ARG.SEGMENT.VOLTAGE_THRESHOLD: {},
 }

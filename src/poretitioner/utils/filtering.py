@@ -11,33 +11,81 @@ import re
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from pathlib import PosixPath
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, NewType, Optional, Union
 
 import h5py
 import numpy as np
+from json import JSONEncoder
 
 from ..logger import Logger, getLogger
 from ..signals import Capture
-from .configuration import FilterConfig
 from .core import NumpyArrayLike, PathLikeOrString
+from .core import ReadId
+from .core import stripped_by_keys
 
 CaptureOrTimeSeries = Union[Capture, NumpyArrayLike]
+
+# Unique identifier for a collection of filters (e.g. "ProfJeffsAwesomeFilters")
+FilterSetId = NewType("FilterSetId", str)
+
+# Unique identifier for an individual filter (e.g. "min_frac")
+FilterName = NewType("FilterName", str)
+
+
+__all__ = [
+    "does_pass_filters",
+    "get_filters",
+    "FilterName",
+    "FilterSetId",
+    "FilterConfig",
+    "Filter",
+    "Filters",
+    "DEFAULT_FILTER_PLUGINS" "FilterSet",
+    "FilterConfigs",
+    "FilterPlugin",
+    "PATH",
+]
 
 
 @dataclass(frozen=True)
 class PATH:
-    FILTER = f"/Filter/"
+    ROOT = f"/Filter/"
 
     @classmethod
-    def filter_path_for_name(cls, name: str) -> str:
-        filter_path = str(PosixPath(PATH.FILTER, name))
+    def filter_path_for_filter_set(cls, filter_set: FilterSetId) -> str:
+        filter_path = str(PosixPath(PATH.ROOT, filter_set))
         return filter_path
 
     @classmethod
-    def filter_pass_path_for_read_id(cls, read_id: str) -> str:
-        pass_path = str(PosixPath(PATH.FILTER, "pass", read_id))
+    def filter_pass_path_for_read_id(cls, read_id: ReadId) -> str:
+        pass_path = str(PosixPath(PATH.ROOT, "pass", read_id))
         return pass_path
 
+    def get_filter_pass_path(read_id):
+        path = str(PosixPath(PATH.ROOT, "pass"))
+        return path
+
+
+@dataclass(frozen=True)
+class FilterConfig:
+    """A blueprint for how to construct a FilterPlugin.
+
+    Note on terminology:
+
+        - FilterConfig: A high-level description of a filter.
+
+        - FilterPlugin: An actual, callable, implementation of a FilterConfig.
+
+
+    For custom plugins, make sure "filepath" is an attribute that points to the file to laod
+    """
+
+    name: str
+    attributes: Dict[str, Any]
+
+
+# Mapping of a FilterName to filter configurations.
+FilterConfigs = NewType("FilterConfigs", Dict[FilterName, FilterConfig])
 
 # TODO: Filter Plugin should check that name is unique. https://github.com/uwmisl/poretitioner/issues/91
 class FilterPlugin(metaclass=ABCMeta):
@@ -299,41 +347,6 @@ class MyCustomFilter(FilterPlugin):
         return meets_criteria
 
 
-def apply_feature_filters(
-    capture: CaptureOrTimeSeries, filters: List[FilterPlugin]
-) -> bool:
-    """
-    Check whether an array of current values (i.e. a single nanopore capture)
-    passes a set of filters. Filters can be based on summary statistics
-    (e.g., mean) and/or a range of allowed values.
-
-    Notes on filter behavior: If the filters list is empty, there are no filters
-    and the capture passes.
-
-    Parameters
-    ----------
-    capture : CaptureOrTimeSeries | NumpyArrayLike
-        Capture containing time series of nanopore current values for a single capture, or the signal itself.
-    filters : List[FilterPlugin]
-        List of FilterPlugin instances. Write your own filter by subclassing FilterPlugin.
-
-    Returns
-    -------
-    boolean
-        True if capture passes all filters; False otherwise.
-    """
-    if filters is None:
-        filters = []
-
-    # TODO: Parallelize? https://github.com/uwmisl/poretitioner/issues/67
-    filtered = [filter_out(capture) for filter_out in filters]
-    print(filtered)
-
-    # Did this signal pass all filters?
-    all_passed = all(filtered)
-    return all_passed
-
-
 def check_capture_ejection_by_read(f5, read_id):
     """Checks whether the current capture was in the pore until the voltage
     was reversed.
@@ -382,27 +395,27 @@ def check_capture_ejection(end_capture, voltage_ends, tol_obs=20):
     return False
 
 
-def apply_filters_to_read(config, f5, read_id, filter_name):
-    passed_filters = True
+# def apply_filters_to_read(config, f5, read_id, filter_name):
+#     passed_filters = True
 
-    # Check whether the capture was ejected
-    if "ejected" in config["filters"][filter_name]:
-        only_use_ejected_captures = config["filters"][filter_name]["ejected"]  # TODO
-        if only_use_ejected_captures:
-            capture_ejected = check_capture_ejection_by_read(f5, read_id)
-            if not capture_ejected:
-                passed_filters = False
-                return passed_filters
-    else:
-        only_use_ejected_captures = False  # could skip this, leaving to help read logic
+#     # Check whether the capture was ejected
+#     if "ejected" in config["filters"][filter_name]:
+#         only_use_ejected_captures = config["filters"][filter_name]["ejected"]  # TODO
+#         if only_use_ejected_captures:
+#             capture_ejected = check_capture_ejection_by_read(f5, read_id)
+#             if not capture_ejected:
+#                 passed_filters = False
+#                 return passed_filters
+#     else:
+#         only_use_ejected_captures = False  # could skip this, leaving to help read logic
 
-    # Apply all the filters
-    get_raw_signal()
-    signal = raw_signal_utils.get_fractional_blockage_for_read(f5, read_id)
-    # print(config["filters"][filter_name])
-    # print(f"min = {np.min(signal)}")
-    passed_filters = apply_feature_filters(signal, config["filters"][filter_name])
-    return passed_filters
+#     # Apply all the filters
+#     get_raw_signal()
+#     signal = raw_signal_utils.get_fractional_blockage_for_read(f5, read_id)
+#     # print(config["filters"][filter_name])
+#     # print(f"min = {np.min(signal)}")
+#     passed_filters = apply_feature_filters(signal, config["filters"][filter_name])
+#     return passed_filters
 
 
 def filter_and_store_result(config, fast5_files, filter_name, overwrite=False):
@@ -431,6 +444,19 @@ def filter_and_store_result(config, fast5_files, filter_name, overwrite=False):
             write_filter_results(f5, config, passed_read_ids, filter_name)
 
 
+#  def write_filter_results(f5, passing_read_ids: List[str], log):
+#         # For all read_ids that passed the filter (AKA reads that were passed in),
+#         # create a hard link in the filter_path to the actual read's location in
+#         # the fast5 file.
+#         for read_id in passing_read_ids:
+#             read_path = format_read_id(read_id)
+#             read_grp = f5.get(read_path)
+#             self.log.debug(read_grp)
+#             filter_read_path = FILTER_PATH.filter_pass_path_for_read_id(read_id)
+#             # Create a hard link from the filter read path to the actual read path
+#             f5[filter_read_path] = read_grp
+
+
 def filter_like_existing(
     config, example_fast5, example_filter_path, fast5_files, new_filter_path
 ):
@@ -439,13 +465,7 @@ def filter_like_existing(
     raise NotImplementedError()
 
 
-def get_filter_pass_path(read_id):
-    path = str(PosixPath(PATH.FILTER, "pass", read_id))
-    return path
-
-
-DEFAULT_PLUGINS = [
-    RangeFilter,
+__DEFAULT_FILTER_PLUGINS = [
     MeanFilter,
     StandardDeviationFilter,
     MedianFilter,
@@ -454,9 +474,162 @@ DEFAULT_PLUGINS = [
     LengthFilter,
 ]
 
+DEFAULT_FILTER_PLUGINS = {
+    filter_plugin_class.name(): filter_plugin_class
+    for filter_plugin_class in __DEFAULT_FILTER_PLUGINS
+}
 
-def plugin_from_config(config: FilterConfig, log: Logger = getLogger()) -> FilterPlugin:
-    """[summary]
+
+@dataclass
+class Filter:
+    """A named filter that can be applied to some data.
+
+    You can use this filter by just calling it on some data.
+
+    my_signal = [1,2,3,4]
+
+    filter = Filter(...)
+
+    passed_filter: bool = filter(my_signal)
+
+    Parameters
+    ----------
+    config : FilterConfig
+        A description of this filter's configuration (e.g. where it was loaded from).
+    plugin : FilterPlugin
+        The actual implementation of this filter.
+        We have this class defined with
+    """
+
+    config: FilterConfig
+    plugin: FilterPlugin
+
+    def __call__(self, *args, **kwargs):
+        return self.plugin(*args, **kwargs)
+
+    def apply(self, *args, **kwargs):
+        self.plugin.apply(*args, **kwargs)
+
+    @property
+    def name(self) -> FilterName:
+        return self.plugin.name()
+
+
+@dataclass
+class Filters:
+    """A collection of callable filters and their names.
+
+    Use this like a dictionary of
+
+    This is probably what you want to use and pass around.
+
+    """
+
+    _filters: Dict[FilterName, Filter]
+
+    def __init__(self, filters: Dict[FilterName, Filter]):
+        self._filters = filters
+
+    def __getitem__(self, filter_name: str):
+        return self._filters[filter_name]
+
+    def __setitem__(self, filter_name: str):
+        return self._filters[filter_name]
+
+    def values(self):
+        return self._filters.values()
+
+    def items(self):
+        return self._filters.items()
+
+    # def filters(self):
+    #     return self._filters.values()
+
+    # def __dask_tokenize__(self):
+    #     # For tokenize to work we want to return a value that fully
+    #     # represents this object. In this case it's the config dictionary.
+    #     return self._filters
+
+    def __call__(self, capture: CaptureOrTimeSeries):
+        """
+        Check whether an array of values (e.g. a single nanopore capture)
+        passes a set of filters.
+
+        Parameters
+        ----------
+        capture : CaptureOrTimeSeries | NumpyArrayLike
+            Capture containing time series of nanopore current values for a single capture, or the signal itself.
+
+        Returns
+        -------
+        boolean
+            True if capture passes all filters; False otherwise.
+        """
+        return does_pass_filters(capture, self._filters.values())
+
+
+def get_filters(filter_configs: Optional[FilterConfigs] = None) -> Filters:
+    """Creates Filters from a list of filter configurations.
+
+    Parameters
+    ----------
+    filter_configs :  Optional[FilterConfigs]
+        A mapping of filter names to their configurations, None by default (i.e. no filtering).
+
+    Returns
+    -------
+    Filters
+        A set of callable/applyable filters.
+    """
+    filter_configs = filter_configs if filter_configs is not None else {}
+    my_filters = Filters(
+        {
+            name: filter_from_config(filter_config)
+            for name, filter_config in filter_configs.items()
+        }
+    )
+    return my_filters
+
+
+@dataclass(frozen=True)
+class FilterSet:
+    """
+    A collection of filters with a name for easy
+    identification.
+    Mapping of filter_set_name to its filters.
+    """
+
+    name: FilterSetId
+    filters: Filters
+
+    def validate(self):
+        raise NotImplementedError("Implement validation for filters!")
+
+    def json_encoder(self) -> JSONEncoder:
+        encoder = FilterJSONEncoder()
+        return encoder
+
+    @classmethod
+    def from_json(cls, filter_set_name: FilterSetId, filters_dict: Dict):
+        filters = {
+            filter_config.get("name"): FilterConfig(**filter_config)
+            for filter_config in json_dict["filters"]
+        }
+        return cls.__new__(filter_set_name, filters)
+
+    @classmethod
+    def from_filter_configs(
+        cls, name: FilterSetId, filter_configs: FilterConfigs = None
+    ):
+        filters: Filters = get_filters(filter_configs)
+        filter_set = cls.__new__(cls)
+        filter_set.__init__(name, filter_configs)
+        return filter_set
+
+
+def filter_from_config(config: FilterConfig, log: Logger = getLogger()) -> Filter:
+    """Creates a Filter from a config spefication. If no "filename" is present in the FilterConfig, it's
+    assumed to be one of the default filtesr
 
     Parameters
     ----------
@@ -467,8 +640,8 @@ def plugin_from_config(config: FilterConfig, log: Logger = getLogger()) -> Filte
 
     Returns
     -------
-    FilterPlugin
-        [description]
+    Filter
+        A filter that can be applied to some data.
 
     Raises
     ------
@@ -478,17 +651,17 @@ def plugin_from_config(config: FilterConfig, log: Logger = getLogger()) -> Filte
         2) The plugin class inherits from the `FilterPlugin` abstract base class.
     """
     name = config.name
-    filepath = config.filepath
+
     attributes: Dict[str, Any] = config.attributes
+    filepath = attributes.get("filepath", None)
 
     # TODO: For non-default FilterPlugins, load/unpickle the class from the filepath. https://github.com/uwmisl/poretitioner/issues/91
     plugin = None
 
-    default_plugins = {plugin.name: plugin for plugin in DEFAULT_PLUGINS}
-    if name in default_plugins:
-        plugin = default_plugins[name]()
+    if name in DEFAULT_FILTER_PLUGINS:
+        plugin = DEFAULT_FILTER_PLUGINS[name]()
     else:
-        # TODO: For non-default FilterPlugins, load/unpickle the class from the filepath. https://github.com/uwmisl/poretitioner/issues/91
+        # TODO: For non-default FilterPlugins, load the class from the filepath. https://github.com/uwmisl/poretitioner/issues/91
         plugin = plugin_from_file(name, filepath)
         pass
 
@@ -509,26 +682,71 @@ def plugin_from_config(config: FilterConfig, log: Logger = getLogger()) -> Filte
         )
         raise e
 
-    return plugin
+    my_filter = Filter(config, plugin)
+
+    return my_filter
 
 
 def plugin_from_file(name: str, filepath: PathLikeOrString):
-    # TODO: For non-default FilterPlugins, load/unpickle the class from the filepath. https://github.com/uwmisl/poretitioner/issues/91
-    pass
-
-
-def get_plugins(filter_configs: List[FilterConfig]) -> List[FilterPlugin]:
-    """Creates FilterPlugins from a list of filter configurations.
+    """[summary]
 
     Parameters
     ----------
-    filter_configs : List[FilterConfig]
+    name : str
+        [description]
+    filepath : PathLikeOrString
         [description]
 
     Returns
     -------
-    List[FilterPlugin]
+    [type]
+        [description]
+
+    Raises
+    ------
+    NotImplementedError
         [description]
     """
-    plugins = [plugin_from_config(config) for config in filter_configs]
-    return plugins
+    # TODO: For non-default FilterPlugins, load/unpickle the class from the filepath. https://github.com/uwmisl/poretitioner/issues/91
+    raise NotImplementedError(
+        "Plugin from file has not been implemented! This method should take in a filepath and filter name, and return a runnable FilterPlugin!"
+    )
+
+
+class FilterJSONEncoder(JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Filters):
+            return obj.items()
+        try:
+            return vars(obj)
+        except TypeError:
+            pass
+        # Best practice to let base class default raise the type error:
+        # https://docs.python.org/3/library/json.html#json.JSONEncoder.default
+        return super().default(obj)
+
+
+def does_pass_filters(capture: CaptureOrTimeSeries, filters: Filters) -> bool:
+    """
+    Check whether an array of values (e.g. a single nanopore capture)
+    passes a set of filters. Filters can be based on summary statistics
+    (e.g., mean) and/or a range of allowed values.
+
+    Parameters
+    ----------
+    capture : CaptureOrTimeSeries | NumpyArrayLike
+        Capture containing time series of nanopore current values for a single capture, or the signal itself.
+    filters : Filters
+        The set of filters to apply. Write your own filter by subclassing FilterPlugin.
+
+    Returns
+    -------
+    boolean
+        True if capture passes all filters; False otherwise.
+    """
+    # TODO: Parallelize? https://github.com/uwmisl/poretitioner/issues/67
+    all_passed = True
+    for filter_out in filters.values():
+        if not filter_out(capture):
+            return False
+    return True

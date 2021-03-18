@@ -11,14 +11,16 @@ from __future__ import annotations
 from collections import namedtuple
 from dataclasses import dataclass
 from os import PathLike
-from typing import Dict, List, Optional, TypeVar, Union, Sequence
+from typing import Dict, Iterable, List, Optional, NewType, Union, Sequence
 
 import numpy as np
 
 __all__ = [
     "find_windows_below_threshold",
     "NumpyArrayLike",
+    "ReadId",
     "PathLikeOrString",
+    "ReadId",
     "Window",
     "WindowsByChannel",
 ]
@@ -30,7 +32,10 @@ class NumpyArrayLike(np.ndarray):
     pass
 
 
-# Represent a path or a string representing a path.
+# Unique identifier for a nanopore read.
+ReadId = NewType("ReadId", str)
+
+# Represents a path or a string representing a path. Having this union-type lets you use paths from Python's built-in pathib module (which is vastly superior to os.path)
 PathLikeOrString = Union[str, PathLike]
 
 
@@ -136,12 +141,16 @@ def find_windows_below_threshold(
     """
 
     # Katie Q: I still don't understand how this function works haha. Let's talk next standup?
-    diff_points = np.where(np.abs(np.diff(np.where(time_series <= threshold, 1, 0))) == 1)[0]
+    diff_points = np.where(
+        np.abs(np.diff(np.where(time_series <= threshold, 1, 0))) == 1
+    )[0]
     if time_series[0] <= threshold:
         diff_points = np.hstack([[0], diff_points])
     if time_series[-1] <= threshold:
         diff_points = np.hstack([diff_points, [time_series.duration]])
-    return [Window(start, end) for start, end in zip(diff_points[::2], diff_points[1::2])]
+    return [
+        Window(start, end) for start, end in zip(diff_points[::2], diff_points[1::2])
+    ]
 
 
 @dataclass
@@ -161,7 +170,7 @@ class WindowsByChannel:
         return self.by_channel.keys()
 
 
-def stripped_by_keys(dictionary: Optional[Dict], keys_to_keep: Sequence) -> Dict:
+def stripped_by_keys(dictionary: Optional[Dict], keys_to_keep: Iterable) -> Dict:
     """Returns a dictionary containing keys and values from dictionary,
     but only keeping the keys in `keys_to_keep`.
 
@@ -171,7 +180,7 @@ def stripped_by_keys(dictionary: Optional[Dict], keys_to_keep: Sequence) -> Dict
     ----------
     dictionary : Optional[Dict]
         Dictionary to strip down by keys.
-    keys_to_keep : Sequence
+    keys_to_keep : Iterable
         Which keys of the dictionary to keep.
 
     Returns
@@ -180,5 +189,7 @@ def stripped_by_keys(dictionary: Optional[Dict], keys_to_keep: Sequence) -> Dict
         Dictionary containing only keys from `keys_to_keep`.
     """
     dictionary = {} if dictionary is None else dictionary
-    dictionary = { key: value for key, value in dictionary.items() if key in keys_to_keep }
+    dictionary = {
+        key: value for key, value in dictionary.items() if key in keys_to_keep
+    }
     return dictionary

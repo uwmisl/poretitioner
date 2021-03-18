@@ -16,6 +16,7 @@ import numpy as np
 
 from . import logger
 from .utils.core import NumpyArrayLike, Window
+from .utils.core import ReadId
 
 __all__ = [
     "digitize_current",
@@ -95,13 +96,13 @@ class BaseSignalSerializationInfo:
         Which nanopore channel generated the data. Must be 1 or greater.
     calibration: ChannelCalibration
         How to convert the nanopore device's analog-to-digital converter (ADC) raw signal to picoAmperes of current.
-    read_id : str, optional
+    read_id : ReadId, optional
         ReadID that generated this signal, by default None
     """
 
     channel_number: int
     calibration: ChannelCalibration
-    read_id: Optional[str]
+    read_id: Optional[ReadId]
 
 
 class BaseSignal(NumpyArrayLike):
@@ -223,7 +224,7 @@ class CurrentSignal(BaseSignal):
         Which nanopore channel generated the data. Must be 1 or greater.
     calibration: ChannelCalibration
         How to convert the nanopore device's analog-to-digital converter (ADC) raw signal to picoAmperes of current.
-    read_id : str, optional
+    read_id : ReadId, optional
         ReadID that generated this signal, by default None
 
     Returns
@@ -233,7 +234,7 @@ class CurrentSignal(BaseSignal):
     """
 
     # ReadId that generated this signal, optional.
-    read_id: Optional[str]
+    read_id: Optional[ReadId]
 
     # Index of the channel that generated this signal.
     channel_number: int
@@ -305,7 +306,7 @@ class FractionalizedSignal(CurrentSignal):
         channel_number: int,
         calibration: ChannelCalibration,
         open_channel_pA: float,
-        read_id: str = None,
+        read_id: ReadId = None,
         do_conversion: bool = False,
     ):
         if do_conversion:
@@ -683,7 +684,7 @@ class CaptureMetadata:
         file.
     start_time_local : int
         Starting time of the capture relative to the beginning of the segmented
-        region. (Relative to sub_run_start_seconds in parallel_find_captures().)
+        region. (Relative to sub_run_start_observations in parallel_find_captures().)
     duration : int
         Number of data points in the capture.
     ejected : boolean
@@ -700,7 +701,7 @@ class CaptureMetadata:
         Nanopore sampling rate (Hz)
     """
 
-    read_id: str
+    read_id: ReadId
     start_time_bulk: int
     start_time_local: int
     duration: int
@@ -831,9 +832,8 @@ def compute_fractional_blockage(
     [NumpyArrayLike]
         Array of fractionalized nanopore current in the range [0, 1]
     """
-    pico = np.array(picoamperes, dtype=float)
-    pico /= open_channel
-    frac = np.clip(pico, a_max=1.0, a_min=0.0)
+    picoamperes /= open_channel
+    frac = np.clip(picoamperes, a_max=1.0, a_min=0.0)
     return frac
 
 

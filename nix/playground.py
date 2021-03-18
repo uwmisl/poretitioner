@@ -23,7 +23,7 @@ def add_poretitioner_to_path():
     sys.path.append(".")
     sys.path.append(poretitioner_directory)
     sys.path.append(PROJECT_DIR_LOCATION)
-    #os.chdir(str(Path(PROJECT_DIR_LOCATION, "src",)))
+    # os.chdir(str(Path(PROJECT_DIR_LOCATION, "src",)))
 
 
 add_poretitioner_to_path()
@@ -44,16 +44,21 @@ from src.poretitioner.utils import *
 from src.poretitioner.application_info import *
 from src.poretitioner.getargs import *
 import src.poretitioner.logger as logger
-from src.poretitioner.utils.classify import ClassifierFile
-from src.poretitioner.utils.configuration import GeneralConfiguration, SegmentConfiguration, readconfig
+from src.poretitioner.utils.classify import *
+from src.poretitioner.utils.configuration import (
+    GeneralConfiguration,
+    SegmentConfiguration,
+    readconfig,
+)
 
+from src import poretitioner
+from src.poretitioner import CONFIG
 
 LOG_VERBOSITY = 3
 logger.configure_root_logger(verbosity=LOG_VERBOSITY, debug=True)
 
 log = logger.getLogger()
 log.debug(f"=============~ Poretitioner ~============")
-
 
 
 CALIBRATION = ChannelCalibration(0, 2, 1)
@@ -63,14 +68,43 @@ OPEN_CHANNEL_BOUND = 10
 RANDOM_SIGNAL = np.random.random_integers(-200, high=800, size=30)
 PORETITIONER_CONFIG_FILE = f"{PROJECT_DIR_LOCATION}/poretitioner_config.toml"
 BULK_FAST5_FILE = f"{PROJECT_DIR_LOCATION}/src/tests/data/bulk_fast5_dummy.fast5"
-CAPTURE_FAST5_FILE = f"{PROJECT_DIR_LOCATION}/src/tests/data/reads_fast5_dummy_9captures.fast5"
-CLASSIFIED_FAST5_FILE = f"{PROJECT_DIR_LOCATION}/src/tests/data/classified_9captures.fast5"
-CLASSIFIER_DETAILS_FAST5_FILE = f"{PROJECT_DIR_LOCATION}/src/tests/data/classifier_details_test.fast5"
-CLASSIFIED_10_MINS_4_CHANNELS = f"{PROJECT_DIR_LOCATION}/src/tests/data/classified_10mins_4channels.fast5"
-FILTER_FAST5_FILE = f"{PROJECT_DIR_LOCATION}/src/tests/data/filter_and_store_result_test.fast5"
+CAPTURE_FAST5_FILE = (
+    f"{PROJECT_DIR_LOCATION}/src/tests/data/reads_fast5_dummy_9captures.fast5"
+)
+CLASSIFIED_FAST5_FILE = (
+    f"{PROJECT_DIR_LOCATION}/src/tests/data/classified_9captures.fast5"
+)
+CLASSIFIER_DETAILS_FAST5_FILE = (
+    f"{PROJECT_DIR_LOCATION}/src/tests/data/classifier_details_test.fast5"
+)
+CLASSIFIED_10_MINS_4_CHANNELS = (
+    f"{PROJECT_DIR_LOCATION}/src/tests/data/classified_10mins_4channels.fast5"
+)
+FILTER_FAST5_FILE = (
+    f"{PROJECT_DIR_LOCATION}/src/tests/data/filter_and_store_result_test.fast5"
+)
 
 raw_signal = np.random.randn(10)
 raw = RawSignal(raw_signal, CHANNEL_NUMBER, CALIBRATION)
 
-classified = ClassifierFile(CLASSIFIED_10_MINS_4_CHANNELS)
+bulky = BulkFile(BULK_FAST5_FILE, "a")
+
+config = poretitioner.default_config(
+        {
+           poretitioner.ARG.GENERAL.BULK_FAST5: "/Users/dna/Developer/poretitioner/src/tests/data/bulk_fast5_dummy.fast5",
+           poretitioner.ARG.GENERAL.CAPTURE_DIRECTORY: "/tmp/captures",
+        }
+)
+
+general_config = config[CONFIG.GENERAL]
+segmentation_config = config[CONFIG.SEGMENTATION]
+filter_config = config[CONFIG.FILTER]
+classifier_config = config[CONFIG.CLASSIFICATION]
+
+capture_files = poretitioner.segment(general_config, segmentation_config)
+
+
+cappy = CaptureFile(CLASSIFIED_FAST5_FILE, "a")
+
+# classified = ClassifierFile(CLASSIFIED_10_MINS_4_CHANNELS)
 # Do whatever else you'd like!

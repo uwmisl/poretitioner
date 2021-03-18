@@ -1,9 +1,16 @@
 import math as m
 
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from typing import Optional
+from ..classify import PytorchClassifierPlugin, LabelForResult, ClassificationResult
+
+
+from poretitioner import Capture
 
 class CNN(nn.Module):
     def __init__(self):
@@ -33,7 +40,9 @@ class CNN(nn.Module):
                                 (
                                     m.floor(
                                         (
-                                            m.floor((reshape - self.K_1 + 1) / self.KP_1)
+                                            m.floor(
+                                                (reshape - self.K_1 + 1) / self.KP_1
+                                            )
                                             - self.K_2
                                             + 1
                                         )
@@ -92,3 +101,66 @@ def load_cnn(state_dict_path, device="cpu"):
     cnn.load_state_dict(state_dict, strict=True)
     cnn.eval()
     return cnn
+
+
+class NTER_2018_CNN(PytorchClassifierPlugin):
+    def __init__(
+        self,
+        module: nn.Module,
+        name: str,
+        version: str,
+        state_dict_filepath: str,
+        class_label_for_result: Optional[LabelForResult] = None,
+        use_cuda: bool = False,
+    ):
+        super().__init__(module, name, version, state_dict_filepath, use_cuda=use_cuda)
+        self.class_label_for_result = class_label_for_result
+
+    def pre_process(self, capture: Capture) -> torch.Tensor:
+        frac = capture.fractionalized
+        # 2D --> 3D array (each obs in a capture becomes its own array)
+        frac_3D = frac.reshape(len(frac), frac.shape[1], 1)
+
+        # Q: Why '19881'?
+        #
+        # A: We only consider the first 19881 observations, as per the NTER paper [1, 2].
+        #
+        #    [1] - https://www.biorxiv.org/content/10.1101/837542v1
+        #    [2] - https://github.com/uwmisl/NanoporeTERs/search?q=19881
+
+        if frac_3D.shape[1] < 19881:
+            temp = np.zeros((frac_3D.shape[0], 19881, 1))
+            temp[:, : frac_3D.shape[1], :] = frac_3D
+            frac_3D = temp
+        frac_3D = frac_3D[:, :19881]  # First 19881 obs as per NTER paper
+        # Break capture into 141x141 (19881 total data points)
+        frac_3D = frac_3D.reshape(len(frac_3D), 1, 141, 141)
+        tensor = torch.from_numpy(frac_3D)
+        if self.use_cuda:
+            tensor = tensor.cuda()
+        return tensor
+
+    def evaluate(self, capture: Capture) -> ClassificationResult:
+        # Pre-process the data, make it cuda-friendly (if applicable) and reshape it for the inference.
+        data = self.pre_process(capture)
+
+        classifier = self.module
+
+        # Ensures the model is in inference mode.
+        classifier.eval()
+
+        # Run the model.
+        outputs = classifier(data)
+
+        out = nn.functional.softmax(outputs, dim=1)
+        prob, label = torch.topk(out, 1)
+        if not self.use_cuda:
+            label = label.cpu().numpy()[0][0]
+        else:
+            label = label.numpy()[0][0]
+        if class_labels is not None:
+            label = class_labels[label]
+        probability = prob[0][0].data
+
+        ClassificationResult(label, probability)
+        return label, probability
