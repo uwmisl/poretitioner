@@ -21,6 +21,8 @@ APPLICATION_INFO_FILE = pkg_resources.resource_filename(
 VERSION_FIELD = "version"
 # Name of the project name key in the project info file.
 NAME_FIELD = "name"
+# Version of the Capture Data Schema
+SCHEMA_FIELD = "data_schema_version"
 
 
 @dataclass(frozen=True)
@@ -37,6 +39,7 @@ class AppInfo:
 
     name: str
     version: str
+    data_schema_version: str
 
 
 @lru_cache(maxsize=None)
@@ -54,5 +57,5 @@ def get_application_info() -> AppInfo:
     # Using LRU cache lets us avoid extra reads, as project name and version should be treated as immutable at runtime.
     with open(APPLICATION_INFO_FILE, "r") as f:
         info = json.load(f)
-        APPLICATION_INFO = AppInfo(name=info[NAME_FIELD], version=info[VERSION_FIELD])
+        APPLICATION_INFO = AppInfo(name=info[NAME_FIELD], version=info[VERSION_FIELD], data_schema_version=info[SCHEMA_FIELD])
     return APPLICATION_INFO

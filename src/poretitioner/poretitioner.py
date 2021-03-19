@@ -65,18 +65,11 @@ def run(args):
         segmentation_config_str = pprint.pformat(seg_config.__dict__)
         general_config_str = pprint.pformat(config.__dict__)
 
-        capture_criteria_filter_configs: FilterConfigs = {
-            name: FilterConfig(name, attributes)
-            for name, attributes in seg_config["capture_criteria"].items()
-        }
-        capture_criteria = get_filters(capture_criteria_filter_configs)
-
         capture_metadata = segment.segment(
             bulk_f5_filepath,
             config,
             seg_config,
             save_location=save_location,
-            capture_criteria=capture_criteria,
             sub_run_start_observations=0,
             sub_run_end_observations=None,
         )

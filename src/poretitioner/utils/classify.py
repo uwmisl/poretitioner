@@ -490,7 +490,7 @@ def write_classifier_details(
     """
 
     if results_path not in f5:
-        f5.create_group(results_path)
+        f5.require_group(results_path)
     f5[results_path].attrs["model"] = classifier_confidence_thresholdig.classifier
     f5[results_path].attrs["model_version"] = classifier_confidence_thresholdig
     f5[results_path].attrs["model_file"] = classifier_confidence_thresholdig[
@@ -506,7 +506,7 @@ def write_classifier_result(
 ):
     results_path = f"{results_path}/{read_id}"
     if results_path not in f5:
-        f5.create_group(results_path)
+        f5.require_group(results_path)
     f5[results_path].attrs["best_class"] = predicted_class
     f5[results_path].attrs["best_score"] = prob
     f5[results_path].attrs["assigned_class"] = (
@@ -600,7 +600,7 @@ class PytorchClassifierPlugin(ClassifierPlugin):
         torch.Tensor
             A tensor that resulted from pre-processing the capture data.
         """
-        tensor = torch.from_numpy(capture.fractionalized)
+        tensor = torch.from_numpy(capture.fractionalized())
         if self.use_cuda:
             tensor = tensor.cuda()
         return tensor

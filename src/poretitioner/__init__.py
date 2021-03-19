@@ -1,5 +1,5 @@
 from .signals import Capture, CaptureMetadata, FractionalizedSignal, PicoampereSignal, RawSignal
-from .fast5s import SubRun, CaptureFile
+from .fast5s import BulkFile, SubRun, CaptureFile
 from .utils import classify as classify
 
 
@@ -8,7 +8,7 @@ from .utils import filtering as filtering
 
 from typing import Dict, Iterable
 from .utils.configuration import readconfig
-from .utils.configuration import CONFIG
+from .utils.configuration import CONFIG, PoretitionerConfig
 
 from .utils import segment as segmenter
 
@@ -16,7 +16,7 @@ from .utils import segment as segmenter
 from .getargs import ARG, get_help
 
 
-def default_config(with_command_line_args: Dict = None):
+def default_config(with_command_line_args: Dict = None) -> PoretitionerConfig:
     path_to_default_config = "/Users/dna/Developer/poretitioner/DEFAULT_PORETITIONER_CONFIG.toml"
     return readconfig(path_to_default_config, command_line_args=with_command_line_args)
 

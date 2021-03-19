@@ -38,6 +38,8 @@ from dataclasses import dataclass
 from os import PathLike
 from typing import Any, Dict, List, Optional, Union
 
+from src.poretitioner import BulkFile
+
 from src.poretitioner.signals import *
 from src.poretitioner.fast5s import *
 from src.poretitioner.utils import *
@@ -84,10 +86,11 @@ FILTER_FAST5_FILE = (
     f"{PROJECT_DIR_LOCATION}/src/tests/data/filter_and_store_result_test.fast5"
 )
 
+
 raw_signal = np.random.randn(10)
 raw = RawSignal(raw_signal, CHANNEL_NUMBER, CALIBRATION)
 
-bulky = BulkFile(BULK_FAST5_FILE, "a")
+bulky = BulkFile(BULK_FAST5_FILE, "r")
 
 config = poretitioner.default_config(
         {

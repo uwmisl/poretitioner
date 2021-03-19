@@ -36,6 +36,7 @@ from . import filtering
 from .configuration import GeneralConfiguration, SegmentConfiguration
 from .core import Window, find_windows_below_threshold
 from .core import ReadId
+from .core import hdf5_dtype
 
 ProgressBar().register()
 
@@ -47,7 +48,7 @@ __name__ = app_info.name
 __all__ = ["segment"]
 
 
-def generate_read_id(*args, **kwargs) -> str:
+def generate_read_id(*args, **kwargs) -> ReadId:
     """Generate a read ID. There's a lot of freedom in how we define these (e.g.
     UUID, a deterministic seed)
 
@@ -57,7 +58,7 @@ def generate_read_id(*args, **kwargs) -> str:
         A unique identifier for a read.
     """
     read_id = str(uuid.uuid4())
-    return read_id
+    return ReadId(read_id)
 
 
 def find_captures(
@@ -258,22 +259,22 @@ def create_capture_fast5(
 
             # Referencing spec v0.1.1
             # /Meta
-            capture_f5.create_group("/Meta")
+            capture_f5.require_group("/Meta")
 
             # /Meta/context_tags
             attrs = ugk["context_tags"].attrs
-            g = capture_f5.create_group("/Meta/context_tags")
+            g = capture_f5.require_group("/Meta/context_tags")
             for k, v in attrs.items():
                 g.attrs.create(k, v)
             g.attrs.create(
-                "bulk_filename", bulk_f5_fname, dtype=f"S{len(bulk_f5_fname)}"
+                "bulk_filename", bulk_f5_fname, dtype=hdf5_dtype(bulk_f5_fname)
             )
             sample_frequency = bulk_f5.get("Meta").attrs["sample_rate"]
             g.attrs.create("sample_frequency", sample_frequency)
 
             # /Meta/tracking_id
             attrs = ugk["tracking_id"].attrs
-            g = capture_f5.create_group("/Meta/tracking_id")
+            g = capture_f5.require_group("/Meta/tracking_id")
             for k, v in attrs.items():
                 g.attrs.create(k, v)
 
@@ -281,7 +282,7 @@ def create_capture_fast5(
                 sub_run_id, sub_run_offset, sub_run_duration = sub_run
                 if sub_run_id is not None:
                     g.attrs.create(
-                        "sub_run_id", sub_run_id, dtype=f"S{len(sub_run_id)}"
+                        "sub_run_id", sub_run_id, dtype=hdf5_dtype(sub_run_id)
                     )
                 if sub_run_offset is not None:
                     g.attrs.create("sub_run_offset", sub_run_offset)
@@ -292,14 +293,14 @@ def create_capture_fast5(
             # TODO: define config param structure : https://github.com/uwmisl/poretitioner/issues/27
             # config = {"param": "value",
             #           "capture_criteria": {"f1": (min, max), "f2: (min, max)"}}
-            g = capture_f5.create_group("/Meta/Segmentation")
+            g = capture_f5.require_group("/Meta/Segmentation")
             # print(__name__)
-            g.attrs.create("segmenter", __name__, dtype=f"S{len(__name__)}")
+            g.attrs.create("segmenter", __name__, dtype=hdf5_dtype(__name__))
             g.attrs.create(
-                "segmenter_version", __version__, dtype=f"S{len(__version__)}"
+                "segmenter_version", __version__, dtype=hdf5_dtype(__version__)
             )
-            g_filt = capture_f5.create_group("/Meta/Segmentation/capture_criteria")
-            g_seg = capture_f5.create_group("/Meta/Segmentation/context_id")
+            g_filt = capture_f5.require_group("/Meta/Segmentation/capture_criteria")
+            g_seg = capture_f5.require_group("/Meta/Segmentation/context_id")
             segment_config = config.get("segment")
             if segment_config is None:
                 raise ValueError("No segment configuration provided.")
@@ -449,7 +450,6 @@ def segment(
     config: GeneralConfiguration,
     segment_config: SegmentConfiguration,
     save_location=None,
-    capture_criteria: Optional[filtering.Filters] = None,
     overwrite=True,
     sub_run_start_observations=0,
     sub_run_end_observations=None,
@@ -489,7 +489,6 @@ def segment(
         bulk_f5_filepath,
         config,
         segment_config,
-        capture_criteria=capture_criteria,
         save_location=save_location,
         overwrite=overwrite,
         sub_run_start_observations=sub_run_start_observations,
@@ -502,8 +501,6 @@ def parallel_find_captures(
     bulk_f5_fname,
     config: GeneralConfiguration,
     segment_config: SegmentConfiguration,
-    # Only supporting range capture_criteria for now (MVP). This should be expanded to all FilterPlugins: https://github.com/uwmisl/poretitioner/issues/67
-    capture_criteria: Optional[filtering.Filters] = None,
     save_location=None,
     overwrite: bool = False,
     sub_run_start_observations: int = 0,
@@ -563,6 +560,8 @@ def parallel_find_captures(
 
     save_location = Path(save_location)
 
+    capture_criteria = segment_config.capture_criteria
+
     if not save_location.exists():
         log.info(f"Creating capture directory at: {save_location!s}")
         save_location.mkdir(parents=True, exist_ok=True)
@@ -614,7 +613,7 @@ def parallel_find_captures(
 
         Parameters
         ----------
-        read_id : str
+        read_id : ReadId
             Uniquely identifies the read from which this capture was identified.
         capture : Capture
             The capture in question.

@@ -5,15 +5,18 @@ fast5.py
 
 Classes for reading, writing and validating fast5 files.
 """
+from __future__ import annotations
+
+from abc import abstractmethod
 import json
 from collections import namedtuple
 from dataclasses import dataclass
 from os import PathLike
-from pathlib import Path, PurePosixPath
-from typing import Dict, List, NewType, Optional, Set, Union
+from pathlib import Path, PosixPath, PurePosixPath
+from typing import Any, Dict, Iterable, List, NewType, Optional, Set, Type, Union
 
 import h5py
-from .utils.filtering import PATH as FILTER_PATH
+from .utils.filtering import FILTER_PATH
 from .utils.filtering import Filters, FilterSet, FilterPlugin, RangeFilter
 
 from .utils.classify import CLASSIFICATION_PATH
@@ -27,8 +30,9 @@ from .signals import (
     VoltageSignal,
 )
 from .utils.configuration import SegmentConfiguration
-from .utils.core import NumpyArrayLike, PathLikeOrString
+from .utils.core import DataclassHDF5GroupSerialable, HDF5GroupSerializable, NumpyArrayLike, PathLikeOrString
 from .utils.core import ReadId
+from .utils.core import hdf5_dtype, HasFast5, Fast5File
 
 __all__ = [
     "BulkFile",
@@ -39,6 +43,62 @@ __all__ = [
 
 # The name of the root of a HDF file. Also attainable from h5py.File.name: https://docs.h5py.org/en/latest/high/file.html#reference
 FAST5_ROOT = "/"
+
+@dataclass(frozen=True)
+class ContextTags(DataclassHDF5GroupSerialable):
+    bulk_filename: str
+    experiment_duration_set: str
+    experiment_type: str
+    flowcell_product_code: str
+    package: str
+    package_version: str
+    sample_frequency: str
+
+    @classmethod
+    def name(cls):
+        # We have to override the default, because the context tags
+        # are stored under a different name than the class name
+        return "context_tags"
+
+@dataclass(frozen=True)
+class TrackingId(DataclassHDF5GroupSerialable):
+    # Q: Why are we violating PEP8 conventions in having a lower-cased class name?
+    # A: To match how ONT stores the group in the fast5 file.
+    #    This lets us serialize/deserialize by class name directly.
+    asic_id: str
+    asic_id_eeprom: str
+    asic_temp: str
+    auto_update: str
+    auto_update_source: str
+    bream_core_version: str
+    bream_is_standard: str
+    bream_ont_version: str
+    device_id: str
+    exp_script_name: str
+    exp_script_purpose: str
+    exp_start_time: str
+    flow_cell_id: str
+    heatsink_temp: str
+    hostname: str
+    installation_type: str
+    local_firmware_file: str
+    operating_system: str
+    protocol_run_id: str
+    protocols_version: str
+    run_id: str
+    sample_id: str
+    usb_config: str
+    version: str
+
+    @classmethod
+    def name(cls):
+        # We have to override the default, because the context tags
+        # are stored under a different name than the class name
+        return "context_tags"
+
+@dataclass(frozen=True)
+class Read(DataclassHDF5GroupSerialable):
+    Signal: NumpyArrayLike # This is the raw signal, fresh from the Fast5.
 
 
 @dataclass(frozen=True)
@@ -64,16 +124,41 @@ class BULK_PATH:
 
 @dataclass(frozen=True)
 class CAPTURE_PATH:
+    ROOT = "/"
     CONTEXT_TAGS = "/Meta/context_tags"
     TRACKING_ID = "/Meta/tracking_id"
+    SUB_RUN = "/Meta/tracking_id/subrun"
     SEGMENTATION = "/Meta/Segmentation"
     CAPTURE_WINDOWS = "/Meta/Segmentation/capture_windows"
     CONTEXT_ID = "/Meta/Segmentation/context_id"
-    FILTERS = "/Meta/Segmentation/capture_criteria"
+    CAPTURE_CRITERIA = "/Meta/Segmentation/capture_criteria"
+
+    @classmethod
+    def FOR_READ_ID(cls, read_id: ReadId) -> str:
+        path = str(PosixPath(CAPTURE_PATH.ROOT, read_id))
+        return path
+
+    @classmethod
+    def FOR_READ_ID_CHANNEL(cls, read_id: ReadId) -> str:
+        path = str(PosixPath(CAPTURE_PATH.FOR_READ_ID(read_id), KEY.CHANNEL_ID))
+        return path
+
+    @classmethod
+    def FOR_READ_ID_SIGNAL(cls, read_id: ReadId) -> str:
+        path = str(PosixPath(CAPTURE_PATH.FOR_READ_ID(read_id), KEY.SIGNAL))
+        return path
+
+@dataclass(frozen=True)
+class Channel(DataclassHDF5GroupSerialable):
+    """Channel-specific information saved for each read."""
+    channel_number: int
+    calibration: ChannelCalibration
+    open_channel_pA: int
+    sampling_rate: int
 
 
 @dataclass(frozen=True)
-class SubRun:
+class SubRun(DataclassHDF5GroupSerialable):
     """If the bulk fast5 contains multiple runs (shorter sub-runs throughout
     the data collection process), this can be used to record additional
     context about the sub run: (id : str, offset : int, and
@@ -82,9 +167,9 @@ class SubRun:
     measured in #/time series points.
     """
 
-    sub_run_id: str
-    sub_run_offset: int
-    sub_run_duration: int
+    id: str
+    offset: int
+    duration: int
 
 
 def format_read_id(read_id: str) -> ReadId:
@@ -92,7 +177,7 @@ def format_read_id(read_id: str) -> ReadId:
 
     Parameters
     ----------
-    read_id : str
+    read_id : ReadId
         Read_id, which may or may not be prefixed with "read_".
 
     Returns
@@ -110,7 +195,7 @@ def channel_path_for_read_id(
 
     Parameters
     ----------
-    read_id : str, optional.
+    read_id : ReadId, optional.
         Read ID of the channel read. None by default.
 
     Returns
@@ -133,7 +218,7 @@ def signal_path_for_read_id(
 
     Parameters
     ----------
-    read_id : str
+    read_id : ReadId
         Read ID of the signal read.
 
     Returns
@@ -142,7 +227,7 @@ def signal_path_for_read_id(
         Correctly formatted signal path.
     """
     read_id = format_read_id(read_id)
-    signal_path = PurePosixPath(root, read_id, KEY.SIGNAL)
+    signal_path = str(PurePosixPath(root, read_id, KEY.SIGNAL))
 
     return signal_path
 
@@ -171,14 +256,14 @@ def add_channel_id_to_path(base: PathLikeOrString) -> PathLike:
     return path_with_channel_id
 
 
-class BaseFile:
+class BaseFile(HasFast5):
     def __init__(
         self, filepath: PathLikeOrString, mode: str = "r", logger: Logger = getLogger()
     ):
         # TODO: Black doesn't like the formatting here, can't figure out why.
         # fmt: off
-        """Base class for interfacing with Fast5 files. 
-        
+        """Base class for interfacing with Fast5 files.
+
         This class should not be instantiated directly, instead it should be subclassed.
 
         Most of the time, nanopore devices/software write data in an HDFS [1] file format called Fast5.
@@ -213,7 +298,7 @@ class BaseFile:
         # fmt: on
 
         self.filepath = Path(filepath).expanduser().resolve()
-        self.f5 = h5py.File(self.filepath, mode)
+        self.f5 = h5py.File(self.filepath, mode=mode)
         self.filename = self.f5.filename
         self.log = logger
         self.ROOT = self.f5.name  # '/' by default
@@ -368,7 +453,7 @@ class BulkFile(BaseFile):
             self.log.error(error_message)
             raise ValueError(error_message)
         try:
-            run_id = self.tracking_id["run_id"].decode("utf-8")
+            run_id = self.f5.get(path).attrs["run_id"].decode("utf-8")
         except KeyError:
             error_message = f"Attribute 'run_id' missing from path:{path} in bulk file '{self.f5.filename}'. Double check that the bulk file includes this field at that path."
             validation_errors.append(error_message)
@@ -506,17 +591,17 @@ class BulkFile(BaseFile):
         )
         return voltages
 
-    @property
-    def context_tags(self) -> Dict:
-        context_tags = self.f5.get(BULK_PATH.CONTEXT_TAGS)
+    def context_tags_group(self) -> h5py.Group:
+        return self.f5[BULK_PATH.CONTEXT_TAGS]
         result = {} if context_tags is None else dict(context_tags.attrs)
         return result
 
-    @property
-    def tracking_id(self) -> Dict:
-        tracking_id = self.f5.get(BULK_PATH.TRACKING_ID)
+    def tracking_id_group(self) -> h5py.Group:
+        return self.f5[BULK_PATH.TRACKING_ID]
         result = {} if tracking_id is None else dict(tracking_id.attrs)
         return result
+
+
 
 
 class CaptureFile(BaseFile):
@@ -533,7 +618,7 @@ class CaptureFile(BaseFile):
         Parameters
         ----------
         capture_filepath : PathLikeOrString
-            Path to the capture file. Capture files are the result of running 
+            Path to the capture file. Capture files are the result of running
             `poretitioner segment` on a bulk file.
         mode : str, optional
             File mode, valid modes are:
@@ -548,8 +633,8 @@ class CaptureFile(BaseFile):
         Raises
         ------
         OSError
-            Capture file couldn't be opened 
-            (e.g. didn't exist, OS Resource temporarily unavailable). 
+            Capture file couldn't be opened
+            (e.g. didn't exist, OS Resource temporarily unavailable).
             Details in message.
         ValueError
             Capture file had validation errors, details in message.
@@ -561,11 +646,11 @@ class CaptureFile(BaseFile):
 
         # Creates /Filters
         if self.f5.get(FILTER_PATH.ROOT) is None:
-            self.f5.create_group(FILTER_PATH.ROOT)
+            self.f5.require_group(FILTER_PATH.ROOT)
 
         # Creates /Classification
         if self.f5.get(CLASSIFICATION_PATH.ROOT) is None:
-            self.f5.create_group(CLASSIFICATION_PATH.ROOT)
+            self.f5.require_group(CLASSIFICATION_PATH.ROOT)
 
         if not self.filepath.exists():
             error_msg = f"Capture fast5 file does not exist at path: {self.filepath}. Make sure the capture file is in this location."
@@ -606,25 +691,26 @@ class CaptureFile(BaseFile):
         # Referencing spec v0.1.1
 
         # /Meta/context_tags
-        capture_context_tags_group = self.f5.create_group(CAPTURE_PATH.CONTEXT_TAGS)
-        for key, value in bulk_f5.context_tags.items():
-            capture_context_tags_group.attrs.create(key, value)
+        capture_context_tags_group = self.f5.require_group(CAPTURE_PATH.CONTEXT_TAGS)
+        bulk_context_tags_group = bulk_f5.context_tags_group()
+        context_tags = ContextTags.from_group(bulk_context_tags_group)
+        context_tags.as_group(capture_context_tags_group.parent)
+        
+        #capture_context_tags_group.attrs.create(key, value, dtype=hdf5_dtype(value))
 
         bulk_f5_fname = bulk_f5.filename
 
-        filename_length = len(bulk_f5_fname)
-        dtype = f"S{filename_length}"  # Need to save the length of the string.
         capture_context_tags_group.attrs.create(
-            "bulk_filename", bulk_f5_fname, dtype=dtype
+            "bulk_filename", bulk_f5_fname, dtype=hdf5_dtype(bulk_f5_fname)
         )
 
         sampling_frequency = bulk_f5.sampling_rate
-        capture_context_tags_group.attrs.create("sample_frequency", sampling_frequency)
+        capture_context_tags_group.attrs.create("sample_frequency", sampling_frequency, dtype=hdf5_dtype(sampling_frequency))
 
         # /Meta/tracking_id
-        capture_tracking_id_group = self.f5.create_group(CAPTURE_PATH.TRACKING_ID)
+        capture_tracking_id_group = self.f5.require_group(CAPTURE_PATH.TRACKING_ID)
         for key, value in bulk_f5.tracking_id.items():
-            capture_tracking_id_group.attrs.create(key, value)
+            capture_tracking_id_group.attrs.create(key, value, dtype=hdf5_dtype(value))
 
         if sub_run is not None:
             id = sub_run.sub_run_id
@@ -632,7 +718,7 @@ class CaptureFile(BaseFile):
             duration = sub_run.sub_run_duration
 
             capture_tracking_id_group.attrs.create(
-                "sub_run_id", id, dtype=f"S{len(id)}"
+                "sub_run_id", id, dtype=hdf5_dtype(id)
             )
             capture_tracking_id_group.attrs.create("sub_run_offset", offset)
             capture_tracking_id_group.attrs.create("sub_run_duration", duration)
@@ -641,19 +727,19 @@ class CaptureFile(BaseFile):
         # TODO: define config param structure : https://github.com/uwmisl/poretitioner/issues/27
         # config = {"param": "value",
         #           "capture_criteria": {"f1": (min, max), "f2: (min, max)"}}
-        capture_segmentation_group = self.f5.create_group(CAPTURE_PATH.SEGMENTATION)
+        capture_segmentation_group = self.f5.require_group(CAPTURE_PATH.SEGMENTATION)
         # print(__name__)
-        version = get_application_info().version
+        version = get_application_info().data_schema_version
         segmenter_name = __name__
         capture_segmentation_group.attrs.create(
-            "segmenter", __name__, dtype=f"S{len(segmenter_name)}"
+            "segmenter", __name__, dtype=hdf5_dtype(segmenter_name)
         )
         capture_segmentation_group.attrs.create(
-            "segmenter_version", version, dtype=f"S{len(version)}"
+            "segmenter_version", version, dtype=hdf5_dtype(version)
         )
-        filter_group = self.f5.create_group(CAPTURE_PATH.FILTERS)
-        context_id_group = self.f5.create_group(CAPTURE_PATH.CONTEXT_ID)
-        capture_windows_group = self.f5.create_group(CAPTURE_PATH.CAPTURE_WINDOWS)
+        filter_group = self.f5.require_group(CAPTURE_PATH.CAPTURE_CRITERIA)
+        context_id_group = self.f5.require_group(CAPTURE_PATH.CONTEXT_ID)
+        capture_windows_group = self.f5.require_group(CAPTURE_PATH.CAPTURE_WINDOWS)
 
         # Only supporting range capture_criteria for now (MVP): https://github.com/uwmisl/poretitioner/issues/67
         if segment_config is None:
@@ -678,8 +764,6 @@ class CaptureFile(BaseFile):
                 self.log.debug(
                     f"Setting capture criteria for {name}: ({minimum}, {maximum})"
                 )
-                if minimum is None and maximum is None:
-                    continue
 
                 filter_group.create_dataset(name, data=(minimum, maximum))
             # Based on the example code, it doesn't seem like we write anything for ejected filter?
@@ -732,7 +816,7 @@ class CaptureFile(BaseFile):
 
     @property
     def reads(self, root: str = FAST5_ROOT) -> List[ReadId]:
-        root_group = self.f5.get(root)
+        root_group = self.f5.require_group(root)
         potential_reads = [] if not root_group else root_group.keys()
         reads = [read for read in potential_reads if self.is_read(read)]
         return reads
@@ -771,7 +855,9 @@ class CaptureFile(BaseFile):
         # If a path has both of theses, we consider the group a signal
         channel_path = str(add_channel_id_to_path(path))
         signal_path = str(add_signal_to_path(path))
-        return self.f5.get(channel_path) and self.f5.get(signal_path)
+        has_channel_path_group = self.f5.get(channel_path, getclass=True) is h5py.Group
+        has_signal_group = self.f5.get(signal_path, getclass=True) is h5py.Group
+        return has_channel_path_group and has_signal_group
 
     def get_fractionalized_read(
         self, read_id: ReadId, start: Optional[int] = None, end: Optional[int] = None
@@ -780,7 +866,7 @@ class CaptureFile(BaseFile):
 
         Parameters
         ----------
-        read_id : str
+        read_id : ReadId
             Read to get the fractionalized signal from.
         start : Optional[int], optional
             Where to start the read, by default None
@@ -817,7 +903,7 @@ class CaptureFile(BaseFile):
 
         Parameters
         ----------
-        read_id : str
+        read_id : ReadId
             Read id to retrieve raw signal. Can be formatted as a path ("read_xxx...")
             or just the read id ("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx").
 
@@ -835,7 +921,7 @@ class CaptureFile(BaseFile):
 
         Parameters
         ----------
-        read_id : str
+        read_id : ReadId
             Which read to fetch the metadata for.
 
         Returns
@@ -895,7 +981,7 @@ class CaptureFile(BaseFile):
         f5[signal_path].attrs[KEY.OPEN_CHANNEL_PA] = metadata.open_channel_pA
 
         channel_path = str(channel_path_for_read_id(read_id))
-        f5.create_group(channel_path)
+        f5.require_group(channel_path)
         f5[channel_path].attrs["channel_number"] = metadata.channel_number
         f5[channel_path].attrs["digitisation"] = metadata.calibration.digitisation
         f5[channel_path].attrs["range"] = metadata.calibration.rng

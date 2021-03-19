@@ -46,7 +46,7 @@ let
         dask
         # Charts and plotting library
         matplotlib
-        tkinter
+        # tkinter
         # Data visualization
         seaborn
         # Interactive computing

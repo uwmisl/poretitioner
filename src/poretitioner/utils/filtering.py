@@ -8,10 +8,11 @@ You can customize your own filters too.
 
 """
 import re
-from abc import ABCMeta, abstractmethod
+from abc import ABC, ABCMeta, abstractmethod
 from dataclasses import dataclass
 from pathlib import PosixPath
-from typing import Any, Dict, List, NewType, Optional, Union
+from typing import Any, Dict, List, NewType, Optional, Protocol, Union
+from typing import Iterable
 
 import h5py
 import numpy as np
@@ -19,11 +20,15 @@ from json import JSONEncoder
 
 from ..logger import Logger, getLogger
 from ..signals import Capture
-from .core import NumpyArrayLike, PathLikeOrString
+from .core import HasFast5, NumpyArrayLike, PathLikeOrString
 from .core import ReadId
 from .core import stripped_by_keys
+from .core import Fast5File
+from .plugin import Plugin
+
 
 CaptureOrTimeSeries = Union[Capture, NumpyArrayLike]
+
 
 # Unique identifier for a collection of filters (e.g. "ProfJeffsAwesomeFilters")
 FilterSetId = NewType("FilterSetId", str)
@@ -48,22 +53,24 @@ __all__ = [
 
 
 @dataclass(frozen=True)
-class PATH:
+class FILTER_PATH:
     ROOT = f"/Filter/"
 
     @classmethod
-    def filter_path_for_filter_set(cls, filter_set: FilterSetId) -> str:
-        filter_path = str(PosixPath(PATH.ROOT, filter_set))
+    def filter_set_path(cls, filter_set_id: FilterSetId) -> str:
+        filter_path = str(PosixPath(FILTER_PATH.ROOT, filter_set_id))
         return filter_path
 
     @classmethod
-    def filter_pass_path_for_read_id(cls, read_id: ReadId) -> str:
-        pass_path = str(PosixPath(PATH.ROOT, "pass", read_id))
+    def filter_set_pass_path(cls, filter_set_id: FilterSetId) -> str:
+        pass_path = str(PosixPath(FILTER_PATH.filter_set_path(filter_set_id), "pass"))
         return pass_path
 
-    def get_filter_pass_path(read_id):
-        path = str(PosixPath(PATH.ROOT, "pass"))
-        return path
+    @classmethod
+    def filter_set_pass_path_for_read_id(cls, filter_set_id: FilterSetId, read_id: ReadId) -> str:
+        pass_path = str(PosixPath(FILTER_PATH.filter_set_pass_path(filter_set_id), read_id))
+        return pass_path
+
 
 
 @dataclass(frozen=True)
@@ -88,7 +95,7 @@ class FilterConfig:
 FilterConfigs = NewType("FilterConfigs", Dict[FilterName, FilterConfig])
 
 # TODO: Filter Plugin should check that name is unique. https://github.com/uwmisl/poretitioner/issues/91
-class FilterPlugin(metaclass=ABCMeta):
+class FilterPlugin(Plugin):
     """
     Abstract class for Filter plugins. To write your own filter, subclass this abstract
     class and implement the `apply` method and `name` property.
@@ -173,7 +180,11 @@ class FilterPlugin(metaclass=ABCMeta):
         return result
 
 
+
 class RangeFilter(FilterPlugin):
+    DEFAULT_MINIMUM: float = -np.inf
+    DEFAULT_MAXIMUM: float = np.inf
+
     def __init__(
         self, minimum: Optional[float] = None, maximum: Optional[float] = None
     ):
@@ -186,10 +197,10 @@ class RangeFilter(FilterPlugin):
         maximum : float, optional
             The largest value this signal should be allowed to take (inclusive), by default RangeFilter.DEFAULT_MAXIMUM
         """
-        self.minimum = minimum
-        self.maximum = maximum
+        self.minimum = minimum if minimum is not None else RangeFilter.DEFAULT_MINIMUM
+        self.maximum = maximum if maximum is not None else RangeFilter.DEFAULT_MAXIMUM
 
-    def extract(self, capture: CaptureOrTimeSeries) -> Any:
+    def extract(self, capture: CaptureOrTimeSeries) -> NumpyArrayLike:
         """Extracts a summary statistic from the capture (e.g. mean, length, standard deviation).
 
         Identity operation by default (just returns the capture).
@@ -205,13 +216,23 @@ class RangeFilter(FilterPlugin):
         capture : CaptureOrTimeSeries
             Capture from which to extract data.
         """
-        return capture
+        try:
+            signal = capture.fractionalized()
+        except AttributeError:
+            signal = capture
+        else:
+            signal = capture
+        return signal
+        #signal = getattr(capture, Capture.fractionalized.__name__, capture)
 
-    def is_in_range(self, value: float) -> bool:
-        minimum = self.minimum if self.minimum is not None else -np.inf
-        maximum = self.maximum if self.maximum is not None else np.inf
+    def is_in_range(self, value: Union[NumpyArrayLike, float]) -> bool:
+        try:
+            # If the value is just a float, we can use this handy syntax:
+            return self.minimum <= value <= self.maximum
+        except ValueError:
+            # But we're not allowed to use that syntax on numpy arrays.
+            return all(np.logical_and(self.minimum <= value, value <= self.maximum))
 
-        return minimum <= value <= maximum
 
     def apply(self, signal):
         value = self.extract(signal)
@@ -226,11 +247,7 @@ class StandardDeviationFilter(RangeFilter):
         return "stdv"
 
     def extract(self, capture: CaptureOrTimeSeries):
-        signal = capture
-        try:
-            signal = capture.fractionalized
-        except AttributeError:
-            pass
+        signal = super().extract(capture)
         return np.std(signal)
 
 
@@ -242,11 +259,7 @@ class MeanFilter(RangeFilter):
         return "mean"
 
     def extract(self, capture: CaptureOrTimeSeries):
-        signal = capture
-        try:
-            signal = capture.fractionalized
-        except AttributeError:
-            pass
+        signal = super().extract(capture)
         return np.mean(signal)
 
 
@@ -256,11 +269,7 @@ class MedianFilter(RangeFilter):
         return "median"
 
     def extract(self, capture: CaptureOrTimeSeries):
-        signal = capture
-        try:
-            signal = capture.fractionalized
-        except AttributeError:
-            pass
+        signal = super().extract(capture)
         return np.median(signal)
 
 
@@ -270,11 +279,7 @@ class MinimumFilter(RangeFilter):
         return "min"
 
     def extract(self, capture: CaptureOrTimeSeries):
-        signal = capture
-        try:
-            signal = capture.fractionalized
-        except AttributeError:
-            pass
+        signal = super().extract(capture)
         return np.min(signal)
 
 
@@ -284,11 +289,7 @@ class MaximumFilter(RangeFilter):
         return "max"
 
     def extract(self, capture: CaptureOrTimeSeries):
-        signal = capture
-        try:
-            signal = capture.fractionalized
-        except AttributeError:
-            pass
+        signal = super().extract(capture)
         return np.max(signal)
 
 
@@ -300,13 +301,18 @@ class LengthFilter(RangeFilter):
         return "length"
 
     def extract(self, capture: CaptureOrTimeSeries):
-        signal = capture
-        try:
-            signal = capture.fractionalized
-        except AttributeError:
-            pass
+        signal = super().extract(capture)
         return len(signal)
 
+class EjectedFilter(FilterPlugin):
+    """Filters captures based on whether they were ejected from the pore.
+    """
+    @classmethod
+    def name(cls) -> str:
+        return "ejected"
+
+    def extract(self, capture: Capture):
+        return capture.ejected
 
 """
 How to Create Your Own Custom Filter:
@@ -324,6 +330,9 @@ the signal has more than 5 samples greater than the threshold, after taking the 
 
 class MyCustomFilter(FilterPlugin):
     threshold: float = 0.5  # Totally arbitrary.
+
+    def name(self):
+        return "foo"
 
     def extract(self, capture):
         # Do the transformations here, or pre-process it before the filter.
@@ -444,17 +453,21 @@ def filter_and_store_result(config, fast5_files, filter_name, overwrite=False):
             write_filter_results(f5, config, passed_read_ids, filter_name)
 
 
-#  def write_filter_results(f5, passing_read_ids: List[str], log):
-#         # For all read_ids that passed the filter (AKA reads that were passed in),
-#         # create a hard link in the filter_path to the actual read's location in
-#         # the fast5 file.
-#         for read_id in passing_read_ids:
-#             read_path = format_read_id(read_id)
-#             read_grp = f5.get(read_path)
-#             self.log.debug(read_grp)
-#             filter_read_path = FILTER_PATH.filter_pass_path_for_read_id(read_id)
-#             # Create a hard link from the filter read path to the actual read path
-#             f5[filter_read_path] = read_grp
+def write_filter_results(f5: Fast5File, filter_set_id: FilterSetId, passing_read_ids: List[ReadId], log: Optional[Logger] = None):
+    # For all read_ids that passed the filter (AKA reads that were passed in),
+    # create a hard link in the filter_path to the actual read's location in
+    # the fast5 file.
+    # /Filters/my_filter_set_id/pass
+    passing_for_filter_path = FILTER_PATH.filter_set_pass_path(filter_set_id)
+    passing_read_id_group = f5.require_group(passing_for_filter_path)
+        
+    for read_id in passing_read_ids:
+        passing_by_read_id_path = FILTER_PATH.filter_set_pass_path_for_read_id(filter_set_id, read_id)
+        passing_by_read_id_group = f5.require_group(passing_by_read_id_path)
+
+        filter_read_path = FILTER_PATH.filter_pass_path_for_read_id(read_id)
+        # Create a hard link from the filter read path to the actual read path
+        f5[filter_read_path] = read_grpa
 
 
 def filter_like_existing(
@@ -479,9 +492,23 @@ DEFAULT_FILTER_PLUGINS = {
     for filter_plugin_class in __DEFAULT_FILTER_PLUGINS
 }
 
+class Filtering(Protocol):
+    """Classes that adhere to the Filtering protocol
+    provide an 'apply' method to an input that returns True 
+    if and only if the input passes its filter.
+
+    These are also callable, so calling a filter on an input 
+    is functionally equivalent to calling its apply method.
+    """
+
+    def __call__(self, *args, **kwargs) -> bool:
+        raise NotImplementedError("Filtering protocol hasn't implemented __call__ yet!")
+
+    def apply(self, *args, **kwargs) -> bool:
+        raise NotImplementedError("Filtering protocol hasn't implemented Apply yet!")
 
 @dataclass
-class Filter:
+class Filter(Filtering):
     """A named filter that can be applied to some data.
 
     You can use this filter by just calling it on some data.
@@ -504,19 +531,19 @@ class Filter:
     config: FilterConfig
     plugin: FilterPlugin
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, **kwargs) -> bool:
         return self.plugin(*args, **kwargs)
 
-    def apply(self, *args, **kwargs):
-        self.plugin.apply(*args, **kwargs)
+    def apply(self, *args, **kwargs) -> bool:
+        return self.plugin.apply(*args, **kwargs)
 
     @property
     def name(self) -> FilterName:
-        return self.plugin.name()
+        return FilterName(self.plugin.name())
 
 
 @dataclass
-class Filters:
+class Filters(Filtering):
     """A collection of callable filters and their names.
 
     Use this like a dictionary of
@@ -530,11 +557,11 @@ class Filters:
     def __init__(self, filters: Dict[FilterName, Filter]):
         self._filters = filters
 
-    def __getitem__(self, filter_name: str):
-        return self._filters[filter_name]
+    def __getitem__(self, filter_name: Union[str, FilterName]):
+        return self._filters[FilterName(filter_name)]
 
-    def __setitem__(self, filter_name: str):
-        return self._filters[filter_name]
+    def __setitem__(self, filter_name: Union[str, FilterName]):
+        return self._filters[FilterName(filter_name)]
 
     def values(self):
         return self._filters.values()
@@ -550,7 +577,7 @@ class Filters:
     #     # represents this object. In this case it's the config dictionary.
     #     return self._filters
 
-    def __call__(self, capture: CaptureOrTimeSeries):
+    def apply(self, capture: CaptureOrTimeSeries) -> bool:
         """
         Check whether an array of values (e.g. a single nanopore capture)
         passes a set of filters.
@@ -565,7 +592,10 @@ class Filters:
         boolean
             True if capture passes all filters; False otherwise.
         """
-        return does_pass_filters(capture, self._filters.values())
+        return does_pass_filters(capture, self)
+
+    def __call__(self, capture: CaptureOrTimeSeries) -> bool:
+        return self.apply(capture)
 
 
 def get_filters(filter_configs: Optional[FilterConfigs] = None) -> Filters:
@@ -581,7 +611,7 @@ def get_filters(filter_configs: Optional[FilterConfigs] = None) -> Filters:
     Filters
         A set of callable/applyable filters.
     """
-    filter_configs = filter_configs if filter_configs is not None else {}
+    filter_configs = filter_configs if filter_configs is not None else FilterConfigs({})
     my_filters = Filters(
         {
             name: filter_from_config(filter_config)
@@ -591,12 +621,45 @@ def get_filters(filter_configs: Optional[FilterConfigs] = None) -> Filters:
     return my_filters
 
 
+def does_pass_filters(capture: CaptureOrTimeSeries, filters: Filters) -> bool:
+    """
+    Check whether an array of values (e.g. a single nanopore capture)
+    passes a set of filters. Filters can be based on summary statistics
+    (e.g., mean) and/or a range of allowed values.
+
+    Parameters
+    ----------
+    capture : CaptureOrTimeSeries | NumpyArrayLike
+        Capture containing time series of nanopore current values for a single capture, or the signal itself.
+    filters : Filters
+        The set of filters to apply. Write your own filter by subclassing FilterPlugin.
+
+    Returns
+    -------
+    boolean
+        True if capture passes all filters; False otherwise.
+    """
+    # TODO: Parallelize? https://github.com/uwmisl/poretitioner/issues/67
+    all_passed = True
+    for filter_out in filters.values():
+        if not filter_out(capture):
+            return False
+    return True
+
+
 @dataclass(frozen=True)
-class FilterSet:
+class FilterSet(Filtering):
     """
     A collection of filters with a name for easy
     identification.
     Mapping of filter_set_name to its filters.
+
+    Q: Why inherit from FilterPlugin? 
+    A: So we can treat an amalgam of filters (i.e. a FilterSet)
+       just like a singular filter. 
+       This is known as the Composite Pattern [1]
+
+    [1] - https://en.wikipedia.org/wiki/Composite_pattern
     """
 
     name: FilterSetId
@@ -610,12 +673,14 @@ class FilterSet:
         return encoder
 
     @classmethod
-    def from_json(cls, filter_set_name: FilterSetId, filters_dict: Dict):
-        filters = {
-            filter_config.get("name"): FilterConfig(**filter_config)
+    def from_json(cls, json_dict: Dict, filter_set_name: FilterSetId, filters_dict: Dict):
+        filter_configs: FilterConfigs = FilterConfigs({
+            FilterName(filter_config.get("name")): FilterConfig(**filter_config)
             for filter_config in json_dict["filters"]
-        }
-        return cls.__new__(filter_set_name, filters)
+        })
+        filters = get_filters(filter_configs)
+        filter_set = cls.__new__(cls)
+        filter_set = filter_set.__init__(filter_set_name, filters)
 
     @classmethod
     def from_filter_configs(
@@ -623,8 +688,14 @@ class FilterSet:
     ):
         filters: Filters = get_filters(filter_configs)
         filter_set = cls.__new__(cls)
-        filter_set.__init__(name, filter_configs)
+        filter_set.__init__(name, filters)
         return filter_set
+
+    def apply(self, capture: CaptureOrTimeSeries) -> bool:
+        return self.filters(capture)
+
+    def __call__(self, capture: CaptureOrTimeSeries) -> bool:
+        return self.apply(capture)
 
 
 def filter_from_config(config: FilterConfig, log: Logger = getLogger()) -> Filter:
@@ -726,27 +797,21 @@ class FilterJSONEncoder(JSONEncoder):
         return super().default(obj)
 
 
-def does_pass_filters(capture: CaptureOrTimeSeries, filters: Filters) -> bool:
-    """
-    Check whether an array of values (e.g. a single nanopore capture)
-    passes a set of filters. Filters can be based on summary statistics
-    (e.g., mean) and/or a range of allowed values.
+from typing import Protocol
 
-    Parameters
-    ----------
-    capture : CaptureOrTimeSeries | NumpyArrayLike
-        Capture containing time series of nanopore current values for a single capture, or the signal itself.
-    filters : Filters
-        The set of filters to apply. Write your own filter by subclassing FilterPlugin.
 
-    Returns
-    -------
-    boolean
-        True if capture passes all filters; False otherwise.
-    """
-    # TODO: Parallelize? https://github.com/uwmisl/poretitioner/issues/67
-    all_passed = True
-    for filter_out in filters.values():
-        if not filter_out(capture):
-            return False
-    return True
+
+class FilterMixin(HasFast5):
+
+    def filter(self, captures: Iterable[Capture], filter_set: FilterSet) -> Iterable[Capture]:
+        passing_captures = [capture for capture in captures if filter_set(capture)]
+        return passing_captures
+
+
+    def filter_sets(self) -> Iterable[FilterSet]:
+        filter_group_keys = self.f5.require_group(FILTER_PATH.ROOT).keys()
+        filter_set_names = filter_group.keys()
+        
+
+    def filter_set(self, filter_set_id: FilterSetId) -> FilterSet:
+        pass

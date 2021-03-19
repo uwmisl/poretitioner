@@ -117,7 +117,7 @@ class NTER_2018_CNN(PytorchClassifierPlugin):
         self.class_label_for_result = class_label_for_result
 
     def pre_process(self, capture: Capture) -> torch.Tensor:
-        frac = capture.fractionalized
+        frac = capture.fractionalized()
         # 2D --> 3D array (each obs in a capture becomes its own array)
         frac_3D = frac.reshape(len(frac), frac.shape[1], 1)
 

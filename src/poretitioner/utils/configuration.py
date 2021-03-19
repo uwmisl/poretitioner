@@ -136,7 +136,7 @@ class BaseConfiguration(metaclass=ABCMeta):
         return names
 
     def initialize_fields(
-        self, command_line_args: Dict = None, config: Dict = None, log: Logger = None
+        self, command_line_args: Dict = None, config: Dict = None, log: Optional[Logger] = None
     ):
         """[summary]
         #TODO
@@ -251,7 +251,7 @@ class SegmentConfiguration(BaseConfiguration):
         )  # Only keep filter-related command line args
         self.initialize_fields(command_line_args=command_line_args, config=config, log=log)
 
-    def initialize_fields(self, command_line_args: Dict, config: Dict, log: Logger = None):
+    def initialize_fields(self, command_line_args: Dict, config: Dict, log: Optional[Logger] = None):
         super().initialize_fields(command_line_args=command_line_args, config=config, log=log)
 
         # Overwrite with actual capture criteria

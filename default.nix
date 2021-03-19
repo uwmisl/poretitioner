@@ -89,10 +89,12 @@ let
     # (instead of setting it to Unix epoch + 1). This is impure, but fine for our purposes.
     created = "now";
     config = {
+      Cmd = [  ];
       # Runs 'poretitioner' by default.
       Entrypoint = [ "${app.outPath}/bin/${app.pname}" ];
     };
   };
+
 in
 {
   app-no-test = app { doCheck = false; };
