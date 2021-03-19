@@ -3,14 +3,19 @@ import pprint
 from pathlib import Path
 from typing import List
 
+import logger
 import numpy as np
 
-import logger
 from .getargs import ARG, COMMAND, get_args
 from .utils import segment
-from .utils.configuration import CONFIG, readconfig, SegmentConfiguration, GeneralConfiguration, FilterConfiguration
+from .utils.configuration import (
+    CONFIG,
+    FilterConfiguration,
+    GeneralConfiguration,
+    SegmentConfiguration,
+    readconfig,
+)
 from .utils.filtering import (
-    get_plugins,
     LengthFilter,
     MaximumFilter,
     MeanFilter,
@@ -18,7 +23,9 @@ from .utils.filtering import (
     MinimumFilter,
     RangeFilter,
     StandardDeviationFilter,
+    get_plugins,
 )
+
 
 def run(args):
     # Configures the root application logger.
@@ -29,7 +36,9 @@ def run(args):
 
     # Get the command line args as a dictionary.
     command_line_args = vars(args)
-    if "capture_directory" not in command_line_args and getattr(args, ARG.CAPTURE_DIRECTORY, False):
+    if "capture_directory" not in command_line_args and getattr(
+        args, ARG.CAPTURE_DIRECTORY, False
+    ):
         command_line_args["capture_directory"] = command_line_args[ARG.CAPTURE_DIRECTORY]
 
     # Read configuration file, if it exists.
@@ -99,8 +108,7 @@ def main():
             "--output-dir",
             "./out/data/",
             "--config",
-            "./poretitioner_config.toml"
-            " ",
+            "./poretitioner_config.toml" " ",
             "-vvvvv",
         ]
         args = get_args(command_line)

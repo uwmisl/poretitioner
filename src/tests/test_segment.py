@@ -13,11 +13,9 @@ from pathlib import Path
 import h5py
 import numpy as np
 import pytest
-from src.poretitioner.logger import (
-    configure_root_logger,
-    getLogger,
-    verbosity_to_log_level,
-)
+from pytest import fixture
+
+from src.poretitioner.logger import configure_root_logger, getLogger, verbosity_to_log_level
 from src.poretitioner.signals import (
     CaptureMetadata,
     ChannelCalibration,
@@ -25,12 +23,8 @@ from src.poretitioner.signals import (
     RawSignal,
     Window,
 )
-from src.poretitioner.utils import segment, filtering
-from pytest import fixture
-from src.poretitioner.utils.configuration import (
-    GeneralConfiguration,
-    SegmentConfiguration,
-)
+from src.poretitioner.utils import filtering, segment
+from src.poretitioner.utils.configuration import GeneralConfiguration, SegmentConfiguration
 
 configure_root_logger(verbosity=1, debug=False)
 
@@ -143,9 +137,7 @@ def old_config():
 
 
 def picoampere_signal_from_data_file(
-    filepath: str,
-    channel_number=1,
-    calibration: ChannelCalibration = ChannelCalibration(0, 1, 1),
+    filepath: str, channel_number=1, calibration: ChannelCalibration = ChannelCalibration(0, 1, 1)
 ) -> PicoampereSignal:
     """Helper method to extract a PicoampereSignal from a raw data file.
 
@@ -171,7 +163,7 @@ def picoampere_signal_from_data_file(
 
 def find_captures_0_single_capture_test():
     data_file = "src/tests/data/capture_windows/test_data_capture_window_0.txt.gz"
-    window = Window(3572989, 3665680)
+    window = Window(3_572_989, 3_665_680)
     data = picoampere_signal_from_data_file(data_file)
     actual_captures = [(33832 + window.start, 92691 + window.start, True)]
     signal_threshold_frac = 0.7
@@ -202,7 +194,7 @@ def find_captures_0_single_capture_test():
 
 def find_captures_0_single_capture_terminal_test():
     data_file = "src/tests/data/capture_windows/test_data_capture_window_0.txt.gz"
-    window = Window(3572989, 3665680)
+    window = Window(3_572_989, 3_665_680)
     data = picoampere_signal_from_data_file(data_file)
     actual_captures = [(33822 + window.start, 92691 + window.start, True)]
     signal_threshold_frac = 0.7
@@ -239,7 +231,7 @@ def find_captures_1_double_capture_noterminal_test():
     Test: terminal_capture_only = True returns no captures"""
     data_file = "src/tests/data/capture_windows/test_data_capture_window_1.txt.gz"
     data = picoampere_signal_from_data_file(data_file)
-    window = Window(4765695, 4858482)
+    window = Window(4_765_695, 4_858_482)
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = True
@@ -268,7 +260,7 @@ def find_captures_1_double_capture_noterminal_2_test():
     Test: terminal_capture_only = False returns 2 captures"""
     data_file = "src/tests/data/capture_windows/test_data_capture_window_1.txt.gz"
     data = picoampere_signal_from_data_file(data_file)
-    window = Window(4765695, 4858482)
+    window = Window(4_765_695, 4_858_482)
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = False
@@ -296,7 +288,7 @@ def find_captures_2_nocaptures_test():
     Test: find_captures returns no captures"""
     data_file = "src/tests/data/capture_windows/test_data_capture_window_2.txt.gz"
     data = picoampere_signal_from_data_file(data_file)
-    window = Window(3423474, 3516439)
+    window = Window(3_423_474, 3_516_439)
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = False
@@ -326,7 +318,7 @@ def find_captures_3_multicapture_terminal_test():
     """
     data_file = "src/tests/data/capture_windows/test_data_capture_window_3.txt.gz"
     data = picoampere_signal_from_data_file(data_file)
-    window = Window(1187841, 1280674)
+    window = Window(1_187_841, 1_280_674)
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = True
@@ -356,8 +348,8 @@ def find_captures_3_multicapture_nonterminal_test():
     """
     data_file = "src/tests/data/capture_windows/test_data_capture_window_3.txt.gz"
     data = picoampere_signal_from_data_file(data_file)
-    window = Window(1187841, 1280674)
-    actual_captures = [(1200088, 1201033, False), (1252611, 1280674, True)]
+    window = Window(1_187_841, 1_280_674)
+    actual_captures = [(1_200_088, 1_201_033, False), (1_252_611, 1_280_674, True)]
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = False
@@ -391,7 +383,7 @@ def find_captures_4_unfolded_terminal_test():
     """
     data_file = "src/tests/data/capture_windows/test_data_capture_window_4.txt.gz"
     data = picoampere_signal_from_data_file(data_file)
-    window = Window(5511887, 5604585)
+    window = Window(5_511_887, 5_604_585)
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = True
@@ -421,7 +413,7 @@ def find_captures_5_unfolded_terminal_test():
     """
     data_file = "src/tests/data/capture_windows/test_data_capture_window_5.txt.gz"
     data = picoampere_signal_from_data_file(data_file)
-    window = Window(965676, 1059216)
+    window = Window(965_676, 1_059_216)
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = True
@@ -441,9 +433,7 @@ def find_captures_5_unfolded_terminal_test():
         end_tol=end_tol,
     )
     assert len(captures) == 1
-    open_channel_pA = np.array(
-        [capture.open_channel_pA_calculated for capture in captures]
-    )
+    open_channel_pA = np.array([capture.open_channel_pA_calculated for capture in captures])
     low_expected_open_channel_pA = 228.5
     high_expected_open_channel_pA = 230
     # Rough check; should be ~229.05 & anything close is okay.
@@ -466,7 +456,7 @@ def find_captures_6_clog_no_open_channel_test():
     """
     data_file = "src/tests/data/capture_windows/test_data_capture_window_6.txt.gz"
     data = picoampere_signal_from_data_file(data_file)[100:]
-    window = Window(2769436, 2863265)
+    window = Window(2_769_436, 2_863_265)
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = False
@@ -486,9 +476,7 @@ def find_captures_6_clog_no_open_channel_test():
         end_tol=end_tol,
     )
     assert len(captures) == 1
-    open_channel_pA = np.array(
-        [capture.open_channel_pA_calculated for capture in captures]
-    )
+    open_channel_pA = np.array([capture.open_channel_pA_calculated for capture in captures])
     expected_open_channel_pA = 230
     all_currents_within_bounds = all(
         (np.isclose(open_channel_pA, expected_open_channel_pA, atol=0.5))
@@ -507,7 +495,7 @@ def find_captures_7_capture_no_open_channel_test():
     """
     data_file = "src/tests/data/capture_windows/test_data_capture_window_7.txt.gz"
     data = picoampere_signal_from_data_file(data_file)[100:]
-    window = Window(2919913, 3013723)
+    window = Window(2_919_913, 3_013_723)
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = False
@@ -532,9 +520,7 @@ def find_captures_7_capture_no_open_channel_test():
     # future changes are made, some tolerance can be allowed.
     expected_open_channel_pA = 230
 
-    open_channel_pA = np.array(
-        [capture.open_channel_pA_calculated for capture in captures]
-    )
+    open_channel_pA = np.array([capture.open_channel_pA_calculated for capture in captures])
     all_currents_within_bounds = all(
         (np.isclose(open_channel_pA, expected_open_channel_pA, atol=0.5))
     )
@@ -553,7 +539,7 @@ def find_captures_8_capture_no_open_channel_test():
     """
     data_file = "src/tests/data/capture_windows/test_data_capture_window_8.txt.gz"
     data = picoampere_signal_from_data_file(data_file)
-    window = Window(4875289, 4969337)
+    window = Window(4_875_289, 4_969_337)
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = False
@@ -618,9 +604,7 @@ class TestParallelFindCaptures:
         bulk_f5_fname = "src/tests/data/bulk_fast5_dummy.fast5"
 
         filters = [filtering.LengthFilter(100, None)]
-        config = GeneralConfiguration(
-            config={"n_workers": 2, "capture_directory": "src/tests"}
-        )
+        config = GeneralConfiguration(config={"n_workers": 2, "capture_directory": "src/tests"})
 
         segment_config = {
             "voltage_threshold": -180,
@@ -636,9 +620,7 @@ class TestParallelFindCaptures:
         }
         segment_config = SegmentConfiguration(segment_config)
 
-        segment.parallel_find_captures(
-            config, segment_config, overwrite=True, filters=filters
-        )
+        segment.parallel_find_captures(config, segment_config, overwrite=True, filters=filters)
 
         run_id = "d0befb838f5a9a966e3c559dc3a75a6612745849"
         actual_n_captures = 5
@@ -669,9 +651,7 @@ class TestParallelFindCaptures:
         bulk_f5_fname = "src/tests/data/bulk_fast5_dummy.fast5"
 
         filters = [filtering.LengthFilter(100, None)]
-        config = GeneralConfiguration(
-            config={"n_workers": 2, "capture_directory": "src/tests"}
-        )
+        config = GeneralConfiguration(config={"n_workers": 2, "capture_directory": "src/tests"})
 
         segment_config = {
             "voltage_threshold": -180,
@@ -687,16 +667,12 @@ class TestParallelFindCaptures:
         }
         segment_config = SegmentConfiguration(segment_config)
 
-        segment.parallel_find_captures(
-            config, segment_config, overwrite=True, filters=filters
-        )
+        segment.parallel_find_captures(config, segment_config, overwrite=True, filters=filters)
         run_id = "d0befb838f5a9a966e3c559dc3a75a6612745849"
         actual_n_captures = 5
         n_captures = 0
         capture_f5_fnames = [
-            os.path.join("src/tests/", x)
-            for x in os.listdir("src/tests/")
-            if run_id in x
+            os.path.join("src/tests/", x) for x in os.listdir("src/tests/") if run_id in x
         ]
         assert len(capture_f5_fnames) == 3
         for capture_f5_fname in capture_f5_fnames:
@@ -727,9 +703,7 @@ class TestSegment:
         bulk_f5_fname = "src/tests/data/bulk_fast5_dummy.fast5"
 
         filters = [filtering.LengthFilter(100, None)]
-        config = GeneralConfiguration(
-            config={"n_workers": 2, "capture_directory": "src/tests"}
-        )
+        config = GeneralConfiguration(config={"n_workers": 2, "capture_directory": "src/tests"})
 
         segment_config = {
             "voltage_threshold": -180,
@@ -749,9 +723,7 @@ class TestSegment:
         }
         segment_config = SegmentConfiguration(segment_config)
 
-        segment.segment(
-            bulk_f5_fname, config, segment_config, overwrite=True, filters=filters
-        )
+        segment.segment(bulk_f5_fname, config, segment_config, overwrite=True, filters=filters)
         run_id = "d0befb838f5a9a966e3c559dc3a75a6612745849"
         actual_n_captures = 5
         n_captures = 0

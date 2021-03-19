@@ -91,7 +91,7 @@ in
   test = poretitioner { doCheck = true; };
   app = app { doCheck = true; };
   lib = poretitioner { doCheck = false; };
-  
+
   # Note: Shell can only be run by using "nix-shell" (i.e. "nix-shell -A shell ./default.nix").
   # Here's an awesome, easy-to-read overview of nix shells: https://ghedam.at/15978/an-introduction-to-nix-shell
   shell = mkShell {

@@ -13,6 +13,7 @@ from typing import List, Optional
 
 import h5py
 import numpy as np
+
 from src.poretitioner.fast5s import CaptureFile
 from src.poretitioner.logger import Logger, getLogger
 from src.poretitioner.utils.classify import ClassifierFile
@@ -446,7 +447,9 @@ def calc_time_until_capture_intervals(
         List of the average time between captures, where each item in this list
         corresponds to an entry in the input list intervals.
     """
-    intervals: List[Window] = intervals if intervals is not None else []  # Defaults to empty list.
+    intervals: List[Window] = (
+        intervals if intervals is not None else []
+    )  # Defaults to empty list.
 
     assert len(intervals) > 0
     capture_times = []

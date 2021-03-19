@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections import namedtuple
 from dataclasses import dataclass
 from os import PathLike
-from typing import Dict, List, Optional, TypeVar, Union, Sequence
+from typing import Dict, List, Optional, Sequence, TypeVar, Union
 
 import numpy as np
 
@@ -180,5 +180,5 @@ def stripped_by_keys(dictionary: Optional[Dict], keys_to_keep: Sequence) -> Dict
         Dictionary containing only keys from `keys_to_keep`.
     """
     dictionary = {} if dictionary is None else dictionary
-    dictionary = { key: value for key, value in dictionary.items() if key in keys_to_keep }
+    dictionary = {key: value for key, value in dictionary.items() if key in keys_to_keep}
     return dictionary

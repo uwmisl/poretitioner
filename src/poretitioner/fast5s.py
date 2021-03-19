@@ -13,10 +13,9 @@ from pathlib import Path, PurePosixPath
 from typing import Dict, List, NewType, Optional, Union
 
 import h5py
-from .utils.filtering import PATH as FILTER_PATH
-from .utils.filtering import FilterPlugin, RangeFilter
 
 from .application_info import get_application_info
+from .fast5s import FilterSet
 from .logger import Logger, getLogger
 from .signals import (
     CaptureMetadata,
@@ -27,6 +26,8 @@ from .signals import (
 )
 from .utils.configuration import FilterConfig, SegmentConfiguration
 from .utils.core import NumpyArrayLike, PathLikeOrString
+from .utils.filtering import PATH as FILTER_PATH
+from .utils.filtering import FilterPlugin, RangeFilter
 
 __all__ = ["BulkFile", "CaptureFile", "channel_path_for_read_id", "signal_path_for_read_id"]
 
@@ -91,7 +92,7 @@ def format_read_id(read_id: str) -> str:
     Returns
     -------
     str
-        Read_id string, which 
+        Read_id string, which
     """
     return read_id if read_id.startswith("read_") else f"read_{read_id}"
 
@@ -174,12 +175,18 @@ class BaseFile:
             Path to the fast5 file to interface with.
 
         mode : str, optional
+
             File mode, valid modes are:
-            - "r" 	Readonly, file must exist (default)
-            - "r+" 	Read/write, file must exist
-            - "w" 	Create file, truncate if exists
-            - "w-" or "x" 	Create file, fail if exists
-            - "a" 	Read/write if exists, create otherwise
+
+            "r" 	Readonly, file must exist (default)
+
+            "r+" 	Read/write, file must exist
+
+            "w" 	Create file, truncate if exists
+
+            "w-" or "x" 	Create file, fail if exists
+
+            "a" 	Read/write if exists, create otherwise
 
         logger : Logger, optional
             Logger to use, by default getLogger()
@@ -187,7 +194,7 @@ class BaseFile:
         Raises
         ------
         OSError
-            File couldn't be opened (e.g. didn't exist, OS 'Resource temporarily unavailable'). Details in message.
+            File couldn't be opened (e.g. didn't exist, OS Resource temporarily unavailable). Details in message.
         ValueError
             File had validation errors, details in message.
         """
@@ -261,7 +268,6 @@ class BaseFile:
 
 
 class BulkFile(BaseFile):
-
     def __init__(
         self, bulk_filepath: PathLikeOrString, mode: str = "r", logger: Logger = getLogger()
     ):
@@ -273,12 +279,18 @@ class BulkFile(BaseFile):
             File path to the bulk fast 5 file.
 
         mode : str, optional
+
             File mode, valid modes are:
-            - "r" 	Readonly, file must exist (default)
-            - "r+" 	Read/write, file must exist
-            - "w" 	Create file, truncate if exists
-            - "w-" or "x" 	Create file, fail if exists
-            - "a" 	Read/write if exists, create otherwise
+
+            "r" 	Readonly, file must exist (default)
+
+            "r+" 	Read/write, file must exist
+
+            "w" 	Create file, truncate if exists
+
+            "w-" or "x" 	Create file, fail if exists
+
+            "a" 	Read/write if exists, create otherwise
 
         logger : Logger, optional
             Logger to use, by default getLogger()
@@ -286,7 +298,8 @@ class BulkFile(BaseFile):
         Raises
         ------
         OSError
-            Bulk file couldn't be opened (e.g. didn't exist, OS 'Resource temporarily unavailable'). Details in message.
+            Bulk file couldn't be opened e.g. didn't exist,
+            OS Resource temporarily unavailable. Details in message.
         ValueError
             Bulk file had validation errors, details in message.
         """
@@ -495,19 +508,26 @@ class CaptureFile(BaseFile):
         capture_filepath : PathLikeOrString
             Path to the capture file. Capture files are the result of running `poretitioner segment` on a bulk file.
         mode : str, optional
+
             File mode, valid modes are:
-            - "r" 	Readonly, file must exist (default)
-            - "r+" 	Read/write, file must exist
-            - "w" 	Create file, truncate if exists
-            - "w-" or "x" 	Create file, fail if exists
-            - "a" 	Read/write if exists, create otherwise
+
+            "r" 	Readonly, file must exist (default)
+
+            "r+" 	Read/write, file must exist
+
+            "w" 	Create file, truncate if exists
+
+            "w-" or "x" 	Create file, fail if exists
+
+            "a" 	Read/write if exists, create otherwise
         logger : Logger, optional
             Logger to use, by default getLogger()
 
         Raises
         ------
         OSError
-            Capture file couldn't be opened (e.g. didn't exist, OS 'Resource temporarily unavailable'). Details in message.
+            Capture file couldn't be opened
+            (e.g. didn't exist, OS Resource temporarily unavailable). Details in message.
         ValueError
             Capture file had validation errors, details in message.
         """
@@ -520,7 +540,7 @@ class CaptureFile(BaseFile):
     def initialize_from_bulk(
         self,
         bulk_f5: BulkFile,
-        capture_criteria: List[RangeFilter],
+        capture_criteria: FilterSet,
         segment_config: SegmentConfiguration,
         sub_run: Optional[SubRun] = None,
     ):
@@ -530,12 +550,12 @@ class CaptureFile(BaseFile):
         ----------
         bulk_f5 : BulkFile
             Bulk Fast5 file, generated from an Oxford Nanopore experiment.
-        capture_criteria : List[RangeFilter]
-            Filters that define what 
+        capture_criteria : FilterSet
+            Filters that refine what signals can even potentially count as captures.
         segment_config : SegmentConfiguration
-            [description]
+            Configuration for the segmenter.
         sub_run : Optional[SubRun], optional
-            [description], by default None
+            The sub run that identifies a period in time, if any, by default None
 
         Raises
         ------
@@ -604,7 +624,7 @@ class CaptureFile(BaseFile):
                     save_value = json.dumps(value)
                 except TypeError:
                     # In case the object isn't easily serializable
-                    save_value = json.dumps({k: v.__dict__ for k, v in value.items()})    
+                    save_value = json.dumps({k: v.__dict__ for k, v in value.items()})
                 context_id_group.create_dataset(key, data=save_value)
 
         for filter_plugin in capture_criteria:

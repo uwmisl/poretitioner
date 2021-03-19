@@ -78,9 +78,7 @@ class ChannelCalibration:
     digitisation: int
 
 
-class SignalMetadata(
-    namedtuple("SignalMetadata", ["channel_number", "window", "calibration"])
-):
+class SignalMetadata(namedtuple("SignalMetadata", ["channel_number", "window", "calibration"])):
     """Metadata around a signal."""
 
 
@@ -325,9 +323,7 @@ class FractionalizedSignal(CurrentSignal):
         self.open_channel_pA = getattr(obj, "open_channel_pA", None)
 
     def __reduce__(self):
-        reconstruct, arguments, object_state = super(
-            FractionalizedSignal, self
-        ).__reduce__()
+        reconstruct, arguments, object_state = super(FractionalizedSignal, self).__reduce__()
         # Create a custom state to pass to __setstate__ when this object is deserialized.
         info = self.serialize_info(open_channel_pA=self.open_channel_pA)
         new_state = object_state + (info,)
@@ -472,10 +468,7 @@ class PicoampereSignal(CurrentSignal):
         read_id = self.read_id
 
         raw = RawSignal(
-            digitize_current(self, calibration),
-            channel_number,
-            calibration,
-            read_id=read_id,
+            digitize_current(self, calibration), channel_number, calibration, read_id=read_id
         )
 
         return raw
@@ -655,10 +648,7 @@ class Channel:
         """
 
         open_channel_median_pA = find_open_channel_current(
-            picoamperes,
-            open_channel_guess,
-            open_channel_bound,
-            default=open_channel_default,
+            picoamperes, open_channel_guess, open_channel_bound, default=open_channel_default
         )
         self = cls.__new__(cls)
         # We're using this esoteric __setattr__ method so we can keep the dataclass frozen while setting its initial attributes
@@ -896,9 +886,9 @@ def find_open_channel_current(
         open_channel_bound = 0.1 * open_channel_guess
     upper_bound = open_channel_guess + open_channel_bound
     lower_bound = open_channel_guess - open_channel_bound
-    ix_in_range = np.where(
-        np.logical_and(picoamperes <= upper_bound, picoamperes > lower_bound)
-    )[0]
+    ix_in_range = np.where(np.logical_and(picoamperes <= upper_bound, picoamperes > lower_bound))[
+        0
+    ]
     if len(ix_in_range) == 0:
         channel_number = getattr(picoamperes, "channel_number", "N/A")
         log.info(
@@ -958,9 +948,7 @@ def find_signal_off_regions(
         return []
 
 
-def find_segments_below_threshold(
-    time_series: NumpyArrayLike, threshold: float
-) -> List[Window]:
+def find_segments_below_threshold(time_series: NumpyArrayLike, threshold: float) -> List[Window]:
     """
     Find regions where the time series data points drop at or below the
     specified threshold.
@@ -979,15 +967,11 @@ def find_segments_below_threshold(
         Each window in the list represents the (start, end) points of regions
         where the input array drops at or below the threshold.
     """
-    diff_points = np.where(
-        np.abs(np.diff(np.where(time_series <= threshold, 1, 0))) == 1
-    )[0]
+    diff_points = np.where(np.abs(np.diff(np.where(time_series <= threshold, 1, 0))) == 1)[0]
     if time_series[0] <= threshold:
         diff_points = np.hstack([[0], diff_points])
     if time_series[-1] <= threshold:
         diff_points = np.hstack([diff_points, [len(time_series)]])
 
-    windows = [
-        Window(start, end) for start, end in zip(diff_points[::2], diff_points[1::2])
-    ]
+    windows = [Window(start, end) for start, end in zip(diff_points[::2], diff_points[1::2])]
     return windows

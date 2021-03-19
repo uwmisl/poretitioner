@@ -12,7 +12,6 @@ import re
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-
 # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
 # from . import filter
 from typing import Dict, Iterable, List, Optional
@@ -133,9 +132,7 @@ def find_captures(
     frac_current = signal_pA.to_fractionalized(open_channel_pA_calculated)
 
     # Apply signal threshold & get list of captures
-    potential_captures = find_windows_below_threshold(
-        frac_current, signal_threshold_frac
-    )
+    potential_captures = find_windows_below_threshold(frac_current, signal_threshold_frac)
     del frac_current
 
     captures = []
@@ -146,10 +143,7 @@ def find_captures(
 
         # Figure out whether the capture was ejected
         ejected = False
-        if (
-            np.abs(capture_window.end - (potential_capture.end + capture_window.start))
-            <= end_tol
-        ):
+        if np.abs(capture_window.end - (potential_capture.end + capture_window.start)) <= end_tol:
             ejected = True
 
         # Save the updated capture info
@@ -298,9 +292,7 @@ def _prep_capture_windows(
     local_logger = logger.getLogger()
     with BulkFile(bulk_f5_fname) as bulk_f5:
         local_logger.info(f"Reading in signals for bulk file: {bulk_f5_fname}")
-        voltage = bulk_f5.get_voltage(
-            start=sub_run_start_seconds, end=sub_run_end_seconds
-        )
+        voltage = bulk_f5.get_voltage(start=sub_run_start_seconds, end=sub_run_end_seconds)
         local_logger.debug(f"voltage: {voltage}")
 
         run_id = bulk_f5.run_id
@@ -343,9 +335,7 @@ def _prep_capture_windows(
                     None,
                 )
                 metadata = SignalMetadata(
-                    channel_number=channel_number,
-                    window=capture_window,
-                    calibration=calibration,
+                    channel_number=channel_number, window=capture_window, calibration=calibration
                 )
 
                 unsegmented_signals.append(unsegmented_signal)
@@ -609,17 +599,11 @@ def parallel_find_captures(
                     n_in_file = 0
                     file_no += 1
                     capture_file.f5.close()
-                    capture_f5_filepath = Path(
-                        save_location, f"{run_id}_{file_no}.fast5"
-                    )
-                    local_logger.info(
-                        f"capture_fname:{capture_f5_filepath} n_in_file:{n_in_file}"
-                    )
+                    capture_f5_filepath = Path(save_location, f"{run_id}_{file_no}.fast5")
+                    local_logger.info(f"capture_fname:{capture_f5_filepath} n_in_file:{n_in_file}")
                     mode = "w"
                     capture_file = CaptureFile(capture_f5_filepath, mode=mode)
-                    capture_file.initialize_from_bulk(
-                        bulk, filters, segment_config, sub_run=None
-                    )
+                    capture_file.initialize_from_bulk(bulk, filters, segment_config, sub_run=None)
 
                 n_in_file += 1
 
@@ -633,12 +617,9 @@ def parallel_find_captures(
                     f"\tLength of raw signal:  {len(raw_signal)}, mean+/stdv: {np.mean(raw_signal)} +/- {np.std(raw_signal)}"
                 )
 
-                local_logger.info(
-                    f"\tWriting read {read_id} to file: {capture_f5_filepath}..."
-                )
+                local_logger.info(f"\tWriting read {read_id} to file: {capture_f5_filepath}...")
 
                 capture_file.write_capture(raw_signal, capture_metadata)
-
 
                 local_logger.debug(f"\tWritten!")
 
@@ -671,9 +652,7 @@ def judge_channels(
         off = []
         for start in range(0, len(raw), slide):
             window_mean = np.mean(raw[start : start + window_sz])
-            if window_mean < np.abs(current_range) and window_mean > -np.abs(
-                current_range
-            ):
+            if window_mean < np.abs(current_range) and window_mean > -np.abs(current_range):
                 off.append(True)
             else:
                 off.append(False)

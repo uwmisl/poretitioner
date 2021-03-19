@@ -2,6 +2,7 @@ import pickle
 
 import numpy as np
 import pytest
+
 from src.poretitioner.fast5s import BulkFile
 from src.poretitioner.signals import (
     BaseSignal,
@@ -84,8 +85,7 @@ class TestBaseSignal:
 
 class TestCurrentSignal:
     def channel_number_is_always_greater_than_zero_test(self):
-        """Oxford nanopore uses one-based indexing for channel indicies. It should never be less than 0.
-        """
+        """Oxford nanopore uses one-based indexing for channel indicies. It should never be less than 0."""
         bad_channel_number: int = 0
 
         with pytest.raises(ValueError):

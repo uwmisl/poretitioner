@@ -8,6 +8,7 @@ This module contains tests for quantify.py functionality.
 """
 import h5py
 import numpy as np
+
 import src.poretitioner.utils.quantify as quantify
 from src.poretitioner.utils.core import Window
 

@@ -126,9 +126,7 @@ class FilterPlugin(metaclass=ABCMeta):
 
 
 class RangeFilter(FilterPlugin):
-    def __init__(
-        self, minimum: Optional[float] = None, maximum: Optional[float] = None
-    ):
+    def __init__(self, minimum: Optional[float] = None, maximum: Optional[float] = None):
         """A filter that filters based on whether a signal falls between a maximum and a minimum.
 
         Parameters
@@ -302,9 +300,7 @@ class MyCustomFilter(FilterPlugin):
         return meets_criteria
 
 
-def apply_feature_filters(
-    capture: CaptureOrTimeSeries, filters: List[FilterPlugin]
-) -> bool:
+def apply_feature_filters(capture: CaptureOrTimeSeries, filters: List[FilterPlugin]) -> bool:
     """
     Check whether an array of current values (i.e. a single nanopore capture)
     passes a set of filters. Filters can be based on summary statistics
@@ -435,9 +431,7 @@ def filter_and_store_result(config, fast5_files, filter_name, overwrite=False):
             write_filter_results(f5, config, passed_read_ids, filter_name)
 
 
-def filter_like_existing(
-    config, example_fast5, example_filter_path, fast5_files, new_filter_path
-):
+def filter_like_existing(config, example_fast5, example_filter_path, fast5_files, new_filter_path):
     # Filters a set of fast5 files exactly the same as an existing filter
     # TODO : #68 : implement
     raise NotImplementedError()
