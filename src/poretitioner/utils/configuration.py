@@ -18,7 +18,7 @@ import dataclasses
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, NewType
+from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 
 import numpy as np
 
@@ -30,6 +30,7 @@ from .core import stripped_by_keys, PathLikeOrString
 from .filtering import Filters, FilterSet
 from .filtering import FilterConfig, FilterConfigs
 from .filtering import get_filters
+
 
 @dataclass(frozen=True)
 class CONFIG:
@@ -134,7 +135,10 @@ class BaseConfiguration(metaclass=ABCMeta):
         return names
 
     def initialize_fields(
-        self, command_line_args: Dict = None, config: Dict = None, log: Optional[Logger] = None
+        self,
+        command_line_args: Dict = None,
+        config: Dict = None,
+        log: Optional[Logger] = None,
     ):
         """[summary]
         #TODO
@@ -175,7 +179,10 @@ class BaseConfiguration(metaclass=ABCMeta):
         """
         raise ValueError("Configuration was invalid.")
 
-PoretitionerConfig = NewType("PoretitionerConfig", Dict[str, Union[BaseConfiguration, FilterSet]])
+
+PoretitionerConfig = NewType(
+    "PoretitionerConfig", Dict[str, Union[BaseConfiguration, FilterSet]]
+)
 
 
 @dataclass(frozen=True)
@@ -208,7 +215,6 @@ class GeneralConfiguration(BaseConfiguration):
             command_line_args, self.valid_field_names
         )  # Only keep filter-related command line args
         self.initialize_fields(command_line_args=command_line_args, config=config)
-
 
     def validate(self):
         raise NotImplementedError("Not implemented configuration")
@@ -247,10 +253,16 @@ class SegmentConfiguration(BaseConfiguration):
         command_line_args = stripped_by_keys(
             command_line_args, self.valid_field_names
         )  # Only keep filter-related command line args
-        self.initialize_fields(command_line_args=command_line_args, config=config, log=log)
+        self.initialize_fields(
+            command_line_args=command_line_args, config=config, log=log
+        )
 
-    def initialize_fields(self, command_line_args: Dict, config: Dict, log: Optional[Logger] = None):
-        super().initialize_fields(command_line_args=command_line_args, config=config, log=log)
+    def initialize_fields(
+        self, command_line_args: Dict, config: Dict, log: Optional[Logger] = None
+    ):
+        super().initialize_fields(
+            command_line_args=command_line_args, config=config, log=log
+        )
 
         # Overwrite with actual capture criteria
         capture_criteria_filter_configs: FilterConfigs = {
@@ -260,7 +272,6 @@ class SegmentConfiguration(BaseConfiguration):
 
         capture_criteria = get_filters(capture_criteria_filter_configs)
         object.__setattr__(self, "capture_criteria", capture_criteria)
-
 
     def validate(self):
         # TODO: Validation
@@ -323,7 +334,11 @@ def get_filter_set(
     return filter_set
 
 
-def readconfig(path: PathLikeOrString, command_line_args: Optional[Dict[str, Any]] = None, log: Logger = getLogger()) -> PoretitionerConfig:
+def readconfig(
+    path: PathLikeOrString,
+    command_line_args: Optional[Dict[str, Any]] = None,
+    log: Logger = getLogger(),
+) -> PoretitionerConfig:
     """Read configuration from the path.
 
     Exceptions
@@ -369,7 +384,7 @@ def readconfig(path: PathLikeOrString, command_line_args: Optional[Dict[str, Any
         CONFIG.GENERAL: general_configuration,
         CONFIG.SEGMENTATION: segmentation_configuration,
         CONFIG.FILTER: filter_set,
-        CONFIG.CLASSIFICATION: {}
+        CONFIG.CLASSIFICATION: {},
     }
 
     return configs

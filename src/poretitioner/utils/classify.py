@@ -11,8 +11,7 @@ import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import PosixPath
-from typing import List
-from typing import NewType, Callable
+from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 
 import numpy as np
 import torch
@@ -22,7 +21,7 @@ from ..logger import Logger, getLogger
 from ..signals import Capture, FractionalizedSignal, RawSignal
 
 # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-#from .models import NTERs_trained_cnn_05152019 as pretrained_model
+# from .models import NTERs_trained_cnn_05152019 as pretrained_model
 from . import filtering
 from .configuration import ClassifierConfiguration
 from .core import PathLikeOrString
@@ -575,7 +574,9 @@ class PytorchClassifierPlugin(ClassifierPlugin):
         #   https://pytorch.org/docs/stable/tensor_attributes.html#torch-device
         device = "cpu" if not use_cuda else "cuda"
 
-        state_dict = torch.load(str(state_dict_filepath), map_location=torch.device(device))
+        state_dict = torch.load(
+            str(state_dict_filepath), map_location=torch.device(device)
+        )
         torch_module.load_state_dict(state_dict, strict=True)
 
         # Sets the model to inference mode

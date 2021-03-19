@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections import namedtuple
 from dataclasses import dataclass
 import dataclasses
-from typing import Dict, List, Optional
+from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 
 import numpy as np
 import h5py
@@ -656,7 +656,6 @@ class Channel(DataclassHDF5GroupSerialable):
         object.__setattr__(self, "sampling_rate", sampling_rate)
         return self
 
-
     @classmethod
     def from_group(cls, group: h5py.Group) -> HDF5GroupSerializable:
         """Serializes this object FROM an HDF5 Group.
@@ -718,6 +717,7 @@ class CaptureMetadata:
 @dataclass(frozen=True)
 class ChannelInfo(HDF5GroupSerializable):
     pass
+
 
 @dataclass(frozen=True)
 class Capture:

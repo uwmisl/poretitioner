@@ -12,7 +12,7 @@ import logging
 from logging import Logger
 import colorlog
 
-from typing import NewType, Optional
+from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 
 Logger = NewType("Logger", Logger)
 __all__ = ["configure_root_logger", "getLogger", "verbosity_to_log_level", "Logger"]
@@ -52,7 +52,9 @@ def verbosity_to_log_level(verbosity: int = 0) -> int:
     return log_level
 
 
-def configure_root_logger(verbosity: int = 0, debug: bool = False, format: Optional[str] = None):
+def configure_root_logger(
+    verbosity: int = 0, debug: bool = False, format: Optional[str] = None
+):
     """Configures a logger for usage throughout the application.
 
     This should be called once during the initialization process, configured
@@ -73,7 +75,7 @@ def configure_root_logger(verbosity: int = 0, debug: bool = False, format: Optio
     handler = colorlog.StreamHandler()
 
     # DEFAULT_FORMAT Adds filename and line number for debug-mode outputs
-    DEFAULT_FORMAT=f"%(log_color)s[%(asctime)s] [%(levelname)-8s] --- %(message)s {'(%(filename)s:%(lineno)s)' if debug else '' }"
+    DEFAULT_FORMAT = f"%(log_color)s[%(asctime)s] [%(levelname)-8s] --- %(message)s {'(%(filename)s:%(lineno)s)' if debug else '' }"
     format = format if format is not None else DEFAULT_FORMAT
     formatter = colorlog.ColoredFormatter(format, style="%")
     handler.setFormatter(formatter)

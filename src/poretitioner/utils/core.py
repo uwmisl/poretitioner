@@ -13,10 +13,15 @@ from collections import namedtuple
 from dataclasses import dataclass, Field, fields
 import dataclasses
 from os import PathLike
-from typing import Any, Dict, Iterable, List, Mapping, Optional, NewType, Protocol, Union, Sequence, Type
+from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 from h5py import File as Fast5File
 import h5py
-from .exceptions import HDF5SerializationException, HDF5GroupSerializationException, CaptureSchemaVersionException
+from h5py._hl.base import Empty
+from .exceptions import (
+    HDF5SerializationException,
+    HDF5GroupSerializationException,
+    CaptureSchemaVersionException,
+)
 from pathlib import PosixPath
 from .plugin import Plugin
 from ..logger import Logger, getLogger
@@ -35,6 +40,7 @@ __all__ = [
 
 # Generic wrapper type for array-like data. Normally we'd use numpy's arraylike type, but that won't be available until
 # Numpy 1.21: https://stackoverflow.com/questions/40378427/numpy-formal-definition-of-array-like-objects
+
 
 class NumpyArrayLike(np.ndarray):
     def __new__(cls, signal: NumpyArrayLike):
@@ -86,7 +92,6 @@ class NumpyArrayLike(np.ndarray):
         super().__setstate__(state[0:-1])
 
 
-
 # Unique identifier for a nanopore read.
 ReadId = NewType("ReadId", str)
 
@@ -97,7 +102,12 @@ PathLikeOrString = Union[str, PathLike]
 ###       Dataclass Helpers      ###
 ####################################
 
-def types_by_field(object: Any) -> Mapping[str, Type[Any]]:
+
+def dataclass_fieldnames(anything: Any) -> AbstractSet[str]:
+    return types_by_field(anything).keys()
+
+
+def types_by_field(anything: Any) -> Mapping[str, Type[Any]]:
     """Returns a mapping of an objects fields/attributes to the type of those fields.
 
     Parameters
@@ -110,17 +120,22 @@ def types_by_field(object: Any) -> Mapping[str, Type[Any]]:
     Dict[str, type]
         Mapping of an attribute name to its type.
     """
-    types_by_field: Mapping[str, Type[Any]] = {}
-    if dataclasses.is_dataclass(object):
-        types_by_field = {field.name:field.type for field in dataclasses.fields(object)}
+    types_by_field: Mapping[str, Type[type]] = {}
+    if dataclasses.is_dataclass(anything):
+        types_by_field = {
+            field.name: field.type for field in dataclasses.fields(anything)
+        }
     else:
-        types_by_field = {name: type(attribute) for name, attribute in vars(object).items()}
+        types_by_field = {
+            name: type(attribute) for name, attribute in vars(anything).items()
+        }
     return types_by_field
 
 
 ####################################
 ###         Fast5 Helpers        ###
 ####################################
+
 
 def hdf5_dtype(object: Any) -> Optional[np.dtype]:
     """Returns the proper h5py dtype for an object, if one is necessary.
@@ -149,12 +164,14 @@ def hdf5_dtype(object: Any) -> Optional[np.dtype]:
     if isinstance(object, str):
         return h5py.string_dtype(length=len(object))
     elif hasattr(object, "dtype"):
-         # Is this already a numpy-like object with a dtype? If so, just use that.
+        # Is this already a numpy-like object with a dtype? If so, just use that.
         return object.dtype
-    return None # For most cases, h5py can determine the dtype from the data itself.
+    return None  # For most cases, h5py can determine the dtype from the data itself.
+
 
 class HasFast5(Protocol):
     f5: Fast5File
+
 
 # Note: We never create or instantiate AttributeManagers directly, instead we borrow its interface.
 #       3 Laws to keep in mind with Attributes:
@@ -168,11 +185,146 @@ class HasFast5(Protocol):
 #
 #       https://docs.h5py.org/en/stable/high/attr.html
 
-HDF5_Dataset = NewType("HDF5_Dataset", h5py.Dataset)
-HDF5_Group = NewType("HDF5_Group", h5py.Group)
-HDF5_Attribute = NewType("HDF5_Attribute", h5py.AttributeManager)
+# HDF5_Dataset = NewType("HDF5_Dataset", h5py.Dataset)
+# HDF5_Group = NewType("HDF5_Group", h5py.Group)
+# HDF5_Attribute = NewType("HDF5_Attribute", h5py.AttributeManager)
 
-HDF5_Type = Union[HDF5_Attribute, HDF5_Dataset, HDF5_Group]
+
+class HasAttrs(Protocol):
+    attrs: HDF5_Attribute
+
+    def create_attr(self, name: str, value: Optional[Any]):
+        """Adds an attribute to the current object.
+
+        Any existing attribute with this name will be overwritten.
+
+        Parameters
+        ----------
+        field_name : str
+            Name of the attribute.
+        value : Optional[Any]
+            Value of the attribute.
+        """
+        ...
+
+
+class HDF5AttributeHaving(HasAttrs):
+    def __init__(self, has_attrs: HasAttrs = None):
+        super().__init__()
+        self.attrs = self.attrs if has_attrs is None else has_attrs.attrs
+
+    def create_attr(
+        self, name: str, value: Optional[Any], log: Optional[Logger] = None
+    ):
+        """Adds an attribute to the current object.
+
+        WARNING: Any existing attribute will be overwritten!
+
+        This method will coerce value to a special 'Empty' type used by HDF5 if the value
+        provided is zero-length or None. For more on Attributes and Empty types, see [1, 2]
+
+        [1] - https://docs.h5py.org/en/stable/high/attr.html#attributes
+        [2] - https://docs.h5py.org/en/stable/high/dataset.html?highlight=Empty#creating-and-reading-empty-or-null-datasets-and-attributes
+
+        Parameters
+        ----------
+        name : str
+            Name of the attribute.
+        value : Optional[Any]
+            Value of the attribute. This method will coerce this value
+            to a special Empty object if it's zero-length or None [2].
+        """
+        use_value = (
+            value is not None and len(value) > 0
+        )  # Only uses the provided value if it's non-empty.
+        if not use_value:
+            empty = h5py.Empty(dtype=np.uint8)
+            self.attrs.create(name, empty)
+        else:
+            self.attrs.create(name, value, dtype=hdf5_dtype(value))
+
+    def object_from_attr(
+        self, name: str, log: Optional[Logger] = None
+    ) -> Optional[Any]:
+        log = log if log is not None else getLogger()
+        try:
+            attr_value = self.attrs[name]
+        except AttributeError:
+            log.warning(
+                f"Could not find an attribute with the name '{name}' on object {self!r}. Returning None"
+            )
+            return None
+
+        if attr_value.shape is None:
+            """
+            From the Docs:
+
+            An empty dataset has shape defined as None,
+            which is the best way of determining whether a dataset is empty or not.
+            An empty dataset can be “read” in a similar way to scalar datasets.
+
+            [1] - https://docs.h5py.org/en/stable/high/dataset.html?highlight=Empty#creating-and-reading-empty-or-null-datasets-and-attributes
+            """
+            return None
+        return bytes.decode(bytes(attr_value), encoding="utf-8")
+
+    def copy_attr(self, name: str, source: HDF5AttributeHaving):
+        """Copy a single attribute from a source.
+        This will overwrite any attribute of this name, if one exists.
+
+        Parameters
+        ----------
+        name : str
+            Which attribute to copy.
+        from : HDF5AttributeHaving
+            Which attribute-haver to copy from.
+        """
+        self.create_attr(name, source.attrs[name])
+
+    def copy_all_attrs(self, source: HDF5AttributeHaving):
+        """Copy a all attributes from a source.
+        This will overwrite any attributes sharing the same names, if any exists.
+
+        Parameters
+        ----------
+        from : HDF5AttributeHaving
+            Which attribute-haver to copy all attributes from.
+        """
+        for name in source.attrs.keys():
+            self.copy_attr(name, source)
+
+
+class HDF5_Dataset(HDF5AttributeHaving, h5py.Dataset):
+    def __init__(self, dataset: h5py.Dataset):
+        super().__init__()
+        self._dataset = dataset
+
+    def __getattr__(self, attrib: str):
+        return getattr(self._dataset, attrib)
+
+
+class HDF5_Group(h5py.Group, HDF5AttributeHaving):
+    @property
+    def parent(self) -> HDF5_Group:
+        return HDF5_Group(self._group.parent)
+
+    def __init__(self, group: h5py.Group):
+        self._group = group
+
+    def __getattr__(self, attrib: str):
+        return getattr(self._group, attrib)
+
+
+class HDF5_Attribute(h5py.AttributeManager):
+    def __init__(self, attrs: h5py.AttributeManager):
+        self.attrs = attrs
+
+    def __getattr__(self, attrib: str):
+        return getattr(self.attrs, attrib)
+
+
+HDF5_Type = Union[HDF5_Dataset, HDF5_Group, HDF5_Attribute]
+
 
 class HDF5Serializing(ABC, Plugin):
     """Any object that can be HDFSserialized.
@@ -181,6 +333,7 @@ class HDF5Serializing(ABC, Plugin):
 
     Don't instantiate this directly, rather subclass.
     """
+
     @classmethod
     @abstractmethod
     def from_a(cls, a: HDF5_Type, log: Optional[Logger] = None) -> HDF5Serializing:
@@ -204,7 +357,9 @@ class HDF5Serializing(ABC, Plugin):
         NotImplementedError
             This method wasn't implemented, but needs to be.
         """
-        raise NotImplementedError(f"{cls!s} is missing an implementation for {HDF5Serializing.from_a.__name__}")
+        raise NotImplementedError(
+            f"{cls!s} is missing an implementation for {HDF5Serializing.from_a.__name__}"
+        )
 
     @abstractmethod
     def as_a(self, a: HDF5_Type, log: Optional[Logger] = None) -> HDF5_Type:
@@ -228,80 +383,34 @@ class HDF5Serializing(ABC, Plugin):
         NotImplementedError
             This method wasn't implemented, but needs to be.
         """
-        raise NotImplementedError(f"{self!s} is missing an implementation for {HDF5Serializing.as_a.__name__}!")
-
-class HDF5AttributeSerializing(HDF5Serializing):
-    @classmethod
-    def name(cls) -> str:
-        """Attribute name that this object will be stored under.
-        i.e. If this method returns "KarlMarx", then a subsequent call to
-
-        `self.as_attribute(Group("/Foo/bar/"))`
-
-        Will result in an attribute 'KarlMarx' at /Foo/bar
-
-        Be double-sure to override this if you want it to be anything other than the class name.
-
-        Returns
-        -------
-        str
-            Name to use in the Fast5 file.
-        """
-        return cls.__name__
+        raise NotImplementedError(
+            f"{self!s} is missing an implementation for {HDF5Serializing.as_a.__name__}!"
+        )
 
     @abstractmethod
-    def from_a(cls, a: HDF5_Attribute, log: Optional[Logger] = None) -> HDF5AttributeSerializing:
-        """Creates an instance of this class (from) (a) HDF5_Type.
+    def update(self, log: Optional[Logger] = None):
+        """Makes sure any changes have been reflected in the underlying object.
 
         Parameters
         ----------
-        a : HDF5_Types
-            Instance of an HDF5Type (e.g. a h5py.Group).
-
-        log : Logger, optional
-            Logger to use for information/warnings/debug
-
-        Returns
-        -------
-        HDF5Serializing
-            An instance of this class with data derived from (a) HDF5_Type.
+        log : Optional[Logger], optional
+            Logger to use, by default None
 
         Raises
         ------
         NotImplementedError
-            This method wasn't implemented, but needs to be.
+            This method wasn't implemented.
         """
-        raise NotImplementedError(f"{cls!s} is missing an implementation for {HDF5Serializing.from_a.__name__}")
-
-    @abstractmethod
-    def as_a(self, a: HDF5_Attribute, log: Optional[Logger] = None) -> HDF5_Attribute:
-        """Returns this object, formatted (as) (a) HDF5_Attribute.
-
-        Parameters
-        ----------
-        a : HDF5_Attribute
-            An HDF5 attribute types we understand.
-
-        log : Logger, optional
-            Logger to use for information/warnings/debug
-
-        Returns
-        -------
-        HDF5_Type
-            This object serialized to a given HDF5 type.
-
-        Raises
-        ------
-        NotImplementedError
-            This method wasn't implemented, but needs to be.
-        """
-        raise NotImplementedError(f"{self!s} is missing an implementation for {HDF5Serializing.as_a.__name__}!")
+        raise NotImplementedError(
+            f"{self!s} is missing an implementation for {HDF5Serializing.update.__name__}!"
+        )
 
 
-class HDF5GroupSerializing(HDF5Serializing):
+class HDF5GroupSerializing(HDF5Serializing, HDF5AttributeHaving):
     """Objects adhering to the `HDF5GroupSerializable` can be written to and
     read directly from hd5 Groups.
     """
+
     @classmethod
     def name(cls) -> str:
         """Group name that this object will be stored under.
@@ -320,7 +429,9 @@ class HDF5GroupSerializing(HDF5Serializing):
         """
         return cls.__name__
 
-    def as_group(self, parent_group: h5py.Group, log: Optional[Logger] = None) -> h5py.Group:
+    def as_group(
+        self, parent_group: HDF5_Group, log: Optional[Logger] = None
+    ) -> HDF5_Group:
         """Stores and Returns this object as an HDF5 Group, rooted at the group passed in.
         This should be useable to directly set the contents of an Hdf5 group.
         This method should also create the group named 'name' in the parent_group, if it doesn't already exist.
@@ -352,7 +463,9 @@ class HDF5GroupSerializing(HDF5Serializing):
         ...
 
     @classmethod
-    def from_group(cls, group: h5py.Group, log: Optional[Logger] = None) -> HDF5GroupSerializable:
+    def from_group(
+        cls, group: HDF5_Group, log: Optional[Logger] = None
+    ) -> HDF5GroupSerializable:
         """Serializes this object FROM an HDF5 Group.
 
         class Baz(HDF5GroupSerializable):
@@ -386,6 +499,10 @@ class HDF5GroupSerializable(HDF5GroupSerializing):
     NOTE: Make sure to call super().as_group(...)
     """
 
+    def __init__(self, group: HDF5_Group) -> None:
+        super().__init__(self)
+        self._group = group
+
     @classmethod
     def name(cls) -> str:
         """Group name that this object will be stored under.
@@ -404,16 +521,22 @@ class HDF5GroupSerializable(HDF5GroupSerializing):
         """
         return cls.__name__
 
-    def as_group(self, parent_group: h5py.Group, log: Optional[Logger] = None) -> h5py.Group:
-        serialized_group = parent_group.require_group(self.name())
+    def as_group(
+        self, parent_group: HDF5_Group, log: Optional[Logger] = None
+    ) -> HDF5_Group:
+        new_group = parent_group.require_group(self.name())
         # Note: This does nothing but register a group with the name 'name' in the parent group.
         #       Implementers must now write their serialized instance to this group.
-        return serialized_group
+        return HDF5_Group(new_group)
 
     @classmethod
     @abstractmethod
-    def from_group(cls, group: h5py.Group, log: Optional[Logger] = None) -> HDF5GroupSerializable:
-        raise NotImplementedError(f"from_group not implemented for {cls.__name__}. Make sure you write a method that returns a serialzied version of this object.")
+    def from_group(
+        cls, group: HDF5_Group, log: Optional[Logger] = None
+    ) -> HDF5GroupSerializable:
+        raise NotImplementedError(
+            f"from_group not implemented for {cls.__name__}. Make sure you write a method that returns a serialzied version of this object."
+        )
 
     @classmethod
     def from_a(cls, a: HDF5_Type, log: Logger) -> HDF5Serializing:
@@ -422,8 +545,6 @@ class HDF5GroupSerializable(HDF5GroupSerializing):
     def as_a(self, a: HDF5_Type, log: Logger) -> HDF5_Type:
         return self.as_group(a, log=log)
 
-
-import importlib
 
 def get_class_for_name(name: str, module_name: str = __name__) -> Type:
     """Gets a class from a module based on its name.
@@ -447,29 +568,34 @@ def get_class_for_name(name: str, module_name: str = __name__) -> Type:
     this_class = getattr(this_module, name)
     return this_class
 
-class DataclassHDF5GroupSerialable(HDF5GroupSerializable):
 
-    def as_group(self, parent_group: h5py.Group, log: Optional[Logger] = None) -> h5py.Group:
+class DataclassHDF5GroupSerialable(HDF5GroupSerializable):
+    def as_group(
+        self, parent_group: HDF5_Group, log: Optional[Logger] = None
+    ) -> HDF5_Group:
         log = log if log is not None else getLogger()
 
         """Returns this object as an HDF5 Group."""
-        my_group = super().as_group(parent_group)
+        my_group: HDF5_Group = super().as_group(parent_group)
 
-        for field_name, value in dataclass.asdict(self).items():
-            if isinstance(value, HDF5GroupSerializable):
+        for field_name, field_value in vars(self).items():
+            if isinstance(field_value, HDF5GroupSerializable):
                 # This value is actually its own group.
                 # So we create a new group rooted at our dataclass's group
                 # And assign it the value of whatever the group of the value is.
-                parent_group.require_group(field_name)
-                field_group = value.as_group(field_name, log=log)
-            elif isinstance(value, HDF5Serializing):
-                my_group.attrs.create(field_name, value, dtype=hdf5_dtype(value))
+                my_group.require_group(field_name)
+                field_group = field_value.as_group(my_group, log=log)
+            # elif isinstance(field_value, HDF5Serializing):
+            #     serializable = field_type.as_a()
+            #     my_group.attrs.create(field_name, , dtype=hdf5_dtype(value))
             else:
-                my_group.attrs.create(field_name, value, dtype=hdf5_dtype(value))
+                my_group.create_attr(field_name, field_value)
         return my_group
 
     @classmethod
-    def from_group(cls, group: h5py.Group, log: Optional[Logger] = None) -> DataclassHDF5GroupSerialable:
+    def from_group(
+        cls, group: HDF5_Group, log: Optional[Logger] = None
+    ) -> DataclassHDF5GroupSerialable:
         log = log if log is not None else getLogger()
         if not log:
             log = getLogger()
@@ -497,16 +623,24 @@ class DataclassHDF5GroupSerialable(HDF5GroupSerializable):
                 try:
                     ThisClass = get_class_for_name(name)
                 except AttributeError as e:
-                    serial_exception = HDF5GroupSerializationException(f"We couldn't serialize group named {name} (group is attached in the exception.", e, group=value)
+                    serial_exception = HDF5GroupSerializationException(
+                        f"We couldn't serialize group named {name} (group is attached in the exception.",
+                        e,
+                        group=value,
+                    )
                     log.exception(serial_exception.msg, serial_exception)
                     raise serial_exception
 
-                #assert get_class_for_name(name) and isinstance(), f"No class found that corresponds to group {name}! Make sure there's a corresponding dataclass named {name} in this module scope!"
+                # assert get_class_for_name(name) and isinstance(), f"No class found that corresponds to group {name}! Make sure there's a corresponding dataclass named {name} in this module scope!"
 
                 try:
                     this_instance = ThisClass.from_group(value, log=log)
                 except AttributeError as e:
-                    serial_exception = HDF5GroupSerializationException(f"We couldn't serialize group named {name!s} from class {ThisClass!s}. It appears {ThisClass!s} doesn't implement the {HDF5GroupSerializing.__name__} protocol. Group is attached in the exception.", e, group=value)
+                    serial_exception = HDF5GroupSerializationException(
+                        f"We couldn't serialize group named {name!s} from class {ThisClass!s}. It appears {ThisClass!s} doesn't implement the {HDF5GroupSerializing.__name__} protocol. Group is attached in the exception.",
+                        e,
+                        group=value,
+                    )
                     log.exception(serial_exception.msg, serial_exception)
                     raise serial_exception
 

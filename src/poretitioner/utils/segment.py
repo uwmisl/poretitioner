@@ -11,7 +11,7 @@ import os
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 
 import dask.bag as db
 import h5py
@@ -695,7 +695,10 @@ def parallel_find_captures(
                 with CaptureFile(capture_f5_filepath, mode=mode) as capture_file:
                     # TODO: SUBRUNS support
                     capture_file.initialize_from_bulk(
-                        bulk, segment_config, capture_criteria=capture_criteria, sub_run=None
+                        bulk,
+                        segment_config,
+                        capture_criteria=capture_criteria,
+                        sub_run=None,
                     )
 
                     capture_files.append(capture_file)

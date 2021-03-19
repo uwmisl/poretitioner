@@ -1,12 +1,19 @@
-from .signals import Capture, CaptureMetadata, FractionalizedSignal, PicoampereSignal, RawSignal
+from .signals import (
+    Capture,
+    CaptureMetadata,
+    FractionalizedSignal,
+    PicoampereSignal,
+    RawSignal,
+)
 from .fast5s import BulkFile, SubRun, CaptureFile
+from .fast5s import ContextTagsBase, ContextTagsBulk, ContextTagsCapture
 from .utils import classify as classify
 
 from .logger import getLogger, Logger
 from .utils.configuration import GeneralConfiguration, SegmentConfiguration
 from .utils import filtering as filtering
 
-from typing import Dict, Iterable, Optional
+from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 from .utils.configuration import readconfig
 from .utils.configuration import CONFIG, PoretitionerConfig
 
@@ -17,18 +24,25 @@ from .getargs import ARG, get_help
 import pathlib
 
 
-def default_config(default_file: str = "", with_command_line_args: Optional[Dict[str, str]] = None) -> PoretitionerConfig:
-    fallback_config_path = str(pathlib.Path("./DEFAULT_PORETITIONER_CONFIG.toml").absolute().resolve())
-    path_to_default_config = default_file if len(default_file) > 0 else fallback_config_path
+def default_config(
+    default_file: str = "", with_command_line_args: Optional[Dict[str, str]] = None
+) -> PoretitionerConfig:
+    fallback_config_path = str(
+        pathlib.Path("./DEFAULT_PORETITIONER_CONFIG.toml").absolute().resolve()
+    )
+    path_to_default_config = (
+        default_file if len(default_file) > 0 else fallback_config_path
+    )
     return readconfig(path_to_default_config, command_line_args=with_command_line_args)
+
 
 def segment(
     config: GeneralConfiguration,
     segment_config: SegmentConfiguration,
-    bulkfast5=None, # Only needed if one wasn't passed in to segment config.
+    bulkfast5=None,  # Only needed if one wasn't passed in to segment config.
     save_location=None,
     overwrite=True,
-    sub_run: SubRun=None,
+    sub_run: SubRun = None,
 ) -> Iterable[CaptureFile]:
     """Identifies the capture regions in a nanopore ionic current signal.
 
@@ -57,8 +71,16 @@ def segment(
         try:
             bulkfast5 = segment_config.bulkfast5
         except AttributeError:
-            raise ValueError("Please pass in a BulkFast5 filepath to perform segmentation, using either the bulkfast5= keyword argument, or adding it to the Segmenter section of the config file.")
-    capture_files = segmenter.segment(segment_config.bulkfast5, config, segment_config, save_location=save_location, capture_criteria=segment_config.capture_criteria ,overwrite=overwrite, sub_run=sub_run)
+            raise ValueError(
+                "Please pass in a BulkFast5 filepath to perform segmentation, using either the bulkfast5= keyword argument, or adding it to the Segmenter section of the config file."
+            )
+    capture_files = segmenter.segment(
+        segment_config.bulkfast5,
+        config,
+        segment_config,
+        save_location=save_location,
+        capture_criteria=segment_config.capture_criteria,
+        overwrite=overwrite,
+        sub_run=sub_run,
+    )
     return capture_files
-
-

@@ -11,8 +11,8 @@ import re
 from abc import ABC, ABCMeta, abstractmethod
 from dataclasses import dataclass
 from pathlib import PosixPath
-from typing import Any, Dict, List, NewType, Optional, Protocol, Union
-from typing import Iterable
+from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
+
 
 import h5py
 import numpy as np
@@ -24,6 +24,7 @@ from .core import HasFast5, NumpyArrayLike, PathLikeOrString
 from .core import ReadId
 from .core import stripped_by_keys
 from .core import Fast5File
+from .core import HDF5GroupSerializing
 from .plugin import Plugin
 
 
@@ -67,10 +68,13 @@ class FILTER_PATH:
         return pass_path
 
     @classmethod
-    def filter_set_pass_path_for_read_id(cls, filter_set_id: FilterSetId, read_id: ReadId) -> str:
-        pass_path = str(PosixPath(FILTER_PATH.filter_set_pass_path(filter_set_id), read_id))
+    def filter_set_pass_path_for_read_id(
+        cls, filter_set_id: FilterSetId, read_id: ReadId
+    ) -> str:
+        pass_path = str(
+            PosixPath(FILTER_PATH.filter_set_pass_path(filter_set_id), read_id)
+        )
         return pass_path
-
 
 
 @dataclass(frozen=True)
@@ -180,7 +184,6 @@ class FilterPlugin(Plugin):
         return result
 
 
-
 class RangeFilter(FilterPlugin):
     DEFAULT_MINIMUM: float = -np.inf
     DEFAULT_MAXIMUM: float = np.inf
@@ -223,7 +226,7 @@ class RangeFilter(FilterPlugin):
         else:
             signal = capture
         return signal
-        #signal = getattr(capture, Capture.fractionalized.__name__, capture)
+        # signal = getattr(capture, Capture.fractionalized.__name__, capture)
 
     def is_in_range(self, value: Union[NumpyArrayLike, float]) -> bool:
         try:
@@ -232,7 +235,6 @@ class RangeFilter(FilterPlugin):
         except ValueError:
             # But we're not allowed to use that syntax on numpy arrays.
             return all(np.logical_and(self.minimum <= value, value <= self.maximum))
-
 
     def apply(self, signal):
         value = self.extract(signal)
@@ -304,15 +306,17 @@ class LengthFilter(RangeFilter):
         signal = super().extract(capture)
         return len(signal)
 
+
 class EjectedFilter(FilterPlugin):
-    """Filters captures based on whether they were ejected from the pore.
-    """
+    """Filters captures based on whether they were ejected from the pore."""
+
     @classmethod
     def name(cls) -> str:
         return "ejected"
 
     def extract(self, capture: Capture):
         return capture.ejected
+
 
 """
 How to Create Your Own Custom Filter:
@@ -453,16 +457,23 @@ def filter_and_store_result(config, fast5_files, filter_name, overwrite=False):
             write_filter_results(f5, config, passed_read_ids, filter_name)
 
 
-def write_filter_results(f5: Fast5File, filter_set_id: FilterSetId, passing_read_ids: List[ReadId], log: Optional[Logger] = None):
+def write_filter_results(
+    f5: Fast5File,
+    filter_set_id: FilterSetId,
+    passing_read_ids: List[ReadId],
+    log: Optional[Logger] = None,
+):
     # For all read_ids that passed the filter (AKA reads that were passed in),
     # create a hard link in the filter_path to the actual read's location in
     # the fast5 file.
     # /Filters/my_filter_set_id/pass
     passing_for_filter_path = FILTER_PATH.filter_set_pass_path(filter_set_id)
     passing_read_id_group = f5.require_group(passing_for_filter_path)
-        
+
     for read_id in passing_read_ids:
-        passing_by_read_id_path = FILTER_PATH.filter_set_pass_path_for_read_id(filter_set_id, read_id)
+        passing_by_read_id_path = FILTER_PATH.filter_set_pass_path_for_read_id(
+            filter_set_id, read_id
+        )
         passing_by_read_id_group = f5.require_group(passing_by_read_id_path)
 
         filter_read_path = FILTER_PATH.filter_pass_path_for_read_id(read_id)
@@ -492,12 +503,13 @@ DEFAULT_FILTER_PLUGINS = {
     for filter_plugin_class in __DEFAULT_FILTER_PLUGINS
 }
 
+
 class Filtering(Protocol):
     """Classes that adhere to the Filtering protocol
-    provide an 'apply' method to an input that returns True 
+    provide an 'apply' method to an input that returns True
     if and only if the input passes its filter.
 
-    These are also callable, so calling a filter on an input 
+    These are also callable, so calling a filter on an input
     is functionally equivalent to calling its apply method.
     """
 
@@ -506,6 +518,7 @@ class Filtering(Protocol):
 
     def apply(self, *args, **kwargs) -> bool:
         raise NotImplementedError("Filtering protocol hasn't implemented Apply yet!")
+
 
 @dataclass
 class Filter(Filtering):
@@ -654,9 +667,9 @@ class FilterSet(Filtering):
     identification.
     Mapping of filter_set_name to its filters.
 
-    Q: Why inherit from FilterPlugin? 
+    Q: Why inherit from FilterPlugin?
     A: So we can treat an amalgam of filters (i.e. a FilterSet)
-       just like a singular filter. 
+       just like a singular filter.
        This is known as the Composite Pattern [1]
 
     [1] - https://en.wikipedia.org/wiki/Composite_pattern
@@ -673,11 +686,15 @@ class FilterSet(Filtering):
         return encoder
 
     @classmethod
-    def from_json(cls, json_dict: Dict, filter_set_name: FilterSetId, filters_dict: Dict):
-        filter_configs: FilterConfigs = FilterConfigs({
-            FilterName(filter_config.get("name")): FilterConfig(**filter_config)
-            for filter_config in json_dict["filters"]
-        })
+    def from_json(
+        cls, json_dict: Dict, filter_set_name: FilterSetId, filters_dict: Dict
+    ):
+        filter_configs: FilterConfigs = FilterConfigs(
+            {
+                FilterName(filter_config.get("name")): FilterConfig(**filter_config)
+                for filter_config in json_dict["filters"]
+            }
+        )
         filters = get_filters(filter_configs)
         filter_set = cls.__new__(cls)
         filter_set = filter_set.__init__(filter_set_name, filters)
@@ -797,21 +814,16 @@ class FilterJSONEncoder(JSONEncoder):
         return super().default(obj)
 
 
-from typing import Protocol
-
-
-
 class FilterMixin(HasFast5):
-
-    def filter(self, captures: Iterable[Capture], filter_set: FilterSet) -> Iterable[Capture]:
+    def filter(
+        self, captures: Iterable[Capture], filter_set: FilterSet
+    ) -> Iterable[Capture]:
         passing_captures = [capture for capture in captures if filter_set(capture)]
         return passing_captures
-
 
     def filter_sets(self) -> Iterable[FilterSet]:
         filter_group_keys = self.f5.require_group(FILTER_PATH.ROOT).keys()
         filter_set_names = filter_group.keys()
-        
 
     def filter_set(self, filter_set_id: FilterSetId) -> FilterSet:
         pass

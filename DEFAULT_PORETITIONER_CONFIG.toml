@@ -6,6 +6,7 @@ n_workers = 5
 
 # Segmentation
 [segmentation]
+  bulkfast5="./d"
   n_captures_per_file = 10
   voltage_threshold = 0.1
   signal_threshold_frac = 0.700000

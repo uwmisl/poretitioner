@@ -13,7 +13,7 @@ from collections import namedtuple
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path, PosixPath, PurePosixPath
-from typing import Any, Dict, Iterable, List, NewType, Optional, Set, Type, Union
+from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 
 import h5py
 from .utils.filtering import FILTER_PATH
@@ -30,35 +30,96 @@ from .signals import (
     VoltageSignal,
 )
 from .utils.configuration import SegmentConfiguration
-from .utils.core import DataclassHDF5GroupSerialable, HDF5GroupSerializable, NumpyArrayLike, PathLikeOrString
+from .utils.core import (
+    DataclassHDF5GroupSerialable,
+    HDF5GroupSerializable,
+    HDF5_Group,
+    NumpyArrayLike,
+    PathLikeOrString,
+)
 from .utils.core import ReadId
 from .utils.core import hdf5_dtype, HasFast5, Fast5File
+from .utils.core import dataclass_fieldnames
 
 __all__ = [
     "BulkFile",
     "CaptureFile",
     "channel_path_for_read_id",
     "signal_path_for_read_id",
+    "ContextTagsBase",
+    "ContextTagsBulk",
+    "ContextTagsCapture",
 ]
 
 # The name of the root of a HDF file. Also attainable from h5py.File.name: https://docs.h5py.org/en/latest/high/file.html#reference
 FAST5_ROOT = "/"
 
+
 @dataclass(frozen=True)
-class ContextTags(DataclassHDF5GroupSerialable):
-    bulk_filename: str
-    experiment_duration_set: str
+class ContextTagsBase(DataclassHDF5GroupSerialable):
+    """A Context Tags group in a Fast5 file.
+
+    We have separate classes for Bulk files `ContextTagsBulk`,
+    and Capture files `ContextTagsCapture` because their fields
+    vary slightly.
+    """
+
+    # Katie Q: Can't find this in the Bulk :O
+    # experiment_duration_set: str
     experiment_type: str
-    flowcell_product_code: str
-    package: str
-    package_version: str
+    # Katie Q: Can't find this in the Bulk :O
+    # flowcell_product_code: str
+    # Katie Q: Can't find this in the Bulk :O
+    # package: str
+    # Katie Q: Can't find this in the Bulk :O
+    # package_version: str
     sample_frequency: str
+
+    department: str
+    local_bc_comp_model: str
+    local_bc_temp_model: str
+    user_filename_input: str
 
     @classmethod
     def name(cls):
         # We have to override the default, because the context tags
         # are stored under a different name than the class name
         return "context_tags"
+
+
+@dataclass(frozen=True)
+class ContextTagsCapture(ContextTagsBase):
+    """A Context Tags group in a Capture Fast5 file.
+
+    We have separate classes for Bulk files `ContextTagsBulk`,
+    and Capture files `ContextTagsCapture` because their fields
+    vary slightly.
+    """
+
+    bulk_filename: str
+
+
+@dataclass(frozen=True)
+class ContextTagsBulk(ContextTagsBase):
+    """A Context Tags group in a Bulk Fast5 file.
+
+    We have separate classes for Bulk files `ContextTagsBulk`,
+    and Capture files `ContextTagsCapture` because their fields
+    vary slightly.
+    """
+
+    filename: str
+
+    def to_context_tags_capture(self) -> ContextTagsCapture:
+        capture_fields = dataclass_fieldnames(ContextTagsCapture)
+        context_tags = {
+            key: value for key, value in vars(self).items() if key in capture_fields
+        }
+        common_attributes = context_tags
+        # "Filename" in Bulk is named "bulk_filename" in Capture.
+        common_attributes["bulk_filename"] = self.filename
+        return ContextTagsCapture(**common_attributes)
+
 
 @dataclass(frozen=True)
 class TrackingId(DataclassHDF5GroupSerialable):
@@ -94,11 +155,17 @@ class TrackingId(DataclassHDF5GroupSerialable):
     def name(cls):
         # We have to override the default, because the context tags
         # are stored under a different name than the class name
-        return "context_tags"
+        return "tracking_id"
+
+
+@dataclass(frozen=True)
+class CaptureTrackingId(TrackingId):
+    sub_run: SubRun
+
 
 @dataclass(frozen=True)
 class Read(DataclassHDF5GroupSerialable):
-    Signal: NumpyArrayLike # This is the raw signal, fresh from the Fast5.
+    Signal: NumpyArrayLike  # This is the raw signal, fresh from the Fast5.
 
 
 @dataclass(frozen=True)
@@ -127,7 +194,7 @@ class CAPTURE_PATH:
     ROOT = "/"
     CONTEXT_TAGS = "/Meta/context_tags"
     TRACKING_ID = "/Meta/tracking_id"
-    SUB_RUN = "/Meta/tracking_id/subrun"
+    SUB_RUN = "/Meta/tracking_id/sub_run"
     SEGMENTATION = "/Meta/Segmentation"
     CAPTURE_WINDOWS = "/Meta/Segmentation/capture_windows"
     CONTEXT_ID = "/Meta/Segmentation/context_id"
@@ -148,9 +215,11 @@ class CAPTURE_PATH:
         path = str(PosixPath(CAPTURE_PATH.FOR_READ_ID(read_id), KEY.SIGNAL))
         return path
 
+
 @dataclass(frozen=True)
 class Channel(DataclassHDF5GroupSerialable):
     """Channel-specific information saved for each read."""
+
     channel_number: int
     calibration: ChannelCalibration
     open_channel_pA: int
@@ -591,17 +660,15 @@ class BulkFile(BaseFile):
         )
         return voltages
 
-    def context_tags_group(self) -> h5py.Group:
-        return self.f5[BULK_PATH.CONTEXT_TAGS]
+    def context_tags_group(self) -> HDF5_Group:
+        return HDF5_Group(self.f5[BULK_PATH.CONTEXT_TAGS])
         result = {} if context_tags is None else dict(context_tags.attrs)
         return result
 
-    def tracking_id_group(self) -> h5py.Group:
-        return self.f5[BULK_PATH.TRACKING_ID]
+    def tracking_id_group(self) -> HDF5_Group:
+        return HDF5_Group(self.f5[BULK_PATH.TRACKING_ID])
         result = {} if tracking_id is None else dict(tracking_id.attrs)
         return result
-
-
 
 
 class CaptureFile(BaseFile):
@@ -667,6 +734,7 @@ class CaptureFile(BaseFile):
         segment_config: SegmentConfiguration,
         capture_criteria: Optional[Filters] = None,
         sub_run: Optional[SubRun] = None,
+        log: Logger = None,
     ):
         """[summary]
 
@@ -691,37 +759,50 @@ class CaptureFile(BaseFile):
         # Referencing spec v0.1.1
 
         # /Meta/context_tags
-        capture_context_tags_group = self.f5.require_group(CAPTURE_PATH.CONTEXT_TAGS)
+        capture_context_tags_group = HDF5_Group(
+            self.f5.require_group(CAPTURE_PATH.CONTEXT_TAGS)
+        )
         bulk_context_tags_group = bulk_f5.context_tags_group()
-        context_tags = ContextTags.from_group(bulk_context_tags_group)
-        context_tags.as_group(capture_context_tags_group.parent)
-        
-        #capture_context_tags_group.attrs.create(key, value, dtype=hdf5_dtype(value))
-
-        bulk_f5_fname = bulk_f5.filename
-
-        capture_context_tags_group.attrs.create(
-            "bulk_filename", bulk_f5_fname, dtype=hdf5_dtype(bulk_f5_fname)
+        # ContextTagsBulk.from_group(bulk_context_tags_group, log=log)
+        context_tags_bulk: ContextTagsBulk = ContextTagsBulk.from_group(
+            bulk_context_tags_group, log=log
+        )
+        context_tags_capture = context_tags_bulk.to_context_tags_capture()
+        capture_context_tags_group = context_tags_capture.as_group(
+            capture_context_tags_group.parent, log=log
         )
 
-        sampling_frequency = bulk_f5.sampling_rate
-        capture_context_tags_group.attrs.create("sample_frequency", sampling_frequency, dtype=hdf5_dtype(sampling_frequency))
+        # capture_context_tags_group.attrs.create(key, value, dtype=hdf5_dtype(value))
+
+        # bulk_f5_fname = bulk_f5.filename
+
+        # capture_context_tags_group.attrs.create(
+        #     "bulk_filename", bulk_f5_fname, dtype=hdf5_dtype(bulk_f5_fname)
+        # )
+
+        # sampling_frequency = bulk_f5.sampling_rate
+        # capture_context_tags_group.attrs.create("sample_frequency", sampling_frequency, dtype=hdf5_dtype(sampling_frequency))
 
         # /Meta/tracking_id
-        capture_tracking_id_group = self.f5.require_group(CAPTURE_PATH.TRACKING_ID)
-        for key, value in bulk_f5.tracking_id.items():
+        capture_tracking_id_group = HDF5_Group(
+            self.f5.require_group(CAPTURE_PATH.TRACKING_ID)
+        )
+        capture_tracking_id_group = bulk_f5.tracking_id_group()
+        for key, value in capture_tracking_id_group.items():
             capture_tracking_id_group.attrs.create(key, value, dtype=hdf5_dtype(value))
 
         if sub_run is not None:
+            subrun_group = HDF5_Group(self.f5.require_group(CAPTURE_PATH.SUB_RUN))
+            sub_run.as_group(subrun_group.parent, log=log)
             id = sub_run.sub_run_id
             offset = sub_run.sub_run_offset
             duration = sub_run.sub_run_duration
 
-            capture_tracking_id_group.attrs.create(
-                "sub_run_id", id, dtype=hdf5_dtype(id)
-            )
-            capture_tracking_id_group.attrs.create("sub_run_offset", offset)
-            capture_tracking_id_group.attrs.create("sub_run_duration", duration)
+            # capture_tracking_id_group.attrs.create(
+            #     "sub_run_id", id, dtype=hdf5_dtype(id)
+            # )
+            # capture_tracking_id_group.attrs.create("sub_run_offset", offset)
+            # capture_tracking_id_group.attrs.create("sub_run_duration", duration)
 
         # /Meta/Segmentation
         # TODO: define config param structure : https://github.com/uwmisl/poretitioner/issues/27

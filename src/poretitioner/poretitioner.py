@@ -1,7 +1,7 @@
 # from .fast5s import BulkFile, CaptureFile
 import pprint
 from pathlib import Path
-from typing import List
+from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 
 import numpy as np
 

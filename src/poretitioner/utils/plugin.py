@@ -1,14 +1,12 @@
 # Generic handling for plugins (filter, classifier )
 from __future__ import annotations
-from typing import Protocol
-from typing import Any
-from typing import Dict
-from typing import Optional, Iterable
+from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
+
 from abc import ABC, abstractmethod
 from ..logger import getLogger, Logger
 
-class Plugin(Protocol):
 
+class Plugin(Protocol):
     @classmethod
     def name(cls) -> str:
         raise NotImplementedError("name hasn't been implemented!")

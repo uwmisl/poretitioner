@@ -24,16 +24,17 @@ def add_poretitioner_to_path():
     sys.path.append(poretitioner_directory)
     sys.path.append(PROJECT_DIR_LOCATION)
 
+
 add_poretitioner_to_path()
 
 import pprint
 import numpy as np
 import toml
 
+from typing import *
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from os import PathLike
-from typing import Any, Dict, List, Optional, Union
 
 from src.poretitioner import BulkFile
 
@@ -57,22 +58,29 @@ from src.poretitioner import CONFIG
 LOG_VERBOSITY = 3
 # Temporarily changing the logger format for the intro messages.
 temp_logger_format = "%(log_color)s%(message)s"
-logger.configure_root_logger(verbosity=LOG_VERBOSITY, debug=True, format=temp_logger_format)
+logger.configure_root_logger(
+    verbosity=LOG_VERBOSITY, debug=True, format=temp_logger_format
+)
 
 log = logger.getLogger()
 
-THIS = __import__(__name__) # The currently running module
+THIS = __import__(__name__)  # The currently running module
 
 
 log.debug(f"=============~ Poretitioner ~============\n")
+
 
 def do_intro(log: LoggerType):
     log.debug(f"\nHi there, my name is Jessica!")
     log.info(f"And my name is Katie!")
 
     log.debug(f"\nWelcome to the Poretitioner Playground")
-    log.debug(f"\nThis is a fun, interactive python REPL environment for learning about, testing, and hacking the Poretitioner.")
-    log.debug(f"It's a great way to try new ideas, explore the Poretitioner APIs, or test your own code-- all without the hastle of building things from scratch.")
+    log.debug(
+        f"\nThis is a fun, interactive python REPL environment for learning about, testing, and hacking the Poretitioner."
+    )
+    log.debug(
+        f"It's a great way to try new ideas, explore the Poretitioner APIs, or test your own code-- all without the hastle of building things from scratch."
+    )
 
     log.debug(f"We've included lots of common modules like numpy--")
     log.info(f"And pytorch!")
@@ -80,7 +88,9 @@ def do_intro(log: LoggerType):
     log.info(f"Or break!")
     log.debug(f"--things as fast as possible")
 
-    log.debug(f"\nJust remember, if you make any changes to Poretitioner code, be sure to call: ")
+    log.debug(
+        f"\nJust remember, if you make any changes to Poretitioner code, be sure to call: "
+    )
     log.debug(f"")
     log.error(f"importlib.reload('poretitioner'")
     log.debug(f"")
@@ -91,11 +101,16 @@ def do_intro(log: LoggerType):
 def explain_help(log: LoggerType):
     log.info("Need help? Not sure where to start?")
     log.info("Try typing 'help(poretitioner)'")
-    log.info("This works on any of the poretitioner APIs. e.g. help(poretitioner.segment)")
+    log.info(
+        "This works on any of the poretitioner APIs. e.g. help(poretitioner.segment)"
+    )
 
     report_bugs(log)
 
-    log.info("\nFor more detailed help, feel free to email me at jdunstan@cs.washington.edu :)")
+    log.info(
+        "\nFor more detailed help, feel free to email me at jdunstan@cs.washington.edu :)"
+    )
+
 
 class Helper:
     BASIC_HELP: str = """
@@ -121,12 +136,19 @@ class Helper:
     def __call__(self):
         self.basic_help()
 
-class EmptyObj(object): pass
+
+class EmptyObj(object):
+    pass
+
+
 helper = EmptyObj()
 setattr(helper, "__call__", explain_help)
 
+
 def report_bugs(log: LoggerType):
-    BUG_REPORT_LINK = "https://github.com/uwmisl/poretitioner/issues/new?labels=beta-hackathon-bug"
+    BUG_REPORT_LINK = (
+        "https://github.com/uwmisl/poretitioner/issues/new?labels=beta-hackathon-bug"
+    )
     FEEDBACK_LINK = "https://github.com/uwmisl/poretitioner/issues/new?labels=beta-hackathon-feedback"
 
     log.debug(f"Please report any bugs here: {BUG_REPORT_LINK}")
@@ -168,11 +190,11 @@ raw = RawSignal(raw_signal, CHANNEL_NUMBER, CALIBRATION)
 
 bulky = BulkFile(BULK_FAST5_FILE, "r")
 
-config = poretitioner.default_config(with_command_line_args=
-        {
-           poretitioner.ARG.GENERAL.BULK_FAST5: "/Users/dna/Developer/poretitioner/src/tests/data/bulk_fast5_dummy.fast5",
-           poretitioner.ARG.GENERAL.CAPTURE_DIRECTORY: "/tmp/captures",
-        }
+config = poretitioner.default_config(
+    with_command_line_args={
+        poretitioner.ARG.GENERAL.BULK_FAST5: "/Users/dna/Developer/poretitioner/src/tests/data/bulk_fast5_dummy.fast5",
+        poretitioner.ARG.GENERAL.CAPTURE_DIRECTORY: "/tmp/captures",
+    }
 )
 
 general_config = config[CONFIG.GENERAL]
@@ -184,7 +206,7 @@ classifier_config = config[CONFIG.CLASSIFICATION]
 logger.configure_root_logger(verbosity=LOG_VERBOSITY, debug=True)
 
 
-#capture_files = poretitioner.segment(general_config, segmentation_config)
+# capture_files = poretitioner.segment(general_config, segmentation_config)
 
 
 cappy = CaptureFile(CLASSIFIED_FAST5_FILE, "a")

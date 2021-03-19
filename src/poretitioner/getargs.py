@@ -8,7 +8,7 @@ This module is responsible for parsing the application's commandline arguments.
 """
 from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass
-from typing import List
+from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 
 
 def as_cli_arg(property: str) -> str:
@@ -115,8 +115,10 @@ def get_args(commandline_args: List = None) -> Namespace:
     args = parser.parse_args(commandline_args)
     return args
 
+
 def get_help():
     return get_args(["--help"])
+
 
 def get_parser(commandline_args: List = None) -> ArgumentParser:
     """Gets the command line arguments passed to the application.

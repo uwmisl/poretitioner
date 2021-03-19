@@ -57,5 +57,9 @@ def get_application_info() -> AppInfo:
     # Using LRU cache lets us avoid extra reads, as project name and version should be treated as immutable at runtime.
     with open(APPLICATION_INFO_FILE, "r") as f:
         info = json.load(f)
-        APPLICATION_INFO = AppInfo(name=info[NAME_FIELD], version=info[VERSION_FIELD], data_schema_version=info[SCHEMA_FIELD])
+        APPLICATION_INFO = AppInfo(
+            name=info[NAME_FIELD],
+            version=info[VERSION_FIELD],
+            data_schema_version=info[SCHEMA_FIELD],
+        )
     return APPLICATION_INFO
