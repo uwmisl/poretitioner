@@ -203,6 +203,7 @@ class MeanFilter(RangeFilter):
 
 
 class MedianFilter(RangeFilter):
+    """Filters for captures with a median within a range."""
     @classmethod
     def name(cls) -> str:
         return "median"
@@ -217,6 +218,7 @@ class MedianFilter(RangeFilter):
 
 
 class MinimumFilter(RangeFilter):
+    """Filters for captures with a minimum within a range."""
     @classmethod
     def name(cls) -> str:
         return "min"
@@ -231,6 +233,7 @@ class MinimumFilter(RangeFilter):
 
 
 class MaximumFilter(RangeFilter):
+    """Filters for captures with a maximum within a range."""
     @classmethod
     def name(cls) -> str:
         return "max"
@@ -340,7 +343,8 @@ def check_capture_ejection_by_read(f5, read_id):
 
     Parameters
     ----------
-    f5 : TODO
+    f5 : h5py.File object (open for reading or more)
+        Capture fast5 file
     read_id : TODO
 
     Returns
