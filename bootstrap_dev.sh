@@ -576,7 +576,8 @@ main () {
         fi
         configure_nix
         configure_nix_channel
-        install_cachix
+        # Disabling cachix until we figure out what's happening here: https://github.com/cachix/cachix/issues/365
+        # install_cachix
         install_misl_env
         green "All done!"
 
