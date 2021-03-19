@@ -15,7 +15,7 @@ NIX_TRUSTED_PUBLIC_KEYS="uwmisl.cachix.org-1:/moWZqhprjtkmTCI9/yIidsJlOrJT5lhlay
 
 # To learn more about Nix configs, please check out:
 # https://nixos.org/manual/nix/unstable/command-ref/conf-file.html
-NIX_CONFIG_FILES=( "/etc/nix/nix.conf" , "$HOME/.config/nix/nix.conf")
+NIX_CONFIG_FILES=( "/etc/nix/nix.conf" )
 
 # Here are the profile files that Nix may modify
 readonly PROFILE_TARGETS=("/etc/bashrc" "/etc/profile.d/nix.sh" "/etc/zshenv" "/etc/zshrc")
@@ -538,6 +538,24 @@ install_misl_env () {
     green "MISL env installed."
 }
 
+
+
+add_nix_to_user_profiles () {
+    PROFILES=( "$HOME/.bashrc" "$HOME/.zshrc" )
+    
+    ADD_NIX="
+# Nix
+if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
+  . '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
+fi
+# End Nix
+"
+
+    for profile in ${PROFILES[@]}; do
+        grep -qxF "${ADD_NIX}" foo.bar || echo "${ADD_NIX}" >> $profile
+    done
+}
+
 ##############################################
 #               Bootstrapping                #
 ##############################################
@@ -554,16 +572,6 @@ main () {
             # Nix is already installed!
             bold "Nix is already installed. Skipping installation."
         else
-            bashrc="/etc/bashrc"
-            zshrc="/etc/zshrc"
-            create_files="sudo touch $bashrc $zshrc"
-            because="
-            I need to check whether $bashrc or $zshrc exist, and create empty ones if they don't.
-
-            This is because Nix will add itself to the user PATH from one or more of these files, but only if they already exist.
-
-            No $bashrc or $zshrc means no Nix on PATH, which means you wouldn't be able to run 'nix' as a command."
-            ask_sudo "$because" "$create_files"
 
             install_nix
             echo ""
@@ -590,6 +598,7 @@ main () {
         fi
         configure_nix
         configure_nix_channel
+        add_nix_to_user_profiles
         # Disabling cachix until we figure out what's happening here: https://github.com/cachix/cachix/issues/365
         # install_cachix
         install_misl_env
