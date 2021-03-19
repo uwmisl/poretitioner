@@ -565,6 +565,10 @@ main () {
         install_cachix
         install_misl_env
         green "All done!"
+        echo ""
+        green "If you encounter any bugs or issues, please report them here:"
+        yellow "\thttps://github.com/uwmisl/poretitioner/issues"
+        green "Feature requests are welcome too!"
 
         # Reload the shell to set environment variables like $NIX_PATH.
         exec $SHELL
