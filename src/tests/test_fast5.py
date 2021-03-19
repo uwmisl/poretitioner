@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
+
 from src.poretitioner.fast5s import (
     BulkFile,
     CaptureFile,

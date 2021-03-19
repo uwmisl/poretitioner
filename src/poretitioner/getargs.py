@@ -58,9 +58,7 @@ class ARG:
     VERBOSE = "verbose"
 
     # Segmenter
-    CAPTURE_DIRECTORY = (
-        "output_dir"  # Argument on the command line has a dash, but the attribute.
-    )
+    CAPTURE_DIRECTORY = "output_dir"  # Argument on the command line has a dash, but the attribute.
 
     class SEGMENT:
         BULKFAST5 = "bulkfast5"
@@ -191,10 +189,7 @@ def get_args(commandline_args: List = None) -> Namespace:
             Parser to give an output file option
         """
         parser.add_argument(
-            "-o",
-            f"--{ARG.OUTPUT}",
-            action="store",
-            help="Where to store this command's output.",
+            "-o", f"--{ARG.OUTPUT}", action="store", help="Where to store this command's output."
         )
 
     def add_configuration_option_to_parser(parser: ArgumentParser):
@@ -217,18 +212,12 @@ def get_args(commandline_args: List = None) -> Namespace:
     subparser = parser.add_subparsers(dest="command")
 
     # Segmenter
-    parser_segment = subparser.add_parser(
-        COMMAND.SEGMENT, description="Segment captures"
-    )
+    parser_segment = subparser.add_parser(COMMAND.SEGMENT, description="Segment captures")
     add_capture_directory_option_to_parser(parser_segment)
 
     parser_filter = subparser.add_parser(COMMAND.FILTER, description="Filter captures")
-    parser_classify = subparser.add_parser(
-        COMMAND.CLASSIFY, description="Classify captures"
-    )
-    parser_quantify = subparser.add_parser(
-        COMMAND.QUANTIFY, description="Quantify captures"
-    )
+    parser_classify = subparser.add_parser(COMMAND.CLASSIFY, description="Classify captures")
+    parser_quantify = subparser.add_parser(COMMAND.QUANTIFY, description="Quantify captures")
 
     parsers = [parser, parser_filter, parser_segment, parser_classify, parser_quantify]
     for subparser in parsers:

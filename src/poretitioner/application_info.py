@@ -14,9 +14,7 @@ import pkg_resources
 
 # Name of the JSON file that contains project configuration information (e.g. package name, build version).
 APPLICATION_INFO_FILENAME = "APPLICATION_INFO.json"
-APPLICATION_INFO_FILE = pkg_resources.resource_filename(
-    __name__, APPLICATION_INFO_FILENAME
-)
+APPLICATION_INFO_FILE = pkg_resources.resource_filename(__name__, APPLICATION_INFO_FILENAME)
 # Name of the version key in the project info file.
 VERSION_FIELD = "version"
 # Name of the project name key in the project info file.

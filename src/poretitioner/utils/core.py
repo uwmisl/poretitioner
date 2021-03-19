@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections import namedtuple
 from dataclasses import dataclass
 from os import PathLike
-from typing import Dict, List, Optional, TypeVar, Union, Sequence
+from typing import Dict, List, Optional, Sequence, TypeVar, Union
 
 import numpy as np
 
@@ -136,16 +136,12 @@ def find_windows_below_threshold(
     """
 
     # Katie Q: I still don't understand how this function works haha. Let's talk next standup?
-    diff_points = np.where(
-        np.abs(np.diff(np.where(time_series <= threshold, 1, 0))) == 1
-    )[0]
+    diff_points = np.where(np.abs(np.diff(np.where(time_series <= threshold, 1, 0))) == 1)[0]
     if time_series[0] <= threshold:
         diff_points = np.hstack([[0], diff_points])
     if time_series[-1] <= threshold:
         diff_points = np.hstack([diff_points, [time_series.duration]])
-    return [
-        Window(start, end) for start, end in zip(diff_points[::2], diff_points[1::2])
-    ]
+    return [Window(start, end) for start, end in zip(diff_points[::2], diff_points[1::2])]
 
 
 @dataclass
@@ -184,7 +180,5 @@ def stripped_by_keys(dictionary: Optional[Dict], keys_to_keep: Sequence) -> Dict
         Dictionary containing only keys from `keys_to_keep`.
     """
     dictionary = {} if dictionary is None else dictionary
-    dictionary = {
-        key: value for key, value in dictionary.items() if key in keys_to_keep
-    }
+    dictionary = {key: value for key, value in dictionary.items() if key in keys_to_keep}
     return dictionary

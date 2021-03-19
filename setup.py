@@ -1,5 +1,6 @@
-import setuptools
 import json
+
+import setuptools
 
 with open("./src/poretitioner/APPLICATION_INFO.json", "r") as f:
     app_info = json.load(f)

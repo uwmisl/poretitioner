@@ -3,20 +3,19 @@ import pprint
 from pathlib import Path
 from typing import List
 
+import logger
 import numpy as np
 
-import logger
 from .getargs import ARG, COMMAND, get_args
 from .utils import segment
 from .utils.configuration import (
     CONFIG,
-    readconfig,
-    SegmentConfiguration,
-    GeneralConfiguration,
     FilterConfiguration,
+    GeneralConfiguration,
+    SegmentConfiguration,
+    readconfig,
 )
 from .utils.filtering import (
-    get_plugins,
     LengthFilter,
     MaximumFilter,
     MeanFilter,
@@ -24,6 +23,7 @@ from .utils.filtering import (
     MinimumFilter,
     RangeFilter,
     StandardDeviationFilter,
+    get_plugins,
 )
 
 
@@ -39,9 +39,7 @@ def run(args):
     if "capture_directory" not in command_line_args and getattr(
         args, ARG.CAPTURE_DIRECTORY, False
     ):
-        command_line_args["capture_directory"] = command_line_args[
-            ARG.CAPTURE_DIRECTORY
-        ]
+        command_line_args["capture_directory"] = command_line_args[ARG.CAPTURE_DIRECTORY]
 
     # Read configuration file, if it exists.
     try:
@@ -49,9 +47,7 @@ def run(args):
     except KeyError as e:
         log.info(f"No config file found from arg: {ARG.CONFIG}.")
         raise e
-    configuration = readconfig(
-        configuration_path, command_line_args=command_line_args, log=log
-    )
+    configuration = readconfig(configuration_path, command_line_args=command_line_args, log=log)
 
     if args.command == COMMAND.SEGMENT:
         bulk_f5_filepath = Path(command_line_args[ARG.BULK_FAST5]).resolve()

@@ -28,9 +28,7 @@ def get_args_no_subcommand_test():
     command = args_from_str(f"--{VERBOSE} --{DEBUG}")
     args = get_args(commandline_args=command)
 
-    assert (
-        args.command == COMMAND.ALL
-    ), "When no subcommand is given, we should run all steps."
+    assert args.command == COMMAND.ALL, "When no subcommand is given, we should run all steps."
     assert args.debug, "Debug should be true when debug option is given."
     assert args.verbose == 1, "Verbose should be '1' when debug command is given."
 
@@ -58,14 +56,10 @@ def get_args_verbose_3_test():
 
 def get_args_file_test():
     test_filepath = "/User/foo/bar/rah.fast5"
-    command = args_from_str(
-        f"{COMMAND.QUANTIFY} --{VERBOSE} --{BULK_FAST5_FILE} {test_filepath}"
-    )
+    command = args_from_str(f"{COMMAND.QUANTIFY} --{VERBOSE} --{BULK_FAST5_FILE} {test_filepath}")
     args = get_args(commandline_args=command)
 
     assert (
         args.command == COMMAND.QUANTIFY
     ), "When quantify subcommand is given, we should run the quantify step."
-    assert (
-        args.file == test_filepath
-    ), "Input file should be read when provided by the file option"
+    assert args.file == test_filepath, "Input file should be read when provided by the file option"

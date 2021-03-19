@@ -1,6 +1,7 @@
 import os
 
 from fast5s import BulkFile, CaptureFile
+
 from ..signals import PicoampereSignal
 from .utils.core import NumpyArrayLike, PathLikeOrString
 

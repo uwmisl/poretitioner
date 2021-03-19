@@ -10,24 +10,22 @@ This module is responsible for parsing the application's configuration file.
 Still working on the configuration step.
 
 """
+import dataclasses
 import math
 from abc import ABCMeta, abstractmethod
 from configparser import ConfigParser
-import toml
-import dataclasses
 from dataclasses import dataclass
+from json import JSONEncoder
 from os import PathLike
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from json import JSONEncoder
-
 import numpy as np
+import toml
 
 from ..getargs import ARG
-from ..logger import getLogger, Logger
-
-from .core import stripped_by_keys, PathLikeOrString
+from ..logger import Logger, getLogger
+from .core import PathLikeOrString, stripped_by_keys
 
 
 @dataclass(frozen=True)
@@ -201,10 +199,7 @@ class FilterConfiguration:
     filters: Dict[str, FilterConfig]
 
     def __init__(
-        self,
-        command_line_args: Dict = None,
-        filter_config: Dict = None,
-        log: Logger = getLogger(),
+        self, command_line_args: Dict = None, filter_config: Dict = None, log: Logger = getLogger()
     ) -> None:
         # Rule of 3, this needs to be a helper of some kind
         filter_command_line_args = stripped_by_keys(
@@ -258,10 +253,7 @@ class GeneralConfiguration(BaseConfiguration):
         pass
 
     def __init__(
-        self,
-        command_line_args: Dict = None,
-        config: Dict = None,
-        log: Logger = getLogger(),
+        self, command_line_args: Dict = None, config: Dict = None, log: Logger = getLogger()
     ) -> None:
         """[summary]
 
@@ -293,10 +285,7 @@ class SegmentConfiguration(BaseConfiguration):
     terminal_capture_only: bool
 
     def __init__(
-        self,
-        command_line_args: Dict = None,
-        config: Dict = None,
-        log: Logger = getLogger(),
+        self, command_line_args: Dict = None, config: Dict = None, log: Logger = getLogger()
     ) -> None:
         """[summary]
 
@@ -347,9 +336,7 @@ def readconfig(path, command_line_args=None, log: Logger = getLogger()):
     path : Pathlike
         Path to the Poretitioner configuration file.
     """
-    config_path = str(
-        get_absolute_path(path)
-    ).strip()  # Strip any trailing/leading whitespace.
+    config_path = str(get_absolute_path(path)).strip()  # Strip any trailing/leading whitespace.
 
     read_config = toml.load(config_path)
     # config = ConfigParser()

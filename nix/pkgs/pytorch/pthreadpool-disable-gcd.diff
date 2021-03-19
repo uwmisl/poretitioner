@@ -31,7 +31,7 @@ index ca84744..244d0ca 100644
 @@ -14,14 +14,6 @@
  	#endif
  #endif
- 
+
 -#ifndef PTHREADPOOL_USE_GCD
 -	#if defined(__APPLE__)
 -		#define PTHREADPOOL_USE_GCD 1

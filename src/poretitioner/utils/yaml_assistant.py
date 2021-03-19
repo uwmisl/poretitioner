@@ -44,13 +44,9 @@ class YAMLAssistant:
             try:
                 current_layer = current_layer.get(name)
             except KeyError:
-                msg = (
-                    'Variable "%s" not present in the yaml file, starting'
-                    ' with "%s".'
-                    % (
-                        var_name,
-                        name,
-                    )
+                msg = 'Variable "%s" not present in the yaml file, starting' ' with "%s".' % (
+                    var_name,
+                    name,
                 )
                 if err:
                     self.logger.error(msg)
@@ -111,10 +107,7 @@ class YAMLAssistant:
                 )
                 self.logger.warning(msg)
             else:
-                msg = (
-                    'Variable "%s" must be present and contain a valid '
-                    "file name." % var_name
-                )
+                msg = 'Variable "%s" must be present and contain a valid ' "file name." % var_name
                 self.logger.error(msg)
                 if err:
                     self.logger.error(msg)

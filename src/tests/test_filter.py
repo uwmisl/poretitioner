@@ -11,8 +11,10 @@ import re
 from shutil import copyfile
 
 import h5py
-import src.poretitioner.utils.filtering as filtering
 import pytest
+
+import src.poretitioner.utils.filtering as filtering
+
 
 # TODO: Restore Filter unit tests: https://github.com/uwmisl/poretitioner/issues/88
 def apply_feature_filters_empty_test():
@@ -99,16 +101,12 @@ def check_capture_ejection_test():
     end_capture = 1200
     voltage_ends = [0, 1000, 2000, 3000]
     tol_obs = 100
-    assert not filtering.check_capture_ejection(
-        end_capture, voltage_ends, tol_obs=tol_obs
-    )
+    assert not filtering.check_capture_ejection(end_capture, voltage_ends, tol_obs=tol_obs)
 
     end_capture = 3100
     voltage_ends = [0, 1000, 2000, 3000]
     tol_obs = 100
-    assert not filtering.check_capture_ejection(
-        end_capture, voltage_ends, tol_obs=tol_obs
-    )
+    assert not filtering.check_capture_ejection(end_capture, voltage_ends, tol_obs=tol_obs)
 
 
 # def apply_filters_to_read_test():

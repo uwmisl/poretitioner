@@ -11,6 +11,7 @@ import pprint
 import sys
 
 import numpy as np
+
 from src.poretitioner.application_info import *
 from src.poretitioner.fast5s import *
 from src.poretitioner.getargs import *

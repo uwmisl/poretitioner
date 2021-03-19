@@ -13,12 +13,9 @@ from pathlib import Path, PurePosixPath
 from typing import Dict, List, NewType, Optional, Union
 
 import h5py
-from .utils.filtering import PATH as FILTER_PATH
-from .utils.filtering import FilterPlugin, RangeFilter
-
-from .fast5s import FilterSet
 
 from .application_info import get_application_info
+from .fast5s import FilterSet
 from .logger import Logger, getLogger
 from .signals import (
     CaptureMetadata,
@@ -29,6 +26,8 @@ from .signals import (
 )
 from .utils.configuration import FilterConfig, SegmentConfiguration
 from .utils.core import NumpyArrayLike, PathLikeOrString
+from .utils.filtering import PATH as FILTER_PATH
+from .utils.filtering import FilterPlugin, RangeFilter
 
 __all__ = ["BulkFile", "CaptureFile", "channel_path_for_read_id", "signal_path_for_read_id"]
 
@@ -269,7 +268,6 @@ class BaseFile:
 
 
 class BulkFile(BaseFile):
-
     def __init__(
         self, bulk_filepath: PathLikeOrString, mode: str = "r", logger: Logger = getLogger()
     ):

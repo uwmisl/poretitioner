@@ -19,9 +19,7 @@ MOCK_VERSION = "17.29.0"
 MOCK_APPLICATION_NAME = "arbitrary_name"
 
 # Mocks our APPLICATION_INFO.json file.
-APPLICATION_INFO_MOCK_JSON = json.dumps(
-    {"version": MOCK_VERSION, "name": MOCK_APPLICATION_NAME}
-)
+APPLICATION_INFO_MOCK_JSON = json.dumps({"version": MOCK_VERSION, "name": MOCK_APPLICATION_NAME})
 
 
 def setup_function(function):
