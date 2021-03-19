@@ -147,9 +147,9 @@ setattr(helper, "__call__", explain_help)
 
 def report_bugs(log: LoggerType):
     BUG_REPORT_LINK = (
-        "https://github.com/uwmisl/poretitioner/issues/new?labels=beta-hackathon-bug"
+        "https://github.com/uwmisl/poretitioner/issues/new?labels=beta-hackathon,beta-hackathon-bug"
     )
-    FEEDBACK_LINK = "https://github.com/uwmisl/poretitioner/issues/new?labels=beta-hackathon-feedback"
+    FEEDBACK_LINK = "https://github.com/uwmisl/poretitioner/issues/new?labels=beta-hackathon,beta-hackathon-feedback"
 
     log.debug(f"Please report any bugs here: {BUG_REPORT_LINK}")
     log.debug(f"Please any general feedback here: {FEEDBACK_LINK}")

@@ -19,7 +19,7 @@ from . import logger
 from .utils.core import HDF5GroupSerializable, NumpyArrayLike, Window
 from .utils.core import ReadId
 from .utils.core import DataclassHDF5GroupSerialable
-from .utils.core import HDF5_Dataset, HDF5_Group, HDF5_Attribute, HDF5_Type
+from .utils.core import HDF5_Dataset, HDF5_Group, HDF5_Attributes, HDF5_Type
 
 __all__ = [
     "digitize_current",
@@ -41,7 +41,7 @@ DEFAULT_OPEN_CHANNEL_BOUND = 15  # In picoAmperes (pA).
 
 
 @dataclass(frozen=True)
-class ChannelCalibration:
+class ChannelCalibration(HDF5GroupSerializable):
     """
     On the Oxford Nanopore devices, there's an analog to digital converter that converts the raw, unitless analog signal
     transforms the raw current. To convert these raw signals to a measurement of current in picoAmperes,

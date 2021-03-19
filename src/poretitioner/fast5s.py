@@ -8,6 +8,7 @@ Classes for reading, writing and validating fast5 files.
 from __future__ import annotations
 
 from abc import abstractmethod
+import dataclasses
 import json
 from collections import namedtuple
 from dataclasses import dataclass
@@ -33,6 +34,7 @@ from .utils.configuration import SegmentConfiguration
 from .utils.core import (
     DataclassHDF5GroupSerialable,
     HDF5GroupSerializable,
+    HDF5GroupSerializing,
     HDF5_Group,
     NumpyArrayLike,
     PathLikeOrString,
@@ -671,6 +673,18 @@ class BulkFile(BaseFile):
         return result
 
 
+@dataclass(frozen=True)
+class SegmentationMeta(HDF5GroupSerializing):
+    segementer: str
+    segementer_version: str
+    filters: HDF5GroupSerializable
+    terminal_captures_only: bool
+    open_channel_prior_mean: float
+    open_channel_prior_stdv: float
+    good_channels: NumpyArrayLike
+    capture_windows: HDF5GroupSerializable
+
+
 class CaptureFile(BaseFile):
     def __init__(
         self,
@@ -794,9 +808,9 @@ class CaptureFile(BaseFile):
         if sub_run is not None:
             subrun_group = HDF5_Group(self.f5.require_group(CAPTURE_PATH.SUB_RUN))
             sub_run.as_group(subrun_group.parent, log=log)
-            id = sub_run.sub_run_id
-            offset = sub_run.sub_run_offset
-            duration = sub_run.sub_run_duration
+            # id = sub_run.sub_run_id
+            # offset = sub_run.sub_run_offset
+            # duration = sub_run.sub_run_duration
 
             # capture_tracking_id_group.attrs.create(
             #     "sub_run_id", id, dtype=hdf5_dtype(id)

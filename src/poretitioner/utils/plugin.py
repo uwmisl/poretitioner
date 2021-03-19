@@ -5,6 +5,20 @@ from typing import *  # I know people don't like import *, but I think it has be
 from abc import ABC, abstractmethod
 from ..logger import getLogger, Logger
 
+T = TypeVar("T")
+# Q: Why is Singleton here instead of .core?
+#
+# A: So newer developers won't get the impression that Singletons are good idea >__> (haha)
+#
+# From https://python-3-patterns-idioms-test.readthedocs.io/en/latest/Singleton.html#id5
+#
+class Singleton(Generic[T]):
+    __instance = None
+    def __new__(cls, val):
+        if Singleton.__instance is None:
+            Singleton.__instance = object.__new__(cls)
+        Singleton.__instance.val = val
+        return Singleton.__instance
 
 class Plugin(Protocol):
     @classmethod
@@ -12,7 +26,7 @@ class Plugin(Protocol):
         raise NotImplementedError("name hasn't been implemented!")
 
 
-class PluginRegistry(ABC):
+class PluginRegistry(ABC, Singleton):
     @abstractmethod
     def register(self, plugin: Plugin) -> bool:
         raise NotImplementedError("Register hasn't been implemented!")
@@ -41,16 +55,14 @@ class DefaultPluginRegistry(PluginRegistry):
         return self._plugins[name]
 
 
+def files_to_consider():
+    pass
+
 class FilterPluginRegistry(DefaultPluginRegistry):
     def __init__(self, log: Optional[Logger] = None):
         super().__init__(log=log)
 
-    def register(self, plugin: Plugin):
-        self.register()
-        name = plugin.name()
-        self.log.info(f"Registering plugin: {name}")
-        self.plugins[name] = plugin
-
-    def unregister(self, name: str):
-        self.log.info(f"Unregistering plugin: {name}")
-        del self.plugins[name]
+class ClassifierPluginRegistry(DefaultPluginRegistry):
+    def __init__(self, log: Optional[Logger] = None):
+        super().__init__(log=log)
+        # IsAttr

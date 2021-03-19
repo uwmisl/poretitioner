@@ -185,33 +185,81 @@ class HasFast5(Protocol):
 #
 #       https://docs.h5py.org/en/stable/high/attr.html
 
-# HDF5_Dataset = NewType("HDF5_Dataset", h5py.Dataset)
-# HDF5_Group = NewType("HDF5_Group", h5py.Group)
-# HDF5_Attribute = NewType("HDF5_Attribute", h5py.AttributeManager)
+# Attrs are really just mappings from names to data/objects.
+HDF5Attrs = Mapping[str, Optional[Any]]
 
+class IsAttr(Protocol):
+    """A special protocol for objects that are just meant to be set data attributes, and don't
+    need any special HDF5 consdiration (e.g. a class that just needs to store a few numbers).
+    """
+
+    def as_attr(self) -> np.dtype:
+        ...
+
+    def from_attr(self, attr) -> IsAttr:
+        ...
+
+class HDF5IsAttr(IsAttr):
+    def as_attr(self) -> np.dtype:
+        ...
+
+    def from_attr(self, attr) -> IsAttr:
+        ...
 
 class HasAttrs(Protocol):
-    attrs: HDF5_Attribute
 
-    def create_attr(self, name: str, value: Optional[Any]):
+    def get_attrs(self) -> Iterable[IsAttr]:
+        ...
+
+    def create_attr(self, name: str, value: Optional[Any], log: Optional[Logger] = None):
         """Adds an attribute to the current object.
 
         Any existing attribute with this name will be overwritten.
 
         Parameters
         ----------
-        field_name : str
+        name : str
             Name of the attribute.
         value : Optional[Any]
             Value of the attribute.
         """
         ...
 
+    def create_attrs(self, attrs: HDF5Attrs, log: Optional[Logger] = None):
+        """Adds multiple attributes to the current object.
+
+        Any existing attribute with the names in attrs will be overwritten.
+
+        Parameters
+        ----------
+        attrs : HDF5Attrs
+            Name of the attribute.
+        value : Optional[Any]
+            Value of the attribute.
+        """
+
+    def object_from_attr(self, name: str, log: Optional[Logger] = None) -> Optional[Any]:
+        """Creates an object from an attribute (if one could be made).
+        # TODO: Plugin Register via Plugins
+
+        Parameters
+        ----------
+        name : str
+            Name of the attribute.
+
+        Returns
+        ----------
+        An instantiated object represented by this attr, or None if one couldn't be found.
+        """
+        ...
+
+class HDF5HasAttrs(HasAttrs):
+    pass
 
 class HDF5AttributeHaving(HasAttrs):
     def __init__(self, has_attrs: HasAttrs = None):
         super().__init__()
-        self.attrs = self.attrs if has_attrs is None else has_attrs.attrs
+        self.attrs = self.get_attrs if has_attrs is None else has_attrs.get_attrs()
 
     def create_attr(
         self, name: str, value: Optional[Any], log: Optional[Logger] = None
@@ -240,8 +288,17 @@ class HDF5AttributeHaving(HasAttrs):
         if not use_value:
             empty = h5py.Empty(dtype=np.uint8)
             self.attrs.create(name, empty)
+            return
+
+        if isinstance(value, HDF5IsAttr):
+            attr_value = value.as_attr()
+            self.attrs.create(name, value, dtype=hdf5_dtype(attr_value))
         else:
             self.attrs.create(name, value, dtype=hdf5_dtype(value))
+
+    def create_attrs(self, attrs: HDF5Attrs, log: Optional[Logger] = None):
+        for attr_name, attr_value in attrs.items():
+            self.create_attr(attr_name, attr_value, log=log)
 
     def object_from_attr(
         self, name: str, log: Optional[Logger] = None
@@ -315,7 +372,7 @@ class HDF5_Group(h5py.Group, HDF5AttributeHaving):
         return getattr(self._group, attrib)
 
 
-class HDF5_Attribute(h5py.AttributeManager):
+class HDF5_Attributes(h5py.AttributeManager):
     def __init__(self, attrs: h5py.AttributeManager):
         self.attrs = attrs
 
@@ -323,7 +380,7 @@ class HDF5_Attribute(h5py.AttributeManager):
         return getattr(self.attrs, attrib)
 
 
-HDF5_Type = Union[HDF5_Dataset, HDF5_Group, HDF5_Attribute]
+HDF5_Type = Union[HDF5_Dataset, HDF5_Group, HDF5_Attributes]
 
 
 class HDF5Serializing(ABC, Plugin):
@@ -411,8 +468,7 @@ class HDF5GroupSerializing(HDF5Serializing, HDF5AttributeHaving):
     read directly from hd5 Groups.
     """
 
-    @classmethod
-    def name(cls) -> str:
+    def name(self) -> str:
         """Group name that this object will be stored under.
         i.e. If this method returns "patrice_lmb", then a subsequent call to
 
@@ -427,7 +483,7 @@ class HDF5GroupSerializing(HDF5Serializing, HDF5AttributeHaving):
         str
             Name to use in the Fast5 file.
         """
-        return cls.__name__
+        return self.__class__.__name__
 
     def as_group(
         self, parent_group: HDF5_Group, log: Optional[Logger] = None
@@ -503,8 +559,7 @@ class HDF5GroupSerializable(HDF5GroupSerializing):
         super().__init__(self)
         self._group = group
 
-    @classmethod
-    def name(cls) -> str:
+    def name(self) -> str:
         """Group name that this object will be stored under.
         i.e. If this method returns "patrice_lmb", then a subsequent call to
 
@@ -519,7 +574,7 @@ class HDF5GroupSerializable(HDF5GroupSerializing):
         str
             Name to use in the Fast5 file.
         """
-        return cls.__name__
+        return self.__class__.__name__
 
     def as_group(
         self, parent_group: HDF5_Group, log: Optional[Logger] = None
@@ -539,11 +594,14 @@ class HDF5GroupSerializable(HDF5GroupSerializing):
         )
 
     @classmethod
-    def from_a(cls, a: HDF5_Type, log: Logger) -> HDF5Serializing:
-        return cls.from_group(a, log=log)
+    def from_a(cls, a: HDF5_Group, log: Logger) -> HDF5Serializing:
+        return cls.from_group(parent_group=a, log=log)
 
     def as_a(self, a: HDF5_Type, log: Logger) -> HDF5_Type:
-        return self.as_group(a, log=log)
+        return self.as_group(parent_group=a, log=log)
+
+    def update(self, log: Optional[Logger] = None):
+        self.as_a(self._group.parent, log=log)
 
 
 def get_class_for_name(name: str, module_name: str = __name__) -> Type:

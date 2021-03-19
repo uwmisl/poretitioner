@@ -20,6 +20,12 @@ from .utils.configuration import CONFIG, PoretitionerConfig
 from .utils import segment as segmenter
 
 
+# Exceptions
+
+from .utils.exceptions import HDF5SerializationException, HDF5GroupSerializationException, CaptureSchemaVersionException, PluginNotFoundException
+
+
+
 from .getargs import ARG, get_help
 import pathlib
 

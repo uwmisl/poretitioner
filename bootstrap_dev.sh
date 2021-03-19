@@ -315,6 +315,8 @@ configure_nix () {
         print_nix_config $NIX_CONFIG_FILE
         echo "I'm about to ask you for sudo permissions to modify $NIX_CONFIG_FILE"
 
+        sudo touch "$NIX_CONFIG_FILE"
+
         # Nix conf info comment
         # This is just to help future users understand where these values come from.
         add_info_line () {

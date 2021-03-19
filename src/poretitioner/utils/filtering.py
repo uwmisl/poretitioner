@@ -20,11 +20,11 @@ from json import JSONEncoder
 
 from ..logger import Logger, getLogger
 from ..signals import Capture
-from .core import HasFast5, NumpyArrayLike, PathLikeOrString
+from .core import HDF5GroupSerializable, HasFast5, IsAttr, NumpyArrayLike, PathLikeOrString
 from .core import ReadId
 from .core import stripped_by_keys
 from .core import Fast5File
-from .core import HDF5GroupSerializing
+from .core import HDF5GroupSerializing, DataclassHDF5GroupSerialable, HDF5_Group
 from .plugin import Plugin
 
 
@@ -521,7 +521,7 @@ class Filtering(Protocol):
 
 
 @dataclass
-class Filter(Filtering):
+class Filter(Filtering, DataclassHDF5GroupSerialable):
     """A named filter that can be applied to some data.
 
     You can use this filter by just calling it on some data.
@@ -544,6 +544,35 @@ class Filter(Filtering):
     config: FilterConfig
     plugin: FilterPlugin
 
+    def as_group(
+        self, parent_group: HDF5_Group, log: Optional[Logger] = None
+    ) -> HDF5_Group:
+        log = log if log is not None else getLogger()
+        # Note: This line simply registers a group with the name 'name' in the parent group.
+        this_group = HDF5_Group(parent_group.require_group(self.name))
+
+        all_attrs = {**vars(self.config), **vars(self.plugin)}
+        this_group.create_attrs(all_attrs)
+
+        # Implementers must now write their serialized instance to this group.
+        return HDF5_Group(new_group)
+
+    @classmethod
+    def from_group(
+        cls, group: HDF5_Group, log: Optional[Logger] = None
+    ) -> DataclassHDF5GroupSerialable:
+        # You see, the trouble is, in the above 'as_group' call, we lumped together
+        # all the attributes of the FilterConfig and the FilterPlugin, not knowing
+        # which attributes belonged to which class.
+        #
+        # Now, here in `from_group`, it's time to pay the piper and figure out which attribute
+        # goes where to create a new Filter instance.
+        #
+        # This is likely achievable through the plugin architecture, since the plugin's
+        # name is unique, we can try to find a plugin with a given name, then get its attributes from there.
+        # Load
+        log.warning("Filter.from_group not implemented...It's a whole thing (see comment)")
+
     def __call__(self, *args, **kwargs) -> bool:
         return self.plugin(*args, **kwargs)
 
@@ -554,62 +583,41 @@ class Filter(Filtering):
     def name(self) -> FilterName:
         return FilterName(self.plugin.name())
 
+    def as_attr(self) -> Dict[str, Any]:
+        name = self.name
+        attrs = {** vars(self.config), **vars(self.plugin), name: name}
+        return attrs
 
-@dataclass
-class Filters(Filtering):
-    """A collection of callable filters and their names.
+    def from_attr(self, attr) -> IsAttr:
+        ...
 
-    Use this like a dictionary of
+class Filters(DataclassHDF5GroupSerialable):
+    filters: Optional[Mapping[str, Filter]] = None
 
-    This is probably what you want to use and pass around.
+    def __init__(self, filters: Optional[Mapping[str, Filter]] = None):
+        self.filters = filters if filters is not None else {}
 
-    """
+    def as_group(
+        self, parent_group: HDF5_Group, log: Optional[Logger] = None
+    ) -> HDF5_Group:
+        log = log if log is not None else getLogger()
 
-    _filters: Dict[FilterName, Filter]
+        """Returns this object as an HDF5 Group."""
+        my_group: HDF5_Group = super().as_group(parent_group)
 
-    def __init__(self, filters: Dict[FilterName, Filter]):
-        self._filters = filters
-
-    def __getitem__(self, filter_name: Union[str, FilterName]):
-        return self._filters[FilterName(filter_name)]
-
-    def __setitem__(self, filter_name: Union[str, FilterName]):
-        return self._filters[FilterName(filter_name)]
-
-    def values(self):
-        return self._filters.values()
-
-    def items(self):
-        return self._filters.items()
-
-    # def filters(self):
-    #     return self._filters.values()
-
-    # def __dask_tokenize__(self):
-    #     # For tokenize to work we want to return a value that fully
-    #     # represents this object. In this case it's the config dictionary.
-    #     return self._filters
-
-    def apply(self, capture: CaptureOrTimeSeries) -> bool:
-        """
-        Check whether an array of values (e.g. a single nanopore capture)
-        passes a set of filters.
-
-        Parameters
-        ----------
-        capture : CaptureOrTimeSeries | NumpyArrayLike
-            Capture containing time series of nanopore current values for a single capture, or the signal itself.
-
-        Returns
-        -------
-        boolean
-            True if capture passes all filters; False otherwise.
-        """
-        return does_pass_filters(capture, self)
-
-    def __call__(self, capture: CaptureOrTimeSeries) -> bool:
-        return self.apply(capture)
-
+        for filter_name, filter_value in self.filters.items():
+            if isinstance(field_value, HDF5GroupSerializable):
+                # This value is actually its own group.
+                # So we create a new group rooted at our dataclass's group
+                # And assign it the value of whatever the group of the value is.
+                my_group.require_group(field_name)
+                field_group = field_value.as_group(my_group, log=log)
+            # elif isinstance(field_value, HDF5Serializing):
+            #     serializable = field_type.as_a()
+            #     my_group.attrs.create(field_name, , dtype=hdf5_dtype(value))
+            else:
+                my_group.create_attr(field_name, field_value)
+        return my_group
 
 def get_filters(filter_configs: Optional[FilterConfigs] = None) -> Filters:
     """Creates Filters from a list of filter configurations.
@@ -660,8 +668,7 @@ def does_pass_filters(capture: CaptureOrTimeSeries, filters: Filters) -> bool:
     return True
 
 
-@dataclass(frozen=True)
-class FilterSet(Filtering):
+class FilterSet(Filtering, HDF5GroupSerializable):
     """
     A collection of filters with a name for easy
     identification.
@@ -677,6 +684,7 @@ class FilterSet(Filtering):
 
     name: FilterSetId
     filters: Filters
+
 
     def validate(self):
         raise NotImplementedError("Implement validation for filters!")
@@ -709,7 +717,7 @@ class FilterSet(Filtering):
         return filter_set
 
     def apply(self, capture: CaptureOrTimeSeries) -> bool:
-        return self.filters(capture)
+        return does_pass_filters(capture, self.filters)
 
     def __call__(self, capture: CaptureOrTimeSeries) -> bool:
         return self.apply(capture)
