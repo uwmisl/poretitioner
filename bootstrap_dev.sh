@@ -145,7 +145,7 @@ ask_sudo () {
     echo ""
     yellow "I'd like to try this by running:"
     echo ""
-    eho "$2"
+    echo "$2"
     echo ""
     yellow "Is it okay if I use sudo to run: $2? \n"
 
