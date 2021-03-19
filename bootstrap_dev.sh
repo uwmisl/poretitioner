@@ -131,32 +131,19 @@ shell () {
 isDarwin () {
     [ $(uname -s ) = "Darwin" ]
 }
-
-##############################################
-#          Installation Methods              #
-##############################################
-
-needsMacOSCatalinaOrHigherInstall () {
-    # As of MacOS X Catalina (10.15.x), the root directory is no longer writeable.
-    # However, Nix expects to be installed at this location. To get around this,
-    # we borrowed a script from the NixOS repository that creates a separate
-    # volume where Nix can be hosted at root (i.e. /nix/).
-
-    # Is this Mac OS?
-    if ! isDarwin ; then
-        green "Not on MacOS, proceeding with standard approach..."
-        return 1;
-    fi
-
-    green "On MacOS, checking whether root directory is writeable..."
-    echo ""
-    yellow "I need to use 'sudo' to check whether the root directory is writeable."
-    yellow "This is because Nix will need to create/delete a directory at the file system root (i.e. /nix/)"
+yellow "This is because Nix will need to create/delete a directory at the file system root (i.e. /nix/), "
+    yellow "as well as append data to your /etc/bashrc and /etc/zshrc to make itself available to all users. "
     yellow "Some extra install/uninstall steps will be necessary if we find out it's not writeable."
+
+
+ask_sudo () {
+    # $1 Reason
+    # $2 command
+    yellow "I need to use 'sudo' to:"
+    echo "$1"
+    yellow "I'd like to try this by running: $2"
     echo ""
-    yellow "I'd like to test this by running 'sudo [ -w / ]'"
-    echo ""
-    yellow "Is it okay if I use sudo to run the above command? \n"
+    yellow "Is it okay if I use sudo to run: $2? \n"
 
     isValidResponse () {
         isYes $1 || isNo $1 || isQuit $1
@@ -185,6 +172,30 @@ needsMacOSCatalinaOrHigherInstall () {
     else
         red "Unsure how to interpret '$response'. Assuming asking for sudo is okay :) ";
     fi
+
+    sudo $2
+}
+
+##############################################
+#          Installation Methods              #
+##############################################
+
+needsMacOSCatalinaOrHigherInstall () {
+    # As of MacOS X Catalina (10.15.x), the root directory is no longer writeable.
+    # However, Nix expects to be installed at this location. To get around this,
+    # we borrowed a script from the NixOS repository that creates a separate
+    # volume where Nix can be hosted at root (i.e. /nix/).
+
+    # Is this Mac OS?
+    if ! isDarwin ; then
+        green "Not on MacOS, proceeding with standard approach..."
+        return 1;
+    fi
+
+    green "On MacOS, checking whether root directory is writeable..."
+    reason="Nix needs to write to the root directory (i.e. /nix/) to install. I need to see if this is possible on your computer, or if we'll have to take some extra steps for installation. "
+    request="sudo [ -w / ]"
+    ask_sudo "$reason" "$request"
 
     # Are we allowed to write to root?
     set -x # Turning on set -x so the user can see what we're running with sudo.
@@ -297,8 +308,6 @@ configure_nix () {
         # Nix Configuration info: https://www.mankier.com/5/nix.conf
         print_nix_config $NIX_CONFIG_FILE
         echo "I'm about to ask you for sudo permissions to modify $NIX_CONFIG_FILE"
-
-        echo ""
 
         # Nix conf info comment
         # This is just to help future users understand where these values come from.
@@ -537,6 +546,11 @@ main () {
             # Nix is already installed!
             bold "Nix is already installed. Skipping installation."
         else
+            bashrc="/etc/bashrc"
+            zshrc="/etc/zshrc"
+            create_files="sudo touch $bashrc $zshrc"
+            ask_sudo "I need to check whether $bashrc or $zshrc exist, and create empty ones if they don't. This is because Nix will add itself to the user PATH from one or more of these files, but only if they already exist. No files means no Nix on path, which means you wouldn't be able to run 'nix' as a command." create_files
+
             install_nix
             echo ""
             green "!!!!!! Important !!!!!!!!"
