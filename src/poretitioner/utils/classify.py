@@ -21,6 +21,7 @@ from .. import fast5s, logger
 from ..fast5s import CaptureFile
 from ..logger import Logger, getLogger
 from ..signals import FractionalizedSignal, RawSignal
+
 # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
 from . import NTERs_trained_cnn_05152019 as pretrained_model
 from . import filtering
@@ -171,12 +172,17 @@ class ClassifierPlugin(metaclass=ABCMeta):
 
     @abstractmethod
     def evaluate(self, capture):
-        raise NotImplementedError("Evaluate hasn't been implemented for this classifier.")
+        raise NotImplementedError(
+            "Evaluate hasn't been implemented for this classifier."
+        )
 
 
 class ClassifierFile(CaptureFile):
     def __init__(
-        self, capture_filepath: PathLikeOrString, mode: str = "r", logger: Logger = getLogger()
+        self,
+        capture_filepath: PathLikeOrString,
+        mode: str = "r",
+        logger: Logger = getLogger(),
     ):
         super().__init__(capture_filepath, mode, logger=logger)
 
@@ -184,7 +190,9 @@ class ClassifierFile(CaptureFile):
         if self.classification_path not in f5:
             f5.create_group(self.classification_path)
 
-    def get_classification_for_read(self, model: str, read_id: str) -> ClassificationResult:
+    def get_classification_for_read(
+        self, model: str, read_id: str
+    ) -> ClassificationResult:
         """Gets the classification result for the read, if it's been classified,
         or NullClassificationResult, if it hasn't.
 
@@ -232,7 +240,9 @@ class ClassifierFile(CaptureFile):
         return results_path
 
     def _get_results_path_for_model(self, model: str, read_id: str) -> str:
-        results_path = str(PurePosixPath(self._get_classification_path_for_model(model), read_id))
+        results_path = str(
+            PurePosixPath(self._get_classification_path_for_model(model), read_id)
+        )
         return results_path
 
     def write_details(self, classifier_details: ClassifierDetails):
@@ -332,7 +342,9 @@ def classify_fast5_file(
     # ClassifierFile(filepath, )
     details = None  # ClassifierDetails(classifier_name, )
     assert classify_start >= 0 and classify_end >= 0
-    assert classifier_confidence_threshold is None or (0 <= classifier_confidence_threshold <= 1)
+    assert classifier_confidence_threshold is None or (
+        0 <= classifier_confidence_threshold <= 1
+    )
 
     local_logger.debug(
         f"Classification parameters: name: {classifier_name}, "
@@ -429,7 +441,9 @@ def init_classifier(classifier_name, classification_path):
 
 
 # TODO: Implement Classification with the new data model: https://github.com/uwmisl/poretitioner/issues/92
-def predict_class(classifier_name, classifier, raw, class_labels=None) -> ClassificationResult:
+def predict_class(
+    classifier_name, classifier, raw, class_labels=None
+) -> ClassificationResult:
     """Runs the classifier using the given raw data as input. Does not apply
     any kind of confidence threshold.
 

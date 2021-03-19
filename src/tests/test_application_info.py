@@ -19,7 +19,9 @@ MOCK_VERSION = "17.29.0"
 MOCK_APPLICATION_NAME = "arbitrary_name"
 
 # Mocks our APPLICATION_INFO.json file.
-APPLICATION_INFO_MOCK_JSON = json.dumps({"version": MOCK_VERSION, "name": MOCK_APPLICATION_NAME})
+APPLICATION_INFO_MOCK_JSON = json.dumps(
+    {"version": MOCK_VERSION, "name": MOCK_APPLICATION_NAME}
+)
 
 
 def setup_function(function):
@@ -30,8 +32,7 @@ def setup_function(function):
 
 @patch("builtins.open", mock_open(read_data=APPLICATION_INFO_MOCK_JSON))
 def get_application_info_data_test():
-    """Test project name and version are properly parsed.
-    """
+    """Test project name and version are properly parsed."""
     info = get_application_info()
     assert info.version == MOCK_VERSION
     assert info.name == MOCK_APPLICATION_NAME
@@ -39,8 +40,7 @@ def get_application_info_data_test():
 
 @patch("builtins.open", mock_open(read_data=APPLICATION_INFO_MOCK_JSON))
 def get_application_info_cache_test():
-    """Test that the metadata file isn't opened more than once, even if the data is requested multiple times.
-    """
+    """Test that the metadata file isn't opened more than once, even if the data is requested multiple times."""
     get_application_info()
     get_application_info()
     get_application_info()
@@ -50,8 +50,7 @@ def get_application_info_cache_test():
 
 @patch("builtins.open", mock_open(read_data=APPLICATION_INFO_MOCK_JSON))
 def get_application_info_idempotent_test():
-    """Test that the project metadata never changes once read, even if the data is requested multiple times.
-    """
+    """Test that the project metadata never changes once read, even if the data is requested multiple times."""
     info = get_application_info()
     info2 = get_application_info()
     info3 = get_application_info()

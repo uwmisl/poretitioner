@@ -639,7 +639,6 @@ def parallel_find_captures(
 
                 capture_file.write_capture(raw_signal, capture_metadata)
 
-
                 local_logger.debug(f"\tWritten!")
 
     return capture_metadatum
