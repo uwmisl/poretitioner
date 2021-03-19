@@ -521,7 +521,7 @@ class Filtering(Protocol):
 
 
 @dataclass
-class Filter(Filtering, DataclassHDF5GroupSerialable):
+class Filter(Filtering):
     """A named filter that can be applied to some data.
 
     You can use this filter by just calling it on some data.
@@ -544,6 +544,29 @@ class Filter(Filtering, DataclassHDF5GroupSerialable):
     config: FilterConfig
     plugin: FilterPlugin
 
+
+    def __call__(self, *args, **kwargs) -> bool:
+        return self.plugin(*args, **kwargs)
+
+    def apply(self, *args, **kwargs) -> bool:
+        return self.plugin.apply(*args, **kwargs)
+
+    @property
+    def name(self) -> FilterName:
+        return FilterName(self.plugin.name())
+
+    def as_attr(self) -> Dict[str, Any]:
+        name = self.name
+        attrs = {** vars(self.config), **vars(self.plugin), name: name}
+        return attrs
+
+    def from_attr(self, attr) -> IsAttr:
+        ...
+
+
+
+@dataclass
+class HDF5FilterSerialable(Filter, DataclassHDF5GroupSerialable):
     def as_group(
         self, parent_group: HDF5_Group, log: Optional[Logger] = None
     ) -> HDF5_Group:
@@ -573,51 +596,14 @@ class Filter(Filtering, DataclassHDF5GroupSerialable):
         # Load
         log.warning("Filter.from_group not implemented...It's a whole thing (see comment)")
 
-    def __call__(self, *args, **kwargs) -> bool:
-        return self.plugin(*args, **kwargs)
+        # This is pure Hail Mary.
+        return super().from_group(group, log)
 
-    def apply(self, *args, **kwargs) -> bool:
-        return self.plugin.apply(*args, **kwargs)
+# class Filters(DataclassHDF5GroupSerialable):
+#     filters: 
 
-    @property
-    def name(self) -> FilterName:
-        return FilterName(self.plugin.name())
+Filters = Dict[FilterName, Filter]
 
-    def as_attr(self) -> Dict[str, Any]:
-        name = self.name
-        attrs = {** vars(self.config), **vars(self.plugin), name: name}
-        return attrs
-
-    def from_attr(self, attr) -> IsAttr:
-        ...
-
-class Filters(DataclassHDF5GroupSerialable):
-    filters: Optional[Mapping[str, Filter]] = None
-
-    def __init__(self, filters: Optional[Mapping[str, Filter]] = None):
-        self.filters = filters if filters is not None else {}
-
-    def as_group(
-        self, parent_group: HDF5_Group, log: Optional[Logger] = None
-    ) -> HDF5_Group:
-        log = log if log is not None else getLogger()
-
-        """Returns this object as an HDF5 Group."""
-        my_group: HDF5_Group = super().as_group(parent_group)
-
-        for filter_name, filter_value in self.filters.items():
-            if isinstance(field_value, HDF5GroupSerializable):
-                # This value is actually its own group.
-                # So we create a new group rooted at our dataclass's group
-                # And assign it the value of whatever the group of the value is.
-                my_group.require_group(field_name)
-                field_group = field_value.as_group(my_group, log=log)
-            # elif isinstance(field_value, HDF5Serializing):
-            #     serializable = field_type.as_a()
-            #     my_group.attrs.create(field_name, , dtype=hdf5_dtype(value))
-            else:
-                my_group.create_attr(field_name, field_value)
-        return my_group
 
 def get_filters(filter_configs: Optional[FilterConfigs] = None) -> Filters:
     """Creates Filters from a list of filter configurations.
@@ -633,12 +619,11 @@ def get_filters(filter_configs: Optional[FilterConfigs] = None) -> Filters:
         A set of callable/applyable filters.
     """
     filter_configs = filter_configs if filter_configs is not None else FilterConfigs({})
-    my_filters = Filters(
-        {
+    my_filters = {
             name: filter_from_config(filter_config)
             for name, filter_config in filter_configs.items()
-        }
-    )
+    }
+
     return my_filters
 
 
@@ -668,7 +653,7 @@ def does_pass_filters(capture: CaptureOrTimeSeries, filters: Filters) -> bool:
     return True
 
 
-class FilterSet(Filtering, HDF5GroupSerializable):
+class FilterSet(Filtering):
     """
     A collection of filters with a name for easy
     identification.
@@ -684,7 +669,6 @@ class FilterSet(Filtering, HDF5GroupSerializable):
 
     name: FilterSetId
     filters: Filters
-
 
     def validate(self):
         raise NotImplementedError("Implement validation for filters!")
@@ -721,6 +705,37 @@ class FilterSet(Filtering, HDF5GroupSerializable):
 
     def __call__(self, capture: CaptureOrTimeSeries) -> bool:
         return self.apply(capture)
+
+
+class HDF5FilterSet(FilterSet, HDF5GroupSerializable):
+
+    def __init__(self, group: HDF5_Group) -> None:
+        super().__init__(group)
+
+    def name(self):
+        return self.name
+
+    def as_group(
+        self, parent_group: HDF5_Group, log: Optional[Logger] = None
+    ) -> HDF5_Group:
+        new_group = super(HDF5GroupSerializable).as_group(parent_group, log=log)
+        for name, filter_t in self.filters.items():
+            filter_group = HDF5_Group(new_group.require_group(name))
+            hdf5_filter = HDF5FilterSerialable(filter_t.config, filter_t.plugin)
+            hdf5_filter.as_group(filter_group)
+
+        # Note: This does nothing but register a group with the name 'name' in the parent group.
+        #       Implementers must now write their serialized instance to this group.
+        return HDF5_Group(new_group)
+
+    @classmethod
+    @abstractmethod
+    def from_group(
+        cls, group: HDF5_Group, log: Optional[Logger] = None
+    ) -> HDF5GroupSerializable:
+        raise NotImplementedError(
+            f"from_group not implemented for {cls.__name__}. Make sure you write a method that returns a serialzied version of this object."
+    )
 
 
 def filter_from_config(config: FilterConfig, log: Logger = getLogger()) -> Filter:

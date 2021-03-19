@@ -43,7 +43,7 @@ __all__ = [
 
 
 class NumpyArrayLike(np.ndarray):
-    def __new__(cls, signal: NumpyArrayLike):
+    def __new__(cls, signal: Union[np.ndarray, NumpyArrayLike]):
         obj = np.copy(signal).view(
             cls
         )  # Optimization: Consider not making a copy, this is more error prone though: np.asarray(signal).view(cls)
@@ -173,6 +173,7 @@ class HasFast5(Protocol):
     f5: Fast5File
 
 
+
 # Note: We never create or instantiate AttributeManagers directly, instead we borrow its interface.
 #       3 Laws to keep in mind with Attributes:
 #
@@ -187,6 +188,7 @@ class HasFast5(Protocol):
 
 # Attrs are really just mappings from names to data/objects.
 HDF5Attrs = Mapping[str, Optional[Any]]
+
 
 class IsAttr(Protocol):
     """A special protocol for objects that are just meant to be set data attributes, and don't
@@ -208,7 +210,7 @@ class HDF5IsAttr(IsAttr):
 
 class HasAttrs(Protocol):
 
-    def get_attrs(self) -> Iterable[IsAttr]:
+    def get_attrs(self) -> HDF5_Attributes:
         ...
 
     def create_attr(self, name: str, value: Optional[Any], log: Optional[Logger] = None):
@@ -253,13 +255,14 @@ class HasAttrs(Protocol):
         """
         ...
 
-class HDF5HasAttrs(HasAttrs):
-    pass
 
 class HDF5AttributeHaving(HasAttrs):
     def __init__(self, has_attrs: HasAttrs = None):
         super().__init__()
-        self.attrs = self.get_attrs if has_attrs is None else has_attrs.get_attrs()
+        self.attrs = self.get_attrs() if has_attrs is None else has_attrs.get_attrs()
+
+    def get_attrs(self) -> HDF5_Attributes:
+        return self.attrs
 
     def create_attr(
         self, name: str, value: Optional[Any], log: Optional[Logger] = None
@@ -287,14 +290,14 @@ class HDF5AttributeHaving(HasAttrs):
         )  # Only uses the provided value if it's non-empty.
         if not use_value:
             empty = h5py.Empty(dtype=np.uint8)
-            self.attrs.create(name, empty)
+            self.get_attrs().create(name, empty)
             return
 
         if isinstance(value, HDF5IsAttr):
             attr_value = value.as_attr()
-            self.attrs.create(name, value, dtype=hdf5_dtype(attr_value))
+            self.get_attrs().create(name, value, dtype=hdf5_dtype(attr_value))
         else:
-            self.attrs.create(name, value, dtype=hdf5_dtype(value))
+            self.get_attrs().create(name, value, dtype=hdf5_dtype(value))
 
     def create_attrs(self, attrs: HDF5Attrs, log: Optional[Logger] = None):
         for attr_name, attr_value in attrs.items():
@@ -305,7 +308,7 @@ class HDF5AttributeHaving(HasAttrs):
     ) -> Optional[Any]:
         log = log if log is not None else getLogger()
         try:
-            attr_value = self.attrs[name]
+            attr_value = self.get_attrs()[name]
         except AttributeError:
             log.warning(
                 f"Could not find an attribute with the name '{name}' on object {self!r}. Returning None"
@@ -336,7 +339,7 @@ class HDF5AttributeHaving(HasAttrs):
         from : HDF5AttributeHaving
             Which attribute-haver to copy from.
         """
-        self.create_attr(name, source.attrs[name])
+        self.create_attr(name, source.get_attrs()[name])
 
     def copy_all_attrs(self, source: HDF5AttributeHaving):
         """Copy a all attributes from a source.
@@ -347,7 +350,7 @@ class HDF5AttributeHaving(HasAttrs):
         from : HDF5AttributeHaving
             Which attribute-haver to copy all attributes from.
         """
-        for name in source.attrs.keys():
+        for name in source.get_attrs().keys():
             self.copy_attr(name, source)
 
 
@@ -360,7 +363,12 @@ class HDF5_Dataset(HDF5AttributeHaving, h5py.Dataset):
         return getattr(self._dataset, attrib)
 
 
-class HDF5_Group(h5py.Group, HDF5AttributeHaving):
+class HDF5_ParentHaving:
+    @property
+    def parent(self) -> HDF5_Group:
+        return HDF5_Group(self.parent)
+
+class HDF5_Group(h5py.Group, HDF5AttributeHaving, HDF5_ParentHaving):
     @property
     def parent(self) -> HDF5_Group:
         return HDF5_Group(self._group.parent)
@@ -372,7 +380,7 @@ class HDF5_Group(h5py.Group, HDF5AttributeHaving):
         return getattr(self._group, attrib)
 
 
-class HDF5_Attributes(h5py.AttributeManager):
+class HDF5_Attributes(h5py.AttributeManager, HDF5_ParentHaving):
     def __init__(self, attrs: h5py.AttributeManager):
         self.attrs = attrs
 
@@ -461,6 +469,60 @@ class HDF5Serializing(ABC, Plugin):
         raise NotImplementedError(
             f"{self!s} is missing an implementation for {HDF5Serializing.update.__name__}!"
         )
+
+
+class HDF5DatasetSerializing(NumpyArrayLike, HDF5Serializing, HDF5AttributeHaving):
+    """Objects adhering to the `HDF5GroupSerializable` can be written to and
+    read directly from hd5 Groups.
+    """
+
+    def name(self) -> str:
+        """Group name that this object will be stored under.
+        i.e. If this method returns "patrice_lmb", then a subsequent call to
+
+        `self.as_group(Group("/Foo/bar/"))`
+
+        Will return a group at /Foo/bar/patrice_lmb
+
+        Be double-sure to override this if you want it to be anything other than the class name.
+
+        Returns
+        -------
+        str
+            Name to use in the Fast5 file.
+        """
+        return self.__class__.__name__
+
+
+class HDF5_DatasetSerializable(HDF5DatasetSerializing):
+
+    @classmethod
+    def from_a(cls, a: Union[HDF5_Dataset, HDF5_Group], log: Optional[Logger] = None) -> HDF5_DatasetSerializable:
+        # Assume A is the parent group
+        # Assuming we're storing a numpy array as this dataset
+
+        # Copies the values into our buffer
+        try:
+            buffer = np.empty(a.shape, dtype=a.dtype)
+            a.read_direct(buffer)
+            data = NumpyArrayLike(buffer)
+
+            return HDF5_DatasetSerializable(cls.__new__(cls, buffer))
+
+        except AttributeError as e:
+            log.error("Could not convert to HDF5_DatasetSerializable from: {a!r}")
+            raise e
+        #serialized = cls.__new__(cls)
+        return 
+
+
+    def as_a(self, a: HDF5_Group, log: Optional[Logger] = None) -> HDF5_Dataset:
+        dataset = HDF5_Dataset(a.require_dataset(self.name(), shape=self.shape, dtype=self.dtype))
+        return dataset
+
+    def update(self, log: Optional[Logger] = None):
+        self.as_a(self._group.parent, log=log)
+
 
 
 class HDF5GroupSerializing(HDF5Serializing, HDF5AttributeHaving):
@@ -622,6 +684,7 @@ def get_class_for_name(name: str, module_name: str = __name__) -> Type:
     Type
         [description]
     """
+    import importlib
     this_module = importlib.import_module(module_name)
     this_class = getattr(this_module, name)
     return this_class
@@ -705,6 +768,77 @@ class DataclassHDF5GroupSerialable(HDF5GroupSerializable):
                 object.__setattr__(my_instance, name, this_instance)
 
         return my_instance
+
+
+class DataclassHDF5DataSetSerialable(HDF5_DatasetSerializable):
+    def as_dataset(
+        self, parent_group: HDF5_Group, log: Optional[Logger] = None
+    ) -> HDF5_Dataset:
+        log = log if log is not None else getLogger()
+
+        """Returns this object as an HDF5 Group."""
+        dataset: HDF5_Dataset = super().as_a(parent_group)
+
+        for field_name, field_value in vars(self).items():
+            dataset.create_attr(field_name, field_value)
+        return dataset
+
+    @classmethod
+    def from_dataset(
+        cls, dataset: HDF5_Dataset, log: Optional[Logger] = None
+    ) -> DataclassHDF5DataSetSerialable:
+        log = log if log is not None else getLogger()
+        if not log:
+            log = getLogger()
+        my_instance = cls.__new__(dataset)
+
+        # First, copy over attrs:
+        for name, value in group.attrs.items():
+            object.__setattr__(my_instance, name, value)
+
+        # Then, copy over any datasets or groups.
+        for name, value in group.items():
+            if isinstance(value, h5py.Dataset):
+                # Assuming we're storing a numpy array as this dataset
+                buffer = np.empty(value.shape, dtype=value.dtype)
+                # Copies the values into our buffer
+                value.read_direct(buffer)
+                object.__setattr__(my_instance, name, buffer)
+            elif isinstance(value, h5py.Group):
+                # If it's a group, we have to do a little more work
+                # 1) Find the class described by the group
+                #   1.1) Verify that we actually know a class by that name. Raise an exception if we don't.
+                #   1.2) Verify that that class has a method to create an instance group a group.
+                # 2) Create a new class instance from that group
+                # 3) Set this object's 'name' field to the object we just created.
+                try:
+                    ThisClass = get_class_for_name(name)
+                except AttributeError as e:
+                    serial_exception = HDF5GroupSerializationException(
+                        f"We couldn't serialize group named {name} (group is attached in the exception.",
+                        e,
+                        group=value,
+                    )
+                    log.exception(serial_exception.msg, serial_exception)
+                    raise serial_exception
+
+                # assert get_class_for_name(name) and isinstance(), f"No class found that corresponds to group {name}! Make sure there's a corresponding dataclass named {name} in this module scope!"
+
+                try:
+                    this_instance = ThisClass.from_group(value, log=log)
+                except AttributeError as e:
+                    serial_exception = HDF5GroupSerializationException(
+                        f"We couldn't serialize group named {name!s} from class {ThisClass!s}. It appears {ThisClass!s} doesn't implement the {HDF5GroupSerializing.__name__} protocol. Group is attached in the exception.",
+                        e,
+                        group=value,
+                    )
+                    log.exception(serial_exception.msg, serial_exception)
+                    raise serial_exception
+
+                object.__setattr__(my_instance, name, this_instance)
+
+        return my_instance
+
 
 
 class Window(namedtuple("Window", ["start", "end"])):

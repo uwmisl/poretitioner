@@ -17,7 +17,7 @@ from pathlib import Path, PosixPath, PurePosixPath
 from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 
 import h5py
-from .utils.filtering import FILTER_PATH
+from .utils.filtering import FILTER_PATH, HDF5FilterSerialable
 from .utils.filtering import Filters, FilterSet, FilterPlugin, RangeFilter
 
 from .utils.classify import CLASSIFICATION_PATH
@@ -227,6 +227,18 @@ class Channel(DataclassHDF5GroupSerialable):
     open_channel_pA: int
     sampling_rate: int
 
+    def name(self) -> str:
+        channel_id = f"channel_{self.channel_number}"
+        return channel_id
+
+@dataclass(frozen=True)
+class Channel(DataclassHDF5GroupSerialable):
+    """Channel-specific information saved for each read."""
+
+    channel_number: int
+    calibration: ChannelCalibration
+    open_channel_pA: int
+    sampling_rate: int
 
 @dataclass(frozen=True)
 class SubRun(DataclassHDF5GroupSerialable):
@@ -677,7 +689,7 @@ class BulkFile(BaseFile):
 class SegmentationMeta(HDF5GroupSerializing):
     segementer: str
     segementer_version: str
-    filters: HDF5GroupSerializable
+    filters: HDF5FilterSerialable
     terminal_captures_only: bool
     open_channel_prior_mean: float
     open_channel_prior_stdv: float
@@ -836,18 +848,23 @@ class CaptureFile(BaseFile):
         context_id_group = self.f5.require_group(CAPTURE_PATH.CONTEXT_ID)
         capture_windows_group = self.f5.require_group(CAPTURE_PATH.CAPTURE_WINDOWS)
 
+        segmenter_name = __name__
+
+        good_channels = [1] # TODO: Pass in good channels
+        
+        SEGMENT_METADATA = SegmentationMeta(segmenter_name, version, filters, segment_config.terminal_capture_only, segment_config.open_channel_prior_mean, segment_config.open_channel_prior_stdv, good_channels, capture_windowss)
         # Only supporting range capture_criteria for now (MVP): https://github.com/uwmisl/poretitioner/issues/67
         if segment_config is None:
             raise ValueError("No segment configuration provided.")
         else:
-            self.log.info(f"Saving Segment config: {segment_config!s}")
-            for key, value in vars(segment_config).items():
-                try:
-                    save_value = json.dumps(value)
-                except TypeError:
-                    # In case the object isn't easily serializable
-                    save_value = json.dumps({k: v.__dict__ for k, v in value.items()})
-                context_id_group.create_dataset(key, data=save_value)
+            # self.log.info(f"Saving Segment config: {segment_config!s}")
+            # for key, value in vars(segment_config).items():
+            #     try:
+            #         save_value = json.dumps(value)
+            #     except TypeError:
+            #         # In case the object isn't easily serializable
+            #         save_value = json.dumps({k: v.__dict__ for k, v in value.items()})
+            #     context_id_group.create_dataset(key, data=save_value)
 
         for name, my_filter in capture_criteria.items():
             filter_plugin = my_filter.plugin

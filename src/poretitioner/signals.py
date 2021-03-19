@@ -41,7 +41,7 @@ DEFAULT_OPEN_CHANNEL_BOUND = 15  # In picoAmperes (pA).
 
 
 @dataclass(frozen=True)
-class ChannelCalibration(HDF5GroupSerializable):
+class ChannelCalibration(DataclassHDF5GroupSerialable):
     """
     On the Oxford Nanopore devices, there's an analog to digital converter that converts the raw, unitless analog signal
     transforms the raw current. To convert these raw signals to a measurement of current in picoAmperes,
@@ -86,6 +86,8 @@ class SignalMetadata(
     namedtuple("SignalMetadata", ["channel_number", "window", "calibration"])
 ):
     """Metadata around a signal."""
+
+    
 
 
 # @dataclass(frozen=True)
@@ -534,6 +536,19 @@ class PicoampereSignal(CurrentSignal):
             frac, channel_number, calibration, open_channel_pA, read_id=self.read_id
         )
         return fractionalized
+
+
+class HDFSSignal(BaseSignal, DataclassHDF5GroupSerialable):
+    start_time_bulk: int
+    start_time_local: int
+    duration: int
+    voltage: float
+    open_channel_pA: int
+    read_id: str
+    ejected: bool
+    channel_number: int
+
+
 
 
 @dataclass(frozen=True)
