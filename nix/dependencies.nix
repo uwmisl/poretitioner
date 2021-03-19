@@ -55,6 +55,8 @@ let
         jupyter
         # Neural networks
         #torchvision
+        # Colorful logs!
+        colorlog
       ] ++ [ pytorch ];
 
       build = [
@@ -126,7 +128,7 @@ rec {
   ###########################################################################################
 
   test = [
-
+    pkgs.less
   ]
     ++ pythonDeps.test
   ;

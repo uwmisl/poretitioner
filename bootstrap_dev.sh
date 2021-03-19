@@ -15,7 +15,7 @@ NIX_TRUSTED_PUBLIC_KEYS="uwmisl.cachix.org-1:/moWZqhprjtkmTCI9/yIidsJlOrJT5lhlay
 
 # To learn more about Nix configs, please check out:
 # https://nixos.org/manual/nix/unstable/command-ref/conf-file.html
-NIX_CONFIG_FILES=( "/etc/nix/nix.conf" )
+NIX_CONFIG_FILES=( "/etc/nix/nix.conf" , "$HOME/.config/nix/nix.conf")
 
 # Here are the profile files that Nix may modify
 readonly PROFILE_TARGETS=("/etc/bashrc" "/etc/profile.d/nix.sh" "/etc/zshenv" "/etc/zshrc")
@@ -260,6 +260,8 @@ install_nix () {
     green "Nix installed!"
 }
 
+ADDED_BY_MISL_INSTALLER="# ADDED BY UW MISL INSTALLER"
+
 patch_shell_profiles () {
     # For whatever reason, Nix currently doesn't add the per-user nix channels to the front of the NIX_PATH
     # search paths, which results in some confusing results: https://github.com/NixOS/nix/issues/2033
@@ -267,7 +269,7 @@ patch_shell_profiles () {
     NIX_PATH_INCLUDES_USER_NIX_PKGS=$(echo $NIX_PATH | grep "${user_nix_pkgs}")
     if ! ${NIX_PATH_INCLUDES_USER_NIX_PKGS}; then
         echo "\tNIX_PATH is: ${NIX_PATH}"
-        export
+        export NIX_PATH="$NIX_PATH_INCLUDES_USER_NIX_PKGS:$NIX_PATH"
         echo "\tNow, NIX_PATH is ${NIX_PATH}"
     fi
 }
@@ -352,7 +354,7 @@ configure_nix () {
         echo "Checking Trusted Users configuration...."
         if ! $(grep "trusted-users =.*" $NIX_CONFIG_FILE --silent); then
             echo "Adding trusted users to $NIX_CONFIG_FILE"
-            echo "trusted-users = root " | sudo tee -a "$NIX_CONFIG_FILE"
+            echo "trusted-users = root $(whoami)" | sudo tee -a "$NIX_CONFIG_FILE"
             green "Trusted users configured!"
         else
             echo "Trusted users already configured. Continuing..."
