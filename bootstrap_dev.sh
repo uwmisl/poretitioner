@@ -139,9 +139,13 @@ yellow "This is because Nix will need to create/delete a directory at the file s
 ask_sudo () {
     # $1 Reason
     # $2 command
-    yellow "I need to use 'sudo' to:"
+    yellow "I'd like to use 'sudo' because:"
+    echo ""
     echo "$1"
-    yellow "I'd like to try this by running: $2"
+    echo ""
+    yellow "I'd like to try this by running:"
+    echo ""
+    eho "$2"
     echo ""
     yellow "Is it okay if I use sudo to run: $2? \n"
 
@@ -193,9 +197,9 @@ needsMacOSCatalinaOrHigherInstall () {
     fi
 
     green "On MacOS, checking whether root directory is writeable..."
-    reason="Nix needs to write to the root directory (i.e. /nix/) to install. I need to see if this is possible on your computer, or if we'll have to take some extra steps for installation. "
+    because="Nix needs to write to the root directory (i.e. /nix/) to install. I need to see if this is possible on your computer, or if we'll have to take some extra steps for installation. "
     request="sudo [ -w / ]"
-    ask_sudo "$reason" "$request"
+    ask_sudo "$because" "$request"
 
     # Are we allowed to write to root?
     set -x # Turning on set -x so the user can see what we're running with sudo.
@@ -549,7 +553,13 @@ main () {
             bashrc="/etc/bashrc"
             zshrc="/etc/zshrc"
             create_files="sudo touch $bashrc $zshrc"
-            ask_sudo "I need to check whether $bashrc or $zshrc exist, and create empty ones if they don't. This is because Nix will add itself to the user PATH from one or more of these files, but only if they already exist. No files means no Nix on path, which means you wouldn't be able to run 'nix' as a command." create_files
+            because="
+            I need to check whether $bashrc or $zshrc exist, and create empty ones if they don't.
+
+            This is because Nix will add itself to the user PATH from one or more of these files, but only if they already exist.
+
+            No $bashrc or $zshrc means no Nix on PATH, which means you wouldn't be able to run 'nix' as a command."
+            ask_sudo "$because" "$create_files"
 
             install_nix
             echo ""
