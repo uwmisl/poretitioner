@@ -706,9 +706,8 @@ class DataclassHDF5GroupSerialable(HDF5GroupSerializable):
                 # And assign it the value of whatever the group of the value is.
                 my_group.require_group(field_name)
                 field_group = field_value.as_group(my_group, log=log)
-            # elif isinstance(field_value, HDF5Serializing):
-            #     serializable = field_type.as_a()
-            #     my_group.attrs.create(field_name, , dtype=hdf5_dtype(value))
+            elif isinstance(field_value, HDF5_DatasetSerializable):
+                field_value.as_a(my_group, log)
             else:
                 my_group.create_attr(field_name, field_value)
         return my_group
