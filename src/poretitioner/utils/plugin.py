@@ -1,9 +1,10 @@
 # Generic handling for plugins (filter, classifier )
 from __future__ import annotations
-from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 
 from abc import ABC, abstractmethod
-from ..logger import getLogger, Logger
+from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
+
+from ..logger import Logger, getLogger
 
 T = TypeVar("T")
 # Q: Why is Singleton here instead of .core?
@@ -14,11 +15,13 @@ T = TypeVar("T")
 #
 class Singleton(Generic[T]):
     __instance = None
+
     def __new__(cls, val):
         if Singleton.__instance is None:
             Singleton.__instance = object.__new__(cls)
         Singleton.__instance.val = val
         return Singleton.__instance
+
 
 class Plugin(Protocol):
     @classmethod
@@ -58,9 +61,11 @@ class DefaultPluginRegistry(PluginRegistry):
 def files_to_consider():
     pass
 
+
 class FilterPluginRegistry(DefaultPluginRegistry):
     def __init__(self, log: Optional[Logger] = None):
         super().__init__(log=log)
+
 
 class ClassifierPluginRegistry(DefaultPluginRegistry):
     def __init__(self, log: Optional[Logger] = None):

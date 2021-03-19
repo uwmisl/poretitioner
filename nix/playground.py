@@ -10,9 +10,9 @@ Best called with bpython [1] in interactive mode.
 [1] - https://bpython-interpreter.org/
 """
 
+import importlib
 import sys
 from pathlib import Path
-import importlib
 
 project_root_dir = Path(__file__).parent.parent.resolve()
 PROJECT_DIR_LOCATION = str(project_root_dir)
@@ -28,32 +28,30 @@ def add_poretitioner_to_path():
 add_poretitioner_to_path()
 
 import pprint
-import numpy as np
-import toml
-
-from typing import *
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from os import PathLike
+from typing import *
 
-from src.poretitioner import BulkFile
+import numpy as np
+import toml
 
-from src.poretitioner.signals import *
-from src.poretitioner.fast5s import *
-from src.poretitioner.utils import *
-from src.poretitioner.application_info import *
-from src.poretitioner.getargs import *
 import src.poretitioner.logger as logger
-from src.poretitioner.logger import Logger as LoggerType, getLogger
+from src import poretitioner
+from src.poretitioner import CONFIG, BulkFile
+from src.poretitioner.application_info import *
+from src.poretitioner.fast5s import *
+from src.poretitioner.getargs import *
+from src.poretitioner.logger import Logger as LoggerType
+from src.poretitioner.logger import getLogger
+from src.poretitioner.signals import *
+from src.poretitioner.utils import *
 from src.poretitioner.utils.classify import *
 from src.poretitioner.utils.configuration import (
     GeneralConfiguration,
     SegmentConfiguration,
     readconfig,
 )
-
-from src import poretitioner
-from src.poretitioner import CONFIG
 
 LOG_VERBOSITY = 3
 # Temporarily changing the logger format for the intro messages.
@@ -146,9 +144,7 @@ setattr(helper, "__call__", explain_help)
 
 
 def report_bugs(log: LoggerType):
-    BUG_REPORT_LINK = (
-        "https://github.com/uwmisl/poretitioner/issues/new?labels=beta-hackathon,beta-hackathon-bug"
-    )
+    BUG_REPORT_LINK = "https://github.com/uwmisl/poretitioner/issues/new?labels=beta-hackathon,beta-hackathon-bug"
     FEEDBACK_LINK = "https://github.com/uwmisl/poretitioner/issues/new?labels=beta-hackathon,beta-hackathon-feedback"
 
     log.debug(f"Please report any bugs here: {BUG_REPORT_LINK}")

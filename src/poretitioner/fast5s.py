@@ -7,9 +7,9 @@ Classes for reading, writing and validating fast5 files.
 """
 from __future__ import annotations
 
-from abc import abstractmethod
 import dataclasses
 import json
+from abc import abstractmethod
 from collections import namedtuple
 from dataclasses import dataclass
 from os import PathLike
@@ -17,10 +17,7 @@ from pathlib import Path, PosixPath, PurePosixPath
 from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 
 import h5py
-from .utils.filtering import FILTER_PATH, HDF5FilterSerialable
-from .utils.filtering import Filters, FilterSet, FilterPlugin, RangeFilter
 
-from .utils.classify import CLASSIFICATION_PATH
 from .application_info import get_application_info
 from .logger import Logger, getLogger
 from .signals import (
@@ -30,18 +27,29 @@ from .signals import (
     RawSignal,
     VoltageSignal,
 )
+from .utils.classify import CLASSIFICATION_PATH
 from .utils.configuration import SegmentConfiguration
 from .utils.core import (
     DataclassHDF5GroupSerialable,
+    Fast5File,
+    HasFast5,
+    HDF5_Group,
     HDF5GroupSerializable,
     HDF5GroupSerializing,
-    HDF5_Group,
     NumpyArrayLike,
     PathLikeOrString,
+    ReadId,
+    dataclass_fieldnames,
+    hdf5_dtype,
 )
-from .utils.core import ReadId
-from .utils.core import hdf5_dtype, HasFast5, Fast5File
-from .utils.core import dataclass_fieldnames
+from .utils.filtering import (
+    FILTER_PATH,
+    FilterPlugin,
+    Filters,
+    FilterSet,
+    HDF5FilterSerialable,
+    RangeFilter,
+)
 
 __all__ = [
     "BulkFile",
@@ -851,7 +859,7 @@ class CaptureFile(BaseFile):
         segmenter_name = __name__
 
         good_channels = [1] # TODO: Pass in good channels
-        
+
         SEGMENT_METADATA = SegmentationMeta(segmenter_name, version, filters, segment_config.terminal_capture_only, segment_config.open_channel_prior_mean, segment_config.open_channel_prior_stdv, good_channels, capture_windowss)
         # Only supporting range capture_criteria for now (MVP): https://github.com/uwmisl/poretitioner/issues/67
         if segment_config is None:

@@ -30,5 +30,5 @@ let devEnvironmentImage = dockerTools.buildImage {
       Entrypoint = [ "${pkgs.zsh}/bin/zsh" "nix-shell -A shell" ];
     };
   };
-in 
+in
 devEnvironmentImage

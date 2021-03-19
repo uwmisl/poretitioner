@@ -10,23 +10,29 @@ You can customize your own filters too.
 import re
 from abc import ABC, ABCMeta, abstractmethod
 from dataclasses import dataclass
+from json import JSONEncoder
 from pathlib import PosixPath
 from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 
-
 import h5py
 import numpy as np
-from json import JSONEncoder
 
 from ..logger import Logger, getLogger
 from ..signals import Capture
-from .core import HDF5GroupSerializable, HasFast5, IsAttr, NumpyArrayLike, PathLikeOrString
-from .core import ReadId
-from .core import stripped_by_keys
-from .core import Fast5File
-from .core import HDF5GroupSerializing, DataclassHDF5GroupSerialable, HDF5_Group
+from .core import (
+    DataclassHDF5GroupSerialable,
+    Fast5File,
+    HasFast5,
+    HDF5_Group,
+    HDF5GroupSerializable,
+    HDF5GroupSerializing,
+    IsAttr,
+    NumpyArrayLike,
+    PathLikeOrString,
+    ReadId,
+    stripped_by_keys,
+)
 from .plugin import Plugin
-
 
 CaptureOrTimeSeries = Union[Capture, NumpyArrayLike]
 
@@ -544,7 +550,6 @@ class Filter(Filtering):
     config: FilterConfig
     plugin: FilterPlugin
 
-
     def __call__(self, *args, **kwargs) -> bool:
         return self.plugin(*args, **kwargs)
 
@@ -557,12 +562,11 @@ class Filter(Filtering):
 
     def as_attr(self) -> Dict[str, Any]:
         name = self.name
-        attrs = {** vars(self.config), **vars(self.plugin), name: name}
+        attrs = {**vars(self.config), **vars(self.plugin), name: name}
         return attrs
 
     def from_attr(self, attr) -> IsAttr:
         ...
-
 
 
 @dataclass
@@ -594,13 +598,16 @@ class HDF5FilterSerialable(Filter, DataclassHDF5GroupSerialable):
         # This is likely achievable through the plugin architecture, since the plugin's
         # name is unique, we can try to find a plugin with a given name, then get its attributes from there.
         # Load
-        log.warning("Filter.from_group not implemented...It's a whole thing (see comment)")
+        log.warning(
+            "Filter.from_group not implemented...It's a whole thing (see comment)"
+        )
 
         # This is pure Hail Mary.
         return super().from_group(group, log)
 
+
 # class Filters(DataclassHDF5GroupSerialable):
-#     filters: 
+#     filters:
 
 Filters = Dict[FilterName, Filter]
 
@@ -620,8 +627,8 @@ def get_filters(filter_configs: Optional[FilterConfigs] = None) -> Filters:
     """
     filter_configs = filter_configs if filter_configs is not None else FilterConfigs({})
     my_filters = {
-            name: filter_from_config(filter_config)
-            for name, filter_config in filter_configs.items()
+        name: filter_from_config(filter_config)
+        for name, filter_config in filter_configs.items()
     }
 
     return my_filters
@@ -708,7 +715,6 @@ class FilterSet(Filtering):
 
 
 class HDF5FilterSet(FilterSet, HDF5GroupSerializable):
-
     def __init__(self, group: HDF5_Group) -> None:
         super().__init__(group)
 
@@ -735,7 +741,7 @@ class HDF5FilterSet(FilterSet, HDF5GroupSerializable):
     ) -> HDF5GroupSerializable:
         raise NotImplementedError(
             f"from_group not implemented for {cls.__name__}. Make sure you write a method that returns a serialzied version of this object."
-    )
+        )
 
 
 def filter_from_config(config: FilterConfig, log: Logger = getLogger()) -> Filter:

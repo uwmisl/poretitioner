@@ -1,4 +1,5 @@
 import pytest
+
 import src.poretitioner as poretitioner
 from src.poretitioner.utils.core import Window
 

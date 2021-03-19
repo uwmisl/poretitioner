@@ -10,9 +10,9 @@ Most importantly, it provides a method for accessing a pre-configured logger.
 """
 import logging
 from logging import Logger
-import colorlog
-
 from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
+
+import colorlog
 
 Logger = NewType("Logger", Logger)
 __all__ = ["configure_root_logger", "getLogger", "verbosity_to_log_level", "Logger"]

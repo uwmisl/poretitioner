@@ -13,6 +13,7 @@ from typing import List, Optional
 
 import h5py
 import numpy as np
+
 from src.poretitioner.fast5s import CaptureFile
 from src.poretitioner.logger import Logger, getLogger
 from src.poretitioner.utils.classify import ClassifierFile

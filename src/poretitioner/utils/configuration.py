@@ -10,26 +10,22 @@ This module is responsible for parsing the application's configuration file.
 Still working on the configuration step.
 
 """
+import dataclasses
 import math
 from abc import ABCMeta, abstractmethod
 from configparser import ConfigParser
-import toml
-import dataclasses
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
 from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 
 import numpy as np
+import toml
 
 from ..getargs import ARG
-from ..logger import getLogger, Logger
-
-from .core import stripped_by_keys, PathLikeOrString
-
-from .filtering import Filters, FilterSet
-from .filtering import FilterConfig, FilterConfigs
-from .filtering import get_filters
+from ..logger import Logger, getLogger
+from .core import PathLikeOrString, stripped_by_keys
+from .filtering import FilterConfig, FilterConfigs, Filters, FilterSet, get_filters
 
 
 @dataclass(frozen=True)

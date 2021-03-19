@@ -12,6 +12,7 @@ from shutil import copyfile
 
 import h5py
 import pytest
+
 import src.poretitioner as poretitioner
 from src.poretitioner.fast5s import CaptureFile
 from src.poretitioner.utils import classify

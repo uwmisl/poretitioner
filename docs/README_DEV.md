@@ -109,9 +109,9 @@ This little command does 3 things, let's break them down. This command...
 
 You're in _trouble_? _Shoot_ me a Slack message or [email](jdunstan_email) :)!
 
-### Nix 
+### Nix
 
-- 
+-
 
 
 [github](https://www.github.com)

@@ -34,9 +34,7 @@ from ..signals import (
 )
 from . import filtering
 from .configuration import GeneralConfiguration, SegmentConfiguration
-from .core import Window, find_windows_below_threshold
-from .core import ReadId
-from .core import hdf5_dtype
+from .core import ReadId, Window, find_windows_below_threshold, hdf5_dtype
 
 ProgressBar().register()
 

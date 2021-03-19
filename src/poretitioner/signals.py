@@ -8,18 +8,26 @@ This module encapsulates data related to nanopore signals and the channels that 
 """
 from __future__ import annotations
 
+import dataclasses
 from collections import namedtuple
 from dataclasses import dataclass
-import dataclasses
 from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 
-import numpy as np
 import h5py
+import numpy as np
+
 from . import logger
-from .utils.core import HDF5GroupSerializable, NumpyArrayLike, Window
-from .utils.core import ReadId
-from .utils.core import DataclassHDF5GroupSerialable
-from .utils.core import HDF5_Dataset, HDF5_Group, HDF5_Attributes, HDF5_Type
+from .utils.core import (
+    DataclassHDF5GroupSerialable,
+    HDF5_Attributes,
+    HDF5_Dataset,
+    HDF5_Group,
+    HDF5_Type,
+    HDF5GroupSerializable,
+    NumpyArrayLike,
+    ReadId,
+    Window,
+)
 
 __all__ = [
     "digitize_current",
@@ -86,8 +94,6 @@ class SignalMetadata(
     namedtuple("SignalMetadata", ["channel_number", "window", "calibration"])
 ):
     """Metadata around a signal."""
-
-    
 
 
 # @dataclass(frozen=True)
@@ -549,8 +555,6 @@ class HDFSSignal(BaseSignal, DataclassHDF5GroupSerialable):
     channel_number: int
 
 
-
-
 @dataclass(frozen=True)
 class Channel(DataclassHDF5GroupSerialable):
     """A nanopore channel. Contains an id (channel_number), info on how it was calibrated, and its median current when the pore is open.
@@ -658,9 +662,7 @@ class Channel(DataclassHDF5GroupSerialable):
         """
 
         open_channel_pA = picoamperes.find_open_channel_current(
-            open_channel_guess,
-            open_channel_bound,
-            default=open_channel_default,
+            open_channel_guess, open_channel_bound, default=open_channel_default
         )
         self = cls.__new__(cls)
         # We're using this esoteric __setattr__ method so we can keep the dataclass frozen while setting its initial attributes

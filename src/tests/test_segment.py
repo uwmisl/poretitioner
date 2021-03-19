@@ -13,6 +13,8 @@ from pathlib import Path
 import h5py
 import numpy as np
 import pytest
+from pytest import fixture
+
 from src.poretitioner.logger import (
     configure_root_logger,
     getLogger,
@@ -25,8 +27,7 @@ from src.poretitioner.signals import (
     RawSignal,
     Window,
 )
-from src.poretitioner.utils import segment, filtering
-from pytest import fixture
+from src.poretitioner.utils import filtering, segment
 
 configure_root_logger(verbosity=1, debug=False)
 
@@ -167,7 +168,7 @@ def picoampere_signal_from_data_file(
 
 def find_captures_0_single_capture_test():
     data_file = "src/tests/data/capture_windows/test_data_capture_window_0.txt.gz"
-    window = Window(3572989, 3665680)
+    window = Window(3_572_989, 3_665_680)
     data = picoampere_signal_from_data_file(data_file)
     actual_captures = [(33832 + window.start, 92691 + window.start, True)]
     signal_threshold_frac = 0.7
@@ -197,7 +198,7 @@ def find_captures_0_single_capture_test():
 
 def find_captures_0_single_capture_terminal_test():
     data_file = "src/tests/data/capture_windows/test_data_capture_window_0.txt.gz"
-    window = Window(3572989, 3665680)
+    window = Window(3_572_989, 3_665_680)
     data = picoampere_signal_from_data_file(data_file)
     actual_captures = [(33822 + window.start, 92691 + window.start, True)]
     signal_threshold_frac = 0.7
@@ -232,7 +233,7 @@ def find_captures_1_double_capture_noterminal_test():
     Test: terminal_capture_only = True returns no captures"""
     data_file = "src/tests/data/capture_windows/test_data_capture_window_1.txt.gz"
     data = picoampere_signal_from_data_file(data_file)
-    window = Window(4765695, 4858482)
+    window = Window(4_765_695, 4_858_482)
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = True
@@ -259,7 +260,7 @@ def find_captures_1_double_capture_noterminal_2_test():
     Test: terminal_capture_only = False returns 2 captures"""
     data_file = "src/tests/data/capture_windows/test_data_capture_window_1.txt.gz"
     data = picoampere_signal_from_data_file(data_file)
-    window = Window(4765695, 4858482)
+    window = Window(4_765_695, 4_858_482)
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = False
@@ -285,7 +286,7 @@ def find_captures_2_nocaptures_test():
     Test: find_captures returns no captures"""
     data_file = "src/tests/data/capture_windows/test_data_capture_window_2.txt.gz"
     data = picoampere_signal_from_data_file(data_file)
-    window = Window(3423474, 3516439)
+    window = Window(3_423_474, 3_516_439)
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = False
@@ -313,7 +314,7 @@ def find_captures_3_multicapture_terminal_test():
     """
     data_file = "src/tests/data/capture_windows/test_data_capture_window_3.txt.gz"
     data = picoampere_signal_from_data_file(data_file)
-    window = Window(1187841, 1280674)
+    window = Window(1_187_841, 1_280_674)
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = True
@@ -341,7 +342,7 @@ def find_captures_3_multicapture_nonterminal_test():
     """
     data_file = "src/tests/data/capture_windows/test_data_capture_window_3.txt.gz"
     data = picoampere_signal_from_data_file(data_file)
-    window = Window(1187841, 1280674)
+    window = Window(1_187_841, 1_280_674)
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = False
@@ -368,7 +369,7 @@ def find_captures_4_unfolded_terminal_test():
     """
     data_file = "src/tests/data/capture_windows/test_data_capture_window_4.txt.gz"
     data = picoampere_signal_from_data_file(data_file)
-    window = Window(5511887, 5604585)
+    window = Window(5_511_887, 5_604_585)
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = True
@@ -396,7 +397,7 @@ def find_captures_5_unfolded_terminal_test():
     """
     data_file = "src/tests/data/capture_windows/test_data_capture_window_5.txt.gz"
     data = picoampere_signal_from_data_file(data_file)
-    window = Window(965676, 1059216)
+    window = Window(965_676, 1_059_216)
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = True
@@ -439,7 +440,7 @@ def find_captures_6_clog_no_open_channel_test():
     """
     data_file = "src/tests/data/capture_windows/test_data_capture_window_6.txt.gz"
     data = picoampere_signal_from_data_file(data_file)
-    window = Window(2769436, 2863265)
+    window = Window(2_769_436, 2_863_265)
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = False
@@ -480,7 +481,7 @@ def find_captures_7_capture_no_open_channel_test():
     """
     data_file = "src/tests/data/capture_windows/test_data_capture_window_7.txt.gz"
     data = picoampere_signal_from_data_file(data_file)[100:]
-    window = Window(2919913, 3013723)
+    window = Window(2_919_913, 3_013_723)
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = False
@@ -524,7 +525,7 @@ def find_captures_8_capture_no_open_channel_test():
     """
     data_file = "src/tests/data/capture_windows/test_data_capture_window_8.txt.gz"
     data = picoampere_signal_from_data_file(data_file)
-    window = Window(4875289, 4969337)
+    window = Window(4_875_289, 4_969_337)
     signal_threshold_frac = 0.7
     alt_open_channel_pA = 230
     terminal_capture_only = False

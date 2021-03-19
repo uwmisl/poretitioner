@@ -7,26 +7,27 @@ Core classes and utilities that aren't specific to any part of the pipeline.
 
 """
 from __future__ import annotations
-from abc import ABC, abstractclassmethod, abstractmethod
 
-from collections import namedtuple
-from dataclasses import dataclass, Field, fields
 import dataclasses
+from abc import ABC, abstractclassmethod, abstractmethod
+from collections import namedtuple
+from dataclasses import Field, dataclass, fields
 from os import PathLike
-from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
-from h5py import File as Fast5File
-import h5py
-from h5py._hl.base import Empty
-from .exceptions import (
-    HDF5SerializationException,
-    HDF5GroupSerializationException,
-    CaptureSchemaVersionException,
-)
 from pathlib import PosixPath
-from .plugin import Plugin
-from ..logger import Logger, getLogger
+from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 
+import h5py
 import numpy as np
+from h5py import File as Fast5File
+from h5py._hl.base import Empty
+
+from ..logger import Logger, getLogger
+from .exceptions import (
+    CaptureSchemaVersionException,
+    HDF5GroupSerializationException,
+    HDF5SerializationException,
+)
+from .plugin import Plugin
 
 __all__ = [
     "find_windows_below_threshold",
@@ -173,7 +174,6 @@ class HasFast5(Protocol):
     f5: Fast5File
 
 
-
 # Note: We never create or instantiate AttributeManagers directly, instead we borrow its interface.
 #       3 Laws to keep in mind with Attributes:
 #
@@ -201,6 +201,7 @@ class IsAttr(Protocol):
     def from_attr(self, attr) -> IsAttr:
         ...
 
+
 class HDF5IsAttr(IsAttr):
     def as_attr(self) -> np.dtype:
         ...
@@ -208,12 +209,14 @@ class HDF5IsAttr(IsAttr):
     def from_attr(self, attr) -> IsAttr:
         ...
 
-class HasAttrs(Protocol):
 
+class HasAttrs(Protocol):
     def get_attrs(self) -> HDF5_Attributes:
         ...
 
-    def create_attr(self, name: str, value: Optional[Any], log: Optional[Logger] = None):
+    def create_attr(
+        self, name: str, value: Optional[Any], log: Optional[Logger] = None
+    ):
         """Adds an attribute to the current object.
 
         Any existing attribute with this name will be overwritten.
@@ -240,7 +243,9 @@ class HasAttrs(Protocol):
             Value of the attribute.
         """
 
-    def object_from_attr(self, name: str, log: Optional[Logger] = None) -> Optional[Any]:
+    def object_from_attr(
+        self, name: str, log: Optional[Logger] = None
+    ) -> Optional[Any]:
         """Creates an object from an attribute (if one could be made).
         # TODO: Plugin Register via Plugins
 
@@ -367,6 +372,7 @@ class HDF5_ParentHaving:
     @property
     def parent(self) -> HDF5_Group:
         return HDF5_Group(self.parent)
+
 
 class HDF5_Group(h5py.Group, HDF5AttributeHaving, HDF5_ParentHaving):
     @property
@@ -495,9 +501,10 @@ class HDF5DatasetSerializing(NumpyArrayLike, HDF5Serializing, HDF5AttributeHavin
 
 
 class HDF5_DatasetSerializable(HDF5DatasetSerializing):
-
     @classmethod
-    def from_a(cls, a: Union[HDF5_Dataset, HDF5_Group], log: Optional[Logger] = None) -> HDF5_DatasetSerializable:
+    def from_a(
+        cls, a: Union[HDF5_Dataset, HDF5_Group], log: Optional[Logger] = None
+    ) -> HDF5_DatasetSerializable:
         # Assume A is the parent group
         # Assuming we're storing a numpy array as this dataset
 
@@ -512,17 +519,17 @@ class HDF5_DatasetSerializable(HDF5DatasetSerializing):
         except AttributeError as e:
             log.error("Could not convert to HDF5_DatasetSerializable from: {a!r}")
             raise e
-        #serialized = cls.__new__(cls)
-        return 
-
+        # serialized = cls.__new__(cls)
+        return
 
     def as_a(self, a: HDF5_Group, log: Optional[Logger] = None) -> HDF5_Dataset:
-        dataset = HDF5_Dataset(a.require_dataset(self.name(), shape=self.shape, dtype=self.dtype))
+        dataset = HDF5_Dataset(
+            a.require_dataset(self.name(), shape=self.shape, dtype=self.dtype)
+        )
         return dataset
 
     def update(self, log: Optional[Logger] = None):
         self.as_a(self._group.parent, log=log)
-
 
 
 class HDF5GroupSerializing(HDF5Serializing, HDF5AttributeHaving):
@@ -685,6 +692,7 @@ def get_class_for_name(name: str, module_name: str = __name__) -> Type:
         [description]
     """
     import importlib
+
     this_module = importlib.import_module(module_name)
     this_class = getattr(this_module, name)
     return this_class
@@ -837,7 +845,6 @@ class DataclassHDF5DataSetSerialable(HDF5_DatasetSerializable):
                 object.__setattr__(my_instance, name, this_instance)
 
         return my_instance
-
 
 
 class Window(namedtuple("Window", ["start", "end"])):

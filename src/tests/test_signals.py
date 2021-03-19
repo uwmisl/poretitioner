@@ -2,6 +2,7 @@ import pickle
 
 import numpy as np
 import pytest
+
 from src.poretitioner.fast5s import BulkFile
 from src.poretitioner.signals import (
     BaseSignal,

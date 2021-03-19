@@ -1,16 +1,14 @@
 import math as m
+from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 
 import numpy as np
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
-from ..classify import PytorchClassifierPlugin, LabelForResult, ClassificationResult
-
-
 from poretitioner import Capture
+
+from ..classify import ClassificationResult, LabelForResult, PytorchClassifierPlugin
 
 
 class CNN(nn.Module):

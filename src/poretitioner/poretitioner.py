@@ -7,21 +7,19 @@ import numpy as np
 
 from . import logger
 from .getargs import ARG, COMMAND, get_args
-
 from .utils import segment
-
 from .utils.configuration import (
     CONFIG,
-    readconfig,
-    SegmentConfiguration,
     GeneralConfiguration,
+    SegmentConfiguration,
+    readconfig,
 )
 from .utils.filtering import (
-    get_filters,
     FilterConfig,
     FilterConfigs,
     Filters,
     FilterSet,
+    get_filters,
 )
 
 

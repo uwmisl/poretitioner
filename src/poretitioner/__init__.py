@@ -1,3 +1,16 @@
+import pathlib
+from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
+
+from .fast5s import (
+    BulkFile,
+    CaptureFile,
+    ContextTagsBase,
+    ContextTagsBulk,
+    ContextTagsCapture,
+    SubRun,
+)
+from .getargs import ARG, get_help
+from .logger import Logger, getLogger
 from .signals import (
     Capture,
     CaptureMetadata,
@@ -5,29 +18,24 @@ from .signals import (
     PicoampereSignal,
     RawSignal,
 )
-from .fast5s import BulkFile, SubRun, CaptureFile
-from .fast5s import ContextTagsBase, ContextTagsBulk, ContextTagsCapture
 from .utils import classify as classify
-
-from .logger import getLogger, Logger
-from .utils.configuration import GeneralConfiguration, SegmentConfiguration
 from .utils import filtering as filtering
-
-from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
-from .utils.configuration import readconfig
-from .utils.configuration import CONFIG, PoretitionerConfig
-
 from .utils import segment as segmenter
-
+from .utils.configuration import (
+    CONFIG,
+    GeneralConfiguration,
+    PoretitionerConfig,
+    SegmentConfiguration,
+    readconfig,
+)
+from .utils.exceptions import (
+    CaptureSchemaVersionException,
+    HDF5GroupSerializationException,
+    HDF5SerializationException,
+    PluginNotFoundException,
+)
 
 # Exceptions
-
-from .utils.exceptions import HDF5SerializationException, HDF5GroupSerializationException, CaptureSchemaVersionException, PluginNotFoundException
-
-
-
-from .getargs import ARG, get_help
-import pathlib
 
 
 def default_config(

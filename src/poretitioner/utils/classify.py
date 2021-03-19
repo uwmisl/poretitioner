@@ -24,9 +24,7 @@ from ..signals import Capture, FractionalizedSignal, RawSignal
 # from .models import NTERs_trained_cnn_05152019 as pretrained_model
 from . import filtering
 from .configuration import ClassifierConfiguration
-from .core import PathLikeOrString
-from .core import ReadId
-from .core import NumpyArrayLike
+from .core import NumpyArrayLike, PathLikeOrString, ReadId
 
 use_cuda = False  # True
 # TODO : Don't hardcode use of CUDA : https://github.com/uwmisl/poretitioner/issues/41
