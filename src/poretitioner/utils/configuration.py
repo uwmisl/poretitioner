@@ -39,8 +39,6 @@ class CONFIG:
     CLASSIFICATION = "classification"
 
 
-
-
 def get_absolute_path(path: PathLikeOrString) -> Path:
     """Gets the absolute path for a file path.
     This method takes care of things like substituting "~" for the home directory.
@@ -177,7 +175,7 @@ class BaseConfiguration(metaclass=ABCMeta):
         """
         raise ValueError("Configuration was invalid.")
 
-PoretitionerConfig = NewType("PoretitionerConfig", Dict[str, BaseConfiguration])
+PoretitionerConfig = NewType("PoretitionerConfig", Dict[str, Union[BaseConfiguration, FilterSet]])
 
 
 @dataclass(frozen=True)
@@ -288,9 +286,9 @@ class ClassifierConfiguration(BaseConfiguration):
 
 
 def get_filter_set(
-    filter_command_line_args: Dict = None,
-    filter_config_from_file: Dict = None,
-    log=None,
+    filter_command_line_args: Optional[Dict[str, Any]] = None,
+    filter_config_from_file: Optional[Dict[str, Any]] = None,
+    log: Logger = None,
 ) -> FilterSet:
 
     filter_config_from_file = (
@@ -325,7 +323,7 @@ def get_filter_set(
     return filter_set
 
 
-def readconfig(path, command_line_args=None, log: Logger = getLogger()) -> PoretitionerConfig:
+def readconfig(path: PathLikeOrString, command_line_args: Optional[Dict[str, Any]] = None, log: Logger = getLogger()) -> PoretitionerConfig:
     """Read configuration from the path.
 
     Exceptions
@@ -349,10 +347,10 @@ def readconfig(path, command_line_args=None, log: Logger = getLogger()) -> Poret
 
     # config.read(config_path)
     # config = config
-    log.debug(f"\n\ngen_config: {gen_config!s}\n\n")
-    log.debug(f"\n\nseg_config: {seg_config!s}\n\n")
-    log.debug(f"\n\ncommand_line_args: {command_line_args!s}\n\n")
-    log.debug(f"\n\nfilter_config: {filter_config!s}\n\n")
+    log.debug(f"gen_config: {gen_config!s}")
+    log.debug(f"seg_config: {seg_config!s}")
+    log.debug(f"command_line_args: {command_line_args!s}")
+    log.debug(f"filter_config: {filter_config!s}")
 
     filter_set = get_filter_set(
         filter_command_line_args=command_line_args,
@@ -367,7 +365,7 @@ def readconfig(path, command_line_args=None, log: Logger = getLogger()) -> Poret
         config=gen_config, command_line_args=command_line_args, log=log
     )
 
-    configs = {
+    configs: PoretitionerConfig = {
         CONFIG.GENERAL: general_configuration,
         CONFIG.SEGMENTATION: segmentation_configuration,
         CONFIG.FILTER: filter_set,

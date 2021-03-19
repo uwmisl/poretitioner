@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Protocol
 from typing import Any
 from typing import Dict
-from typing import Optional
+from typing import Optional, Iterable
 from abc import ABC, abstractmethod
 from ..logger import getLogger, Logger
 
@@ -22,6 +22,10 @@ class PluginRegistry(ABC):
     @abstractmethod
     def get(self, name: str) -> Plugin:
         raise NotImplementedError("get hasn't been implemented!")
+
+    @abstractmethod
+    def find(self, plugin_type: Plugin, modules: Iterable[Any]) -> Optional[Plugin]:
+        return None
 
 
 class DefaultPluginRegistry(PluginRegistry):
@@ -42,9 +46,9 @@ class DefaultPluginRegistry(PluginRegistry):
 class FilterPluginRegistry(DefaultPluginRegistry):
     def __init__(self, log: Optional[Logger] = None):
         super().__init__(log=log)
-        self.plugins = {}
 
     def register(self, plugin: Plugin):
+        self.register()
         name = plugin.name()
         self.log.info(f"Registering plugin: {name}")
         self.plugins[name] = plugin

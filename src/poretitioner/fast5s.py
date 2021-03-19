@@ -745,7 +745,7 @@ class CaptureFile(BaseFile):
         if segment_config is None:
             raise ValueError("No segment configuration provided.")
         else:
-            self.log.warning(f"\n\n Saving Segment config: {segment_config!s}")
+            self.log.info(f"Saving Segment config: {segment_config!s}")
             for key, value in vars(segment_config).items():
                 try:
                     save_value = json.dumps(value)

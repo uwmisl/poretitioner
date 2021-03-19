@@ -59,7 +59,7 @@ def run(args):
     save_location = Path(getattr(args, ARG.GENERAL.CAPTURE_DIRECTORY)).resolve()
 
     log.info(f"bulk_f5_filepath: {bulk_f5_filepath}")
-    log.info(f"\n\nSave location: {save_location}")
+    log.info(f"Save location: {save_location}")
 
     if args.command == COMMAND.SEGMENT:
         segmentation_config_str = pprint.pformat(seg_config.__dict__)

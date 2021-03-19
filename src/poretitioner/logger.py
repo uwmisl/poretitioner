@@ -10,11 +10,15 @@ Most importantly, it provides a method for accessing a pre-configured logger.
 """
 import logging
 from logging import Logger
+import colorlog
 
+from typing import NewType, Optional
+
+Logger = NewType("Logger", Logger)
 __all__ = ["configure_root_logger", "getLogger", "verbosity_to_log_level", "Logger"]
 
 
-def verbosity_to_log_level(verbosity=0) -> int:
+def verbosity_to_log_level(verbosity: int = 0) -> int:
     """Converts a verbosity to a logging level from the standard library logging module.
 
     0 - Log errors only.
@@ -48,7 +52,7 @@ def verbosity_to_log_level(verbosity=0) -> int:
     return log_level
 
 
-def configure_root_logger(verbosity=0, debug=False):
+def configure_root_logger(verbosity: int = 0, debug: bool = False, format: Optional[str] = None):
     """Configures a logger for usage throughout the application.
 
     This should be called once during the initialization process, configured
@@ -60,16 +64,18 @@ def configure_root_logger(verbosity=0, debug=False):
         How verbose the logging should be on a scale of 0 to 3. Anything higher is treated as a 3.
     debug : bool, optional
         Whether to append filename and line number to the log, by default False
+    FORMAT : str, optional
+        Formatting string to use, by default None. https://docs.python.org/3/library/logging.html#logging.Formatter
     """
     log_level = verbosity_to_log_level(verbosity=verbosity)
 
-    root_logger = logging.getLogger(__name__)
-    handler = logging.StreamHandler()
+    root_logger = colorlog.getLogger(__name__)
+    handler = colorlog.StreamHandler()
 
-    # Adds filename and line number to debug output
-    FORMAT_LINE_NUMBER = "(%(filename)s:%(lineno)s)" if debug else ""
-    FORMAT = "[%(asctime)s] [%(levelname)-8s] --- %(message)s " + FORMAT_LINE_NUMBER
-    formatter = logging.Formatter(FORMAT, style="%")
+    # DEFAULT_FORMAT Adds filename and line number for debug-mode outputs
+    DEFAULT_FORMAT=f"%(log_color)s[%(asctime)s] [%(levelname)-8s] --- %(message)s {'(%(filename)s:%(lineno)s)' if debug else '' }"
+    format = format if format is not None else DEFAULT_FORMAT
+    formatter = colorlog.ColoredFormatter(format, style="%")
     handler.setFormatter(formatter)
 
     root_logger.addHandler(handler)

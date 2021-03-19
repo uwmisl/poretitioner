@@ -2,11 +2,11 @@ from .signals import Capture, CaptureMetadata, FractionalizedSignal, PicoampereS
 from .fast5s import BulkFile, SubRun, CaptureFile
 from .utils import classify as classify
 
-
+from .logger import getLogger, Logger
 from .utils.configuration import GeneralConfiguration, SegmentConfiguration
 from .utils import filtering as filtering
 
-from typing import Dict, Iterable
+from typing import Dict, Iterable, Optional
 from .utils.configuration import readconfig
 from .utils.configuration import CONFIG, PoretitionerConfig
 
@@ -14,15 +14,18 @@ from .utils import segment as segmenter
 
 
 from .getargs import ARG, get_help
+import pathlib
 
 
-def default_config(with_command_line_args: Dict = None) -> PoretitionerConfig:
-    path_to_default_config = "/Users/dna/Developer/poretitioner/DEFAULT_PORETITIONER_CONFIG.toml"
+def default_config(default_file: str = "", with_command_line_args: Optional[Dict[str, str]] = None) -> PoretitionerConfig:
+    fallback_config_path = str(pathlib.Path("./DEFAULT_PORETITIONER_CONFIG.toml").absolute().resolve())
+    path_to_default_config = default_file if len(default_file) > 0 else fallback_config_path
     return readconfig(path_to_default_config, command_line_args=with_command_line_args)
 
 def segment(
     config: GeneralConfiguration,
     segment_config: SegmentConfiguration,
+    bulkfast5=None, # Only needed if one wasn't passed in to segment config.
     save_location=None,
     overwrite=True,
     sub_run: SubRun=None,
@@ -50,6 +53,11 @@ def segment(
         An iterable of capture files. This can be used like a list of the segmented captures.
 
     """
+    if bulkfast5 is None:
+        try:
+            bulkfast5 = segment_config.bulkfast5
+        except AttributeError:
+            raise ValueError("Please pass in a BulkFast5 filepath to perform segmentation, using either the bulkfast5= keyword argument, or adding it to the Segmenter section of the config file.")
     capture_files = segmenter.segment(segment_config.bulkfast5, config, segment_config, save_location=save_location, capture_criteria=segment_config.capture_criteria ,overwrite=overwrite, sub_run=sub_run)
     return capture_files
 
