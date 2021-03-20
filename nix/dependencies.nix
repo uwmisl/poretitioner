@@ -17,7 +17,7 @@
 #
 ###########################################################################################
 
-{ pkgs ? import <nixpkgs> { config = (import ./nix/config.nix); overlays = [ (import "./nix/overlays.nix") ]; }
+{ pkgs ? import <nixpkgs> { config = (import ./config.nix); overlays = [ (import ./overlays.nix) ]; }
 , python ? (pkgs.callPackage ./python.nix) { inherit pkgs; }
 , lib ? pkgs.lib
 , stdenv ? pkgs.stdenv
@@ -53,6 +53,8 @@ let
         notebook
         # For interactive builds
         jupyter
+        # For validating config and dict inputs
+        schema
         # Neural networks
         #torchvision
         # Colorful logs!
