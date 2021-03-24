@@ -13,11 +13,4 @@
 { pkgs }:
 let
   python = pkgs.python38; # Specifies Python version. In our case, Python 3.8;
-
-  # The following code customizes our Python packages, like Cuda vs. Non-Cuda Pytorch.
-  pythonWithOverrides = (python.withPackages (pypkgs:
-    let
-      # Use QT as backend for matplotlib.
-      matplotlib = (pypkgs.matplotlib.override { enableTk = true; });
-    in [ matplotlib ]));
-in pythonWithOverrides
+in python
