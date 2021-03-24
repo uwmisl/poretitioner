@@ -1,4 +1,5 @@
 {
   "version": "0.0.1",
-  "name": "poretitioner"
+  "name": "poretitioner",
+  "data_schema_version": "1.0"
 }

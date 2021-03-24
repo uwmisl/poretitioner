@@ -11,14 +11,12 @@
 set -o errexit
 set -e
 
-NIX_TRUSTED_PUBLIC_KEYS="uwmisl.cachix.org-1:/moWZqhprjtkmTCI9/yIidsJlOrJT5lhlay+9hKZTcA= cachix.cachix.org-1:eWNHQldwUO7G2VkjpnjDbWwy4KQ/HNxht7H4SSoMckM= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.nixos.org-1:CNHJZBh9K4tP3EKF6FkkgeVYsS3ohTl+oS0Qa8bezVs= nix-linter.cachix.org-1:BdTne5LEHQfIoJh4RsoVdgvqfObpyHO5L0SCjXFShlE= "
-
 # To learn more about Nix configs, please check out:
 # https://nixos.org/manual/nix/unstable/command-ref/conf-file.html
 NIX_CONFIG_FILES=( "/etc/nix/nix.conf" )
 
 # Here are the profile files that Nix may modify
-readonly PROFILE_TARGETS=("/etc/bashrc" "/etc/profile.d/nix.sh" "/etc/zshenv" "/etc/zshrc")
+readonly PROFILE_TARGETS=("$HOME/.bashrc" "$HOME/.zshrc" "/etc/zshenv" "/etc/zshrc")
 readonly PROFILE_BACKUP_SUFFIX=".backup-before-nix"
 
 ##############################################
@@ -132,31 +130,18 @@ isDarwin () {
     [ $(uname -s ) = "Darwin" ]
 }
 
-##############################################
-#          Installation Methods              #
-##############################################
-
-needsMacOSCatalinaOrHigherInstall () {
-    # As of MacOS X Catalina (10.15.x), the root directory is no longer writeable.
-    # However, Nix expects to be installed at this location. To get around this,
-    # we borrowed a script from the NixOS repository that creates a separate
-    # volume where Nix can be hosted at root (i.e. /nix/).
-
-    # Is this Mac OS?
-    if ! isDarwin ; then
-        green "Not on MacOS, proceeding with standard approach..."
-        return 1;
-    fi
-
-    green "On MacOS, checking whether root directory is writeable..."
+ask_sudo () {
+    # $1 Reason
+    # $2 command
+    yellow "I'd like to use 'sudo' to:"
     echo ""
-    yellow "I need to use 'sudo' to check whether the root directory is writeable."
-    yellow "This is because Nix will need to create/delete a directory at the file system root (i.e. /nix/)"
-    yellow "Some extra install/uninstall steps will be necessary if we find out it's not writeable."
+    echo "$1"
     echo ""
-    yellow "I'd like to test this by running 'sudo [ -w / ]'"
+    yellow "I'd like to try this by running:"
     echo ""
-    yellow "Is it okay if I use sudo to run the above command? \n"
+    echo "$2"
+    echo ""
+    yellow "Is it okay if I use sudo to run: $2? \n"
 
     isValidResponse () {
         isYes $1 || isNo $1 || isQuit $1
@@ -185,6 +170,30 @@ needsMacOSCatalinaOrHigherInstall () {
     else
         red "Unsure how to interpret '$response'. Assuming asking for sudo is okay :) ";
     fi
+
+    sudo $2
+}
+
+##############################################
+#          Installation Methods              #
+##############################################
+
+needsMacOSCatalinaOrHigherInstall () {
+    # As of MacOS X Catalina (10.15.x), the root directory is no longer writeable.
+    # However, Nix expects to be installed at this location. To get around this,
+    # we borrowed a script from the NixOS repository that creates a separate
+    # volume where Nix can be hosted at root (i.e. /nix/).
+
+    # Is this Mac OS?
+    if ! isDarwin ; then
+        green "Not on MacOS, proceeding with standard approach..."
+        return 1;
+    fi
+
+    green "On MacOS, checking whether root directory is writeable..."
+    because="Nix needs to write to the root directory (i.e. /nix/) to install. I need to see if this is possible on your computer, or if we'll have to take some extra steps for installation. "
+    request="sudo [ -w / ]"
+    ask_sudo "$because" "$request"
 
     # Are we allowed to write to root?
     set -x # Turning on set -x so the user can see what we're running with sudo.
@@ -245,17 +254,6 @@ install_nix () {
     green "Nix installed!"
 }
 
-patch_shell_profiles () {
-    # For whatever reason, Nix currently doesn't add the per-user nix channels to the front of the NIX_PATH
-    # search paths, which results in some confusing results: https://github.com/NixOS/nix/issues/2033
-    PER_USER_NIX_PKGS="/nix/var/nix/profiles/per-user/$(whoami)/channels/nixpkgs:/nix/var/nix/profiles/per-user/$(whoami)/channels"
-    NIX_PATH_INCLUDES_USER_NIX_PKGS=$(echo $NIX_PATH | grep "${user_nix_pkgs}")
-    if ! ${NIX_PATH_INCLUDES_USER_NIX_PKGS}; then
-        echo "\tNIX_PATH is: ${NIX_PATH}"
-        export
-        echo "\tNow, NIX_PATH is ${NIX_PATH}"
-    fi
-}
 
 configure_nix_channel () {
     green "Configuring nix channel..."
@@ -292,218 +290,42 @@ print_nix_config () {
     echo ""
 }
 
-configure_nix () {
-    for NIX_CONFIG_FILE in ${NIX_CONFIG_FILES[@]}; do
-        # Nix Configuration info: https://www.mankier.com/5/nix.conf
-        print_nix_config $NIX_CONFIG_FILE
-        echo "I'm about to ask you for sudo permissions to modify $NIX_CONFIG_FILE"
-
-        echo ""
-
-        # Nix conf info comment
-        # This is just to help future users understand where these values come from.
-        add_info_line () {
-            # Nix Configuration info: https://www.mankier.com/5/nix.conf
-            info_string="# To understand what each of these configurations means, please visit: https://www.mankier.com/5/nix.conf"
-            if ! $(grep -n "$info_string" "$NIX_CONFIG_FILE" --silent); then
-                    echo "Adding Nix.conf info line..."
-                    TEMP_FILE="/tmp/bootstrap.conf"
-                    touch "$TEMP_FILE"
-                    echo "$info_string" > "$TEMP_FILE"
-                    sudo cat "$NIX_CONFIG_FILE" | sudo tee -a "$TEMP_FILE"
-                    sudo mv "$TEMP_FILE" "$NIX_CONFIG_FILE"
-                    echo "Added Nix conf info line."
-            else
-                    echo "Found Nix conf info line. Moving on..."
-            fi
-        }
-
-        add_info_line
-        echo ""
-
-        # Builders Use Substituters
-
-        builders_use_substitutes_line_number=$(grep -n "^builders-use-substitutes =.*" "$NIX_CONFIG_FILE" | awk -F':' '{print $1}' | xargs )
-        if ! $(grep -n "builders-use-substitutes =.*" "$NIX_CONFIG_FILE" --silent); then
-                echo "Adding builders-use-substitutes = true..."
-                echo "builders-use-substitutes = true" | sudo tee -a "$NIX_CONFIG_FILE"
-                echo "Added builders-use-substitutes = true."
-            else
-                echo "Found builders-use-substitutes. Moving on..."
-        fi
-
-        echo ""
-
-        # Trusted Users
-
-        echo "Checking Trusted Users configuration...."
-        if ! $(grep "trusted-users =.*" $NIX_CONFIG_FILE --silent); then
-            echo "Adding trusted users to $NIX_CONFIG_FILE"
-            echo "trusted-users = root " | sudo tee -a "$NIX_CONFIG_FILE"
-            green "Trusted users configured!"
-        else
-            echo "Trusted users already configured. Continuing..."
-        fi
-
-        echo ""
-
-        # Trusted Public Keys
-
-        echo "Checking Trusted Public Keys configuration...."
-        if ! $(grep "trusted-public-keys =.*" "$NIX_CONFIG_FILE" --silent); then
-            echo "Adding trusted users to $NIX_CONFIG_FILE"
-            echo "trusted-public-keys = ${NIX_TRUSTED_PUBLIC_KEYS}" | sudo tee -a "$NIX_CONFIG_FILE"
-            green "Trusted Public Keys configured!"
-        else
-            echo "Trusted Public Keys already configured. Continuing..."
-        fi
-
-        echo ""
-
-        # Trusted Substituters
-        echo "Checking Trusted Substituters configuration..."
-        TRUSTED_SUBSTITUTERS=('https://cache.nixos.org' 'https://hydra.nixos.org' )
-        if ! $(grep "trusted-substituters =.*" "$NIX_CONFIG_FILE" --silent); then
-            echo "Adding trusted substituters to $NIX_CONFIG_FILE"
-            echo "trusted-substituters =" | sudo tee -a "$NIX_CONFIG_FILE"
-            green "Trusted Substituters section added!"
-        else
-            echo "Trusted Substituterssers already configured. Continuing..."
-        fi
-
-        # Trusted Substitutions
-        trusted_substituters_line_number=$(grep -n "^trusted-substituters =.*" "$NIX_CONFIG_FILE" | awk -F':' '{print $1}' | xargs )
-        for trusted_subby in ${TRUSTED_SUBSTITUTERS[@]}; do
-            echo "Looking for '$trusted_subby'"
-            if ! $(grep -n "trusted-substituters =.*$trusted_subby.*" "$NIX_CONFIG_FILE" --silent); then
-                echo "Adding trusted substituter '$trusted_subby'..."
-                sudo sed -i -e "${trusted_substituters_line_number}s,$, ${trusted_subby},g" "$NIX_CONFIG_FILE"
-                echo "Added trusted substituter '$trusted_subby'."
-            else
-                echo "Found trusted substituter '$trusted_subby'. Moving on..."
-            fi
-        done
-
-        echo ""
-
-        # Allowed URIs
-        echo "Checking Allowed URIs configuration...."
-        ALLOWED_URIS=( 'https://cache.nixos.org' )
-        if ! $(grep "allowed-uris =.*" "$NIX_CONFIG_FILE" --silent); then
-            echo "Adding allowed uris to $NIX_CONFIG_FILE"
-            echo "allowed-uris =" | sudo tee -a "$NIX_CONFIG_FILE"
-            green "Allowed URIs section added!"
-        else
-            echo "Allowed URIs already configured. Continuing..."
-        fi
-
-        uri_line_number=$(grep -n "^allowed-uris =.*" "$NIX_CONFIG_FILE" | awk -F':' '{print $1}' | xargs )
-        for allowed_uri in ${ALLOWED_URIS[@]}; do
-            echo "Looking for '$allowed_uri'"
-            if ! $(grep -n "allowed-uris =.*$allowed_uri.*" "$NIX_CONFIG_FILE" --silent); then
-                echo "Adding allowed uri '$allowed_uri'..."
-                sudo sed -i -e "${uri_line_number}s,$, ${allowed_uri},g" "$NIX_CONFIG_FILE"
-                echo "Added allowed uri '$allowed_uri'."
-            else
-                echo "Found allowed uri '$allowed_uri'. Moving on..."
-            fi
-        done
-
-        echo ""
-
-        # Substitutions
-        echo "Checking Substituters configuration...."
-
-        echo "Checking for substituters line:"
-        if ! $(grep "^substituters =.*" $NIX_CONFIG_FILE --silent); then
-            # Adding substituters configuration.
-            echo "Substituteters configuration not found, adding..."
-            echo "substituters =" | sudo tee -a $NIX_CONFIG_FILE
-            echo "Substituteters configuration added."
-        fi
-
-        VALID_SUBSTITUTERS=( 'https://cache.nixos.org' 'https://cachix.cachix.org' 'https://uwmisl.cachix.org' 'https://nix-linter.cachix.org' )
-        substituters_line_number=$(grep -n "^substituters =.*" $NIX_CONFIG_FILE | awk -F':' '{print $1}' | xargs )
-        for subby in ${VALID_SUBSTITUTERS[@]}; do
-            echo "Looking for '$subby' in substituters = ..."
-            if ! $(grep -n "substituters =.*$subby.*" $NIX_CONFIG_FILE --silent); then
-                echo "Adding substituter '$subby'..."
-                sudo sed -i -e "${substituters_line_number}s,$, ${subby},g" $NIX_CONFIG_FILE
-                echo "Added substituter '$subby'."
-            else
-                echo "Found substituter '$subby'. Moving on..."
-            fi
-        done
-
-        echo ""
-
-
-        # max Http connections
-        if ! $(grep "^http-connections =.*" $NIX_CONFIG_FILE --silent); then
-            # Adding substituters configuration.
-            echo "http-connections not found, adding..."
-            # Using 0 means there's no limit on the maximum number of parallel HTTP connections.
-            echo "http-connections = 0" | sudo tee -a $NIX_CONFIG_FILE
-            echo "http-connections configuration added."
-        fi
-        echo ""
-
-        # Max jobs (maximum number of jobs Nix will try to build in parallel)
-        if ! $(grep "^max-jobs =.*" $NIX_CONFIG_FILE --silent); then
-            # Adding substituters configuration.
-            echo "max-jobs not found, adding..."
-            # Using 0 means there's no limit on the maximum number of parallel HTTP connections.
-            echo "max-jobs = auto" | sudo tee -a $NIX_CONFIG_FILE
-            echo "max-jobs configuration added."
-        fi
-        echo ""
-
-        # Auto optimize store
-        if ! $(grep "^auto-optimise-store =.*" $NIX_CONFIG_FILE --silent); then
-            # Adding substituters configuration.
-            echo "auto-optimise-store not found, adding..."
-            # Using 0 means there's no limit on the maximum number of parallel HTTP connections.
-            echo "auto-optimise-store = true" | sudo tee -a $NIX_CONFIG_FILE
-            echo "auto-optimise-store configuration added."
-        fi
-        echo ""
-
-        # Keep outputs
-        if ! $(grep "^keep-outputs =.*" $NIX_CONFIG_FILE --silent); then
-            echo "keep-outputs not found, adding..."
-            echo "keep-outputs = true" | sudo tee -a $NIX_CONFIG_FILE
-            echo "keep-outputs configuration added."
-        fi
-        echo ""
-
-        # Keep derivations
-        if ! $(grep "^keep-derivations =.*" $NIX_CONFIG_FILE --silent); then
-            echo "keep-derivations not found, adding..."
-            echo "keep-derivations = true" | sudo tee -a $NIX_CONFIG_FILE
-            echo "keep-derivations configuration added."
-        fi
-        echo ""
-
-        green "\nDone configuring nix. Let's look at the config file:\n"
-        print_nix_config $NIX_CONFIG_FILE
-    done
-}
-
-
 install_cachix () {
     # Nix must be installed first before installing cachix.
-
-    # Installs cachix, a system that caches our dependencies so we don't have to rebuild (e.g.) pytorch from binaries all the time or when we switch machines).
-    # MISL's cachix repo is stored at https://app.cachix.org/cache/uwmisl (access through the MISL github group).
+    #
+    # Installs Cachix: a package host that caches our builds [1]
+    # so we don't have to rebuild (e.g.) pytorch from binaries all the time or when we switch machines).
+    #
+    # MISL's cachix repo is stored at [2] and is accessed through the MISL github group.
+    #
+    # [1] - https://cachix.org/
+    # [2] - https://app.cachix.org/cache/uwmisl
+    #
     if [ ! -x "$(command -v cachix)" ] &&  [[ ! $(nix-env -q | grep cachix) ]]
     then
         yellow "Cachix not installed, installing Cachix..."
-        nix-env -iA cachix -f https://cachix.org/api/v1/install
+
+        install_cachix="sudo nix-env -iA cachix -f https://cachix.org/api/v1/install"
+        ask_sudo "Cachix is a remote binary cache that lets us store and share packages we've already built. This can save us a lot of build time. I'd like to install Cachix as a trusted user so that all users can use these trusted caches" "$install_cachix"
+
+        sudo nix-env -iA cachix -f https://cachix.org/api/v1/install
         # Cachix is already installed.
         green "Cachix installed!"
     else
         bold "Cachix is already installed. Skipping installation."
     fi
+}
+
+configure_cachix () {
+    CACHIX_CACHES=( "cachix" "pytorch-world" "uwmisl" )
+    configure_cachix="sudo cachix use cachix"
+    ask_sudo "Configure Cachix as a trusted user so we can add trusted caches for all users." "$configure_cachix"
+
+    for CACHE in ${CACHIX_CACHES[@]}; do
+        echo "Use cachix cache: ${CACHE}..."
+        sudo cachix use "$CACHE"
+    done
+    green "Cachix configured!"
 }
 
 install_misl_env () {
@@ -541,34 +363,19 @@ main () {
             echo ""
             green "!!!!!! Important !!!!!!!!"
             echo ""
-            green "Nix is now technically installed, but you must close and re-open your shell before the shell will pick up on the changes."
+            green "Nix is now installed, but you must run this script again to finish installation."
             echo ""
-            green "To continue, close this shell and open a new one, then run this script again."
-            echo ""
-            if isDarwin; then
-                echo "Pro-tip: To get back to the same directory in the new shell, run the following in the current shell:"
-                echo ""
-                printf "\tpwd | pbcopy \n"
-                echo ""
-                echo "Then, after closing this shell and opening a new one, run: "
-                echo ""
-                printf "\tpbpaste && cd \$(pbpaste) \n"
-                echo ""
-            fi
-
+            green "To continue, simply run this script a second time."
             echo ""
             green "See you soon :)"
-            exit 0
+            # Reload the shell to set environment variables like $NIX_PATH.
+            exec $SHELL
         fi
-        configure_nix
         configure_nix_channel
         install_cachix
+        configure_cachix
         install_misl_env
         green "All done!"
-        echo ""
-        green "If you encounter any bugs or issues, please report them here:"
-        yellow "\thttps://github.com/uwmisl/poretitioner/issues"
-        green "Feature requests are welcome too!"
 
         # Reload the shell to set environment variables like $NIX_PATH.
         exec $SHELL

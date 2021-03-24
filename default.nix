@@ -42,7 +42,15 @@ let
   test_pkgs = dependencies.test;
   run_tests_and_coverage = "echo Running tests:  ${tests.coverage};"
     + tests.coverage;
-  src = ./.;
+
+  shell = callPackage ./nix/shell.nix {
+    inherit python cudaSupport;
+    postShellHook = ''
+    '';
+  };
+
+
+  poretitioner_src = builtins.path { path = ./.; inherit name; };
 
   # How to develop/release python packages with Nix:
   # https://github.com/NixOS/nixpkgs/blob/master/doc/languages-frameworks/python.section.md
@@ -54,7 +62,7 @@ let
       pname = name;
       version = version;
       format = "pyproject";
-      src = src;
+      src = poretitioner_src;
       checkInputs = test_pkgs;
       inherit doCheck;
       checkPhase = run_tests_and_coverage;
@@ -81,10 +89,12 @@ let
     # (instead of setting it to Unix epoch + 1). This is impure, but fine for our purposes.
     created = "now";
     config = {
+      Cmd = [ ];
       # Runs 'poretitioner' by default.
       Entrypoint = [ "${app.outPath}/bin/${app.pname}" ];
     };
   };
+
 in
 {
   app-no-test = app { doCheck = false; };
@@ -94,16 +104,10 @@ in
 
   # Note: Shell can only be run by using "nix-shell" (i.e. "nix-shell -A shell ./default.nix").
   # Here's an awesome, easy-to-read overview of nix shells: https://ghedam.at/15978/an-introduction-to-nix-shell
-  shell = mkShell {
-    #  [ (poretitioner { doCheck = false; }) ] ++
-    shellHook = ''
-      PYTHONPATH="./src/poretitioner:$PYTHONPATH"
-    '';
-    propagatedBuildInputs = all_pkgs;
-  };
+  shell = shell;
 }
-//
-# Docker support
+  //
+  # Docker support
 pkgs.lib.optionalAttrs (supportsDocker) {
   docker = dockerImage { app = (app { doCheck = false; }); };
 }

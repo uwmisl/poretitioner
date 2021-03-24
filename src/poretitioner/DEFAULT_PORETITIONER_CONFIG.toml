@@ -1,14 +1,8 @@
 [general]
-# Segmenter version. Uses semantic versioning.
-#   Changes in minor/patch version are backwards compatible.
 version = "1.0"
 
 # Maximum number of parallel workers for the segmentation stage.
 n_workers = 5
-
-# Where to store the captures after segmentation, or otherwise where
-# the segmented captures were stored.
-capture_directory = "./out/data"
 
 # Segmentation
 [segmentation]
