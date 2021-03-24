@@ -174,7 +174,9 @@ def quantify_files(
                 blockage_array = capture_array
             else:
                 blockage_array = get_capture_details_in_f5(
-                    capture, read_path=read_path, classification_path=classification_path
+                    capture,
+                    read_path=read_path,
+                    classification_path=classification_path,
                 )
             if len(blockage_array) > 0:
                 blockage_arrays.append(blockage_array)
@@ -209,7 +211,10 @@ def quantify_files(
 
     elif quant_method == "capture_freq":
         capture_freqs = calc_capture_freq_intervals(
-            capture_windows, captures_by_channel, intervals=intervals, sampling_rate=sampling_rate
+            capture_windows,
+            captures_by_channel,
+            intervals=intervals,
+            sampling_rate=sampling_rate,
         )
         return capture_freqs
 
@@ -447,9 +452,7 @@ def calc_time_until_capture_intervals(
         List of the average time between captures, where each item in this list
         corresponds to an entry in the input list intervals.
     """
-    intervals: List[Window] = (
-        intervals if intervals is not None else []
-    )  # Defaults to empty list.
+    intervals: List[Window] = intervals if intervals is not None else []  # Defaults to empty list.
 
     assert len(intervals) > 0
     capture_times = []

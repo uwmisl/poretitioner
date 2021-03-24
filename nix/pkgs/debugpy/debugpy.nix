@@ -15,8 +15,9 @@
 #
 ###########################################################################################
 
-{ pkgs ? import <nixpkgs> { }, lib ? pkgs.lib
-, python ?  pkgs.python39
+{ pkgs ? import <nixpkgs> { }
+, lib ? pkgs.lib
+, python ? pkgs.python39
 
 }:
 with python.pkgs;

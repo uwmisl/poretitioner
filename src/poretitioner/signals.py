@@ -8,14 +8,25 @@ This module encapsulates data related to nanopore signals and the channels that 
 """
 from __future__ import annotations
 
+import dataclasses
 from collections import namedtuple
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 
+import h5py
 import numpy as np
 
 from . import logger
-from .utils.core import NumpyArrayLike, Window
+from .hdf5 import (
+    HDF5_Attributes,
+    HDF5_Dataset,
+    HDF5_DatasetSerialableDataclass,
+    HDF5_Group,
+    HDF5_GroupSerialableDataclass,
+    HDF5_GroupSerializable,
+    HDF5_Type,
+)
+from .utils.core import NumpyArrayLike, ReadId, Window
 
 __all__ = [
     "digitize_current",
@@ -36,70 +47,45 @@ DEFAULT_OPEN_CHANNEL_GUESS = 220  # In picoAmperes (pA).
 DEFAULT_OPEN_CHANNEL_BOUND = 15  # In picoAmperes (pA).
 
 
-@dataclass(frozen=True)
-class ChannelCalibration:
-    """
-    On the Oxford Nanopore devices, there's an analog to digital converter that converts the raw, unitless analog signal
-    transforms the raw current. To convert these raw signals to a measurement of current in picoAmperes,
-    we need to know certain values for the channel configuration.
-
-
-    ⎜   Physics    ⎜  Device  ⎜            Software          ⎜
-
-    ⎜‒‒‒‒‒‒‒‒‒‒‒‒‒⎜‒‒‒‒‒‒‒‒‒⎜‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒⎜
-
-    ⎜             ⎜         ⎜                            ⎜
-
-    ⎜   Current   ⟶  ADC    ⟶    Calibration ⟶  Signal     ⎜
-
-    ⎜  (Amperes)   ⎜ (Unitless) ⎜      (Unitless)    (PicoAmperes)⎜
-
-    ⎜             ⎜         ⎜                            ⎜
-
-    ⎜‒‒‒‒‒‒‒‒‒‒‒‒⎜‒‒‒‒‒‒‒‒‒⎜‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒⎜
-
-
-    Fields
-    ----------
-    offset : float
-        Adjustment to the ADC to each 0pA.
-        Essentially, this is the average value the device ADC gives when there's zero current.
-        We subtract this from the raw ADC value to account for this, like zero'ing out a scale before weighing.
-
-    rng: float
-        The range of digitized picoAmperes that can be produced after the analog-to-digital conversion. The ratio of rng:digitisation represents the change in picoamperes of current per ADC change of 1.
-
-    digitisation: int
-        This is the number of values that can even be produced the Analog-to-Digital. This exists because only a finite number of values can be represnted by a digitized signal.
-    """
-
-    offset: float
-    rng: int
-    digitisation: int
-
-
 class SignalMetadata(namedtuple("SignalMetadata", ["channel_number", "window", "calibration"])):
     """Metadata around a signal."""
 
 
-@dataclass(frozen=True)
-class BaseSignalSerializationInfo:
-    """Extra  (i.e. non ndarray) data that we want to preserve during serialization.
-    To understand why this is necessary, please read: https://stackoverflow.com/questions/26598109/preserve-custom-attributes-when-pickling-subclass-of-numpy-array
+# @dataclass(frozen=True)
+# class BaseSignalSerializationInfo:
+#     """Extra  (i.e. non ndarray) data that we want to preserve during serialization.
+#     To understand why this is necessary, please read: https://stackoverflow.com/questions/26598109/preserve-custom-attributes-when-pickling-subclass-of-numpy-array
 
-    Fields
-     ----------
-    channel_number : int
-        Which nanopore channel generated the data. Must be 1 or greater.
-    calibration: ChannelCalibration
-        How to convert the nanopore device's analog-to-digital converter (ADC) raw signal to picoAmperes of current.
-    read_id : str, optional
-        ReadID that generated this signal, by default None
-    """
+#     Fields
+#      ----------
+#     channel_number : int
+#         Which nanopore channel generated the data. Must be 1 or greater.
+#     calibration: ChannelCalibration
+#         How to convert the nanopore device's analog-to-digital converter (ADC) raw signal to picoAmperes of current.
+#     read_id : ReadId, optional
+#         ReadID that generated this signal, by default None
+#     """
 
-    channel_number: int
-    calibration: ChannelCalibration
-    read_id: Optional[str]
+#     channel_number: int
+#     calibration: ChannelCalibration
+#     read_id: Optional[ReadId]
+
+#     # Multiprocessing and Dask require pickling (i.e. serializing) their inputs.
+#     # By default, this will drop all our custom class data.
+#     # https://stackoverflow.com/questions/26598109/preserve-custom-attributes-when-pickling-subclass-of-numpy-array
+#     def __reduce__(self):
+#         reconstruct, arguments, object_state = super().__reduce__()
+#         # Create a custom state to pass to __setstate__ when this object is deserialized.
+#         info = self.serialize_info()
+#         new_state = object_state + (info,)
+#         # Return a tuple that replaces the parent's __setstate__ tuple with our own
+#         return (reconstruct, arguments, new_state)
+
+#     def __setstate__(self, state):
+#         info = state[-1]
+#         self.deserialize_from_info(info)
+#         # Call the parent's __setstate__ with the other tuple elements.
+#         super().__setstate__(state[0:-1])
 
 
 class BaseSignal(NumpyArrayLike):
@@ -119,9 +105,8 @@ class BaseSignal(NumpyArrayLike):
         Which nanopore channel generated the data. Must be 1 or greater.
     calibration: ChannelCalibration
         How to convert the nanopore device's analog-to-digital converter (ADC) raw signal to picoAmperes of current.
-    read_id : str, optional
+    read_id : ReadId, optional
         ReadID that generated this signal, by default None
-
     Returns
     -------
     [BaseSignal]
@@ -151,48 +136,6 @@ class BaseSignal(NumpyArrayLike):
         )  # Optimization: Consider not making a copy, this is more error prone though: np.asarray(signal).view(cls)
         return obj
 
-    def serialize_info(self, **kwargs) -> Dict:
-        """Creates a dictionary describing the signal and its attributes.
-
-        Returns
-        -------
-        Dict
-            A serialized set of attributes.
-        """
-        # When serializing, copy over any existing attributes already in self, and
-        # any that don't exist in self get taken from kwargs.
-        existing_info = self.__dict__
-        info = {key: getattr(self, key, kwargs.get(key)) for key in kwargs.keys()}
-        return {**info, **existing_info}
-
-    def deserialize_from_info(self, info: Dict):
-        """Sets attributes on an object from a serialized dict.
-
-        Parameters
-        ----------
-        info : Dict
-            Dictionary of attributes to set after deserialization.
-        """
-        for name, value in info.items():
-            setattr(self, name, value)
-
-    # Multiprocessing and Dask require pickling (i.e. serializing) their inputs.
-    # By default, this will drop all our custom class data.
-    # https://stackoverflow.com/questions/26598109/preserve-custom-attributes-when-pickling-subclass-of-numpy-array
-    def __reduce__(self):
-        reconstruct, arguments, object_state = super(BaseSignal, self).__reduce__()
-        # Create a custom state to pass to __setstate__ when this object is deserialized.
-        info = self.serialize_info()
-        new_state = object_state + (info,)
-        # Return a tuple that replaces the parent's __setstate__ tuple with our own
-        return (reconstruct, arguments, new_state)
-
-    def __setstate__(self, state):
-        info = state[-1]
-        self.deserialize_from_info(info)
-        # Call the parent's __setstate__ with the other tuple elements.
-        super(BaseSignal, self).__setstate__(state[0:-1])
-
     @property
     def duration(self) -> int:
         """How many samples are contained in this signal
@@ -221,7 +164,7 @@ class CurrentSignal(BaseSignal):
         Which nanopore channel generated the data. Must be 1 or greater.
     calibration: ChannelCalibration
         How to convert the nanopore device's analog-to-digital converter (ADC) raw signal to picoAmperes of current.
-    read_id : str, optional
+    read_id : ReadId, optional
         ReadID that generated this signal, by default None
 
     Returns
@@ -231,7 +174,7 @@ class CurrentSignal(BaseSignal):
     """
 
     # ReadId that generated this signal, optional.
-    read_id: Optional[str]
+    read_id: Optional[ReadId]
 
     # Index of the channel that generated this signal.
     channel_number: int
@@ -285,7 +228,7 @@ class FractionalizedSignal(CurrentSignal):
         How to convert the nanopore device's analog-to-digital converter (ADC) raw signal to picoAmperes of current.
     open_channel_pA : float
         Median signal value when no capture is in the pore.
-    read_id : str, optional
+    read_id : ReadId, optional
         ReadID that generated this signal, by default None
     do_conversion: bool, optional
         Whether to interpret the input signal as a RawSignal that needs to be fractionalized, otherwise assume the input
@@ -303,7 +246,7 @@ class FractionalizedSignal(CurrentSignal):
         channel_number: int,
         calibration: ChannelCalibration,
         open_channel_pA: float,
-        read_id: str = None,
+        read_id: ReadId = None,
         do_conversion: bool = False,
     ):
         if do_conversion:
@@ -363,7 +306,7 @@ class RawSignal(CurrentSignal):
         Which nanopore channel generated the data. Must be 1 or greater.
     calibration: ChannelCalibration
         How to convert the nanopore device's analog-to-digital converter (ADC) raw signal to picoAmperes of current.
-    read_id : str, optional
+    read_id : ReadId, optional
         ReadID that generated this signal, by default None
 
     Returns
@@ -419,7 +362,7 @@ class PicoampereSignal(CurrentSignal):
         Which nanopore channel generated the data. Must be 1 or greater.
     calibration: ChannelCalibration
         How to convert the nanopore device's analog-to-digital converter (ADC) raw signal to picoAmperes of current.
-    read_id : str, optional
+    read_id : ReadId, optional
         ReadID that generated this signal, by default None
 
     Returns
@@ -447,13 +390,13 @@ class PicoampereSignal(CurrentSignal):
             Default open channel current to use if one could not be calculated from the signal, by default DEFAULT_OPEN_CHANNEL_GUESS.
 
         """
-        open_channel_median_pA = find_open_channel_current(
+        open_channel_pA = find_open_channel_current(
             self,
             open_channel_guess=open_channel_guess,
             open_channel_bound=open_channel_bound,
             default=default,
         )
-        return open_channel_median_pA
+        return open_channel_pA
 
     def to_raw(self) -> RawSignal:
         """Digitize the picoampere signal, converting it back to raw ADC values.
@@ -468,7 +411,10 @@ class PicoampereSignal(CurrentSignal):
         read_id = self.read_id
 
         raw = RawSignal(
-            digitize_current(self, calibration), channel_number, calibration, read_id=read_id
+            digitize_current(self, calibration),
+            channel_number,
+            calibration,
+            read_id=read_id,
         )
 
         return raw
@@ -550,8 +496,66 @@ class PicoampereSignal(CurrentSignal):
         return fractionalized
 
 
+# @dataclass(frozen=True, init=False)
+@dataclass(init=False)
+class HDF5_Signal(HDF5_DatasetSerialableDataclass):
+    start_time_bulk: int
+    start_time_local: int
+    duration: int
+    voltage: float
+    open_channel_pA: float
+    read_id: ReadId
+    ejected: bool
+    channel_number: int
+
+    def __new__(
+        cls,
+        data: Union[np.ndarray, NumpyArrayLike],
+        start_time_bulk: int,
+        start_time_local: int,
+        duration: int,
+        voltage: float,
+        open_channel_pA: float,
+        read_id: ReadId,
+        ejected: bool,
+        channel_number: int,
+    ):
+        self = super().__new__(cls, data)
+        self.start_time_bulk = start_time_bulk
+        self.start_time_local = start_time_local
+        self.duration = duration
+        self.voltage = voltage
+        self.open_channel_pA = open_channel_pA
+        self.read_id = read_id
+        self.ejected = ejected
+        self.channel_number = channel_number
+        return self
+
+    def __init__(
+        self,
+        data: Union[np.ndarray, NumpyArrayLike],
+        start_time_bulk: int,
+        start_time_local: int,
+        duration: int,
+        voltage: float,
+        open_channel_pA: float,
+        read_id: ReadId,
+        ejected: bool,
+        channel_number: int,
+    ):
+        super().__init__(data)
+        self.start_time_bulk = start_time_bulk
+        self.start_time_local = start_time_local
+        self.duration = duration
+        self.voltage = voltage
+        self.open_channel_pA = open_channel_pA
+        self.read_id = read_id
+        self.ejected = ejected
+        self.channel_number = channel_number
+
+
 @dataclass(frozen=True)
-class Channel:
+class Channel(HDF5_GroupSerialableDataclass):
     """A nanopore channel. Contains an id (channel_number), info on how it was calibrated, and its median current when the pore is open.
 
     Fields
@@ -560,13 +564,16 @@ class Channel:
         Identifies which pore channel this is. Note that indicies are 1-based, not 0-based (i.e. the first channel is 1).
     calibration : ChannelCalibration
         How this channel was calibrated. This determines how to convert the raw ADC signal to picoamperes.
-    open_channel_median_pA : float
+    open_channel_pA : float
         The median current that flows through the channel when it is completely open (i.e. unblocked). Measured in picoamperes.
+    sampling_rate: int
+        How frequently the device produces observations. In Hz.
     """
 
     calibration: ChannelCalibration
     channel_number: int
-    open_channel_median_pA: PicoampereSignal
+    open_channel_pA: PicoampereSignal
+    sampling_rate: int
 
     @classmethod
     def from_raw_signal(
@@ -574,9 +581,10 @@ class Channel:
         raw: RawSignal,
         channel_number: int,
         calibration: ChannelCalibration,
+        sampling_rate: int,
         open_channel_guess: float = DEFAULT_OPEN_CHANNEL_GUESS,
         open_channel_bound: float = DEFAULT_OPEN_CHANNEL_BOUND,
-        open_channel_default: Optional[float] = DEFAULT_OPEN_CHANNEL_GUESS,
+        open_channel_default: float = DEFAULT_OPEN_CHANNEL_GUESS,
     ):
         """Creates a channel summary via the signal.
 
@@ -588,12 +596,14 @@ class Channel:
             Identifies which pore channel this is. Note that indicies are 1-based, not 0-based (i.e. the first channel is 1).
         calibration : ChannelCalibration
             How this channel was calibrated. This determines how to convert the raw ADC signal to picoamperes.
+        sampling_rate: int
+            How frequently the channel produced observations. In Hz.
         open_channel_guess : float
             Approximate estimate of the "open channel current", which is the median current that flows when the channel is completely open (i.e. unblocked). Measured in picoamperes, by default DEFAULT_OPEN_CHANNEL_GUESS.
         open_channel_bound : float
             Approximate estimate of the variance in open channel current value from
             channel to channel (AKA the range to search), by default DEFAULT_OPEN_CHANNEL_BOUND.
-        open_channel_default : Optional[float], optional
+        open_channel_default : float, optional
             Default open channel current to use if one could not be calculated from the signal, by default DEFAULT_OPEN_CHANNEL_GUESS.
 
         Returns
@@ -603,10 +613,10 @@ class Channel:
         """
         picoamperes = raw.to_picoamperes()
         self = cls.from_picoampere_signal(
-            cls,
             picoamperes,
             channel_number,
             calibration,
+            sampling_rate,
             open_channel_guess=open_channel_guess,
             open_channel_bound=open_channel_bound,
             open_channel_default=open_channel_default,
@@ -619,9 +629,10 @@ class Channel:
         picoamperes: PicoampereSignal,
         channel_number: int,
         calibration: ChannelCalibration,
+        sampling_rate: int,
         open_channel_guess: float = DEFAULT_OPEN_CHANNEL_GUESS,
         open_channel_bound: float = DEFAULT_OPEN_CHANNEL_BOUND,
-        open_channel_default: Optional[float] = DEFAULT_OPEN_CHANNEL_GUESS,
+        open_channel_default: float = DEFAULT_OPEN_CHANNEL_GUESS,
     ):
         """Creates a channel summary via the signal.
 
@@ -633,12 +644,14 @@ class Channel:
             Identifies which pore channel this is. Note that indicies are 1-based, not 0-based (i.e. the first channel is 1).
         calibration : ChannelCalibration
             How this channel was calibrated. This determines how to convert the raw ADC signal to picoamperes.
+        sampling_rate : int
+            How frequently the channel produced observations. In Hz.
         open_channel_guess : float
             Approximate estimate of the "open channel current", which is the median current that flows when the channel is completely open (i.e. unblocked). Measured in picoamperes, by default DEFAULT_OPEN_CHANNEL_GUESS.
         open_channel_bound : float
             Approximate estimate of the variance in open channel current value from
             channel to channel (AKA the range to search), by default DEFAULT_OPEN_CHANNEL_BOUND.
-        open_channel_default : Optional[float], optional
+        open_channel_default : float, optional
             Default open channel current to use if one could not be calculated from the signal, by default DEFAULT_OPEN_CHANNEL_GUESS.
 
         Returns
@@ -647,16 +660,31 @@ class Channel:
             Channel as derived from the signal.
         """
 
-        open_channel_median_pA = find_open_channel_current(
-            picoamperes, open_channel_guess, open_channel_bound, default=open_channel_default
+        open_channel_pA = picoamperes.find_open_channel_current(
+            open_channel_guess, open_channel_bound, default=open_channel_default
         )
         self = cls.__new__(cls)
         # We're using this esoteric __setattr__ method so we can keep the dataclass frozen while setting its initial attributes
         # https://docs.python.org/3/library/dataclasses.html#frozen-instances
-        object.__setattr__(self, "open_channel_median_pA", open_channel_median_pA)
+        object.__setattr__(self, "open_channel_pA", open_channel_pA)
         object.__setattr__(self, "channel_number", channel_number)
         object.__setattr__(self, "calibration", calibration)
+        object.__setattr__(self, "sampling_rate", sampling_rate)
         return self
+
+    @classmethod
+    def from_group(cls, group: h5py.Group) -> HDF5_GroupSerializable:
+        """Serializes this object FROM an HDF5 Group.
+
+        class Baz(HDF5_GroupSerializable):
+            # ...Implementation
+
+        my_hdf5_file = h5py.File("/path/to/file")
+        baz_serialized_group = filts.require_group("/baz")
+
+        baz = Baz.from_group(baz_serialized_group) # I now have an instance of Baz.
+        """
+        ...
 
 
 @dataclass(frozen=True)
@@ -666,14 +694,14 @@ class CaptureMetadata:
     Fields
     ----------
 
-    read_id : str
+    read_id : ReadId
         Identifier for this read (unique within the run, usually a uuid.)
     start_time_bulk : int
         Starting time of the capture relative to the start of the bulk fast5
         file.
     start_time_local : int
         Starting time of the capture relative to the beginning of the segmented
-        region. (Relative to sub_run_start_seconds in parallel_find_captures().)
+        region. (Relative to sub_run_start_observations in parallel_find_captures().)
     duration : int
         Number of data points in the capture.
     ejected : boolean
@@ -690,7 +718,7 @@ class CaptureMetadata:
         Nanopore sampling rate (Hz)
     """
 
-    read_id: str
+    read_id: ReadId
     start_time_bulk: int
     start_time_local: int
     duration: int
@@ -731,13 +759,12 @@ class Capture:
     window: Window
     signal_threshold_frac: float
     open_channel_pA_calculated: float
-    ejected: Optional[bool]
+    ejected: bool
 
     @property
     def duration(self):
         return len(self.signal)
 
-    @property
     def fractionalized(self, start=None, end=None) -> FractionalizedSignal:
         frac = self.signal[start:end].to_fractionalized(self.open_channel_pA_calculated)
         return frac
@@ -775,7 +802,7 @@ def calculate_raw_in_picoamperes(
     [NumpyArrayLike]
         Raw current scaled to pA.
     """
-    return (raw + calibration.offset) * (calibration.rng / calibration.digitisation)
+    return (raw + calibration.offset) * (calibration.range / calibration.digitisation)
 
 
 def digitize_current(
@@ -796,7 +823,7 @@ def digitize_current(
         Picoampere current digitized (i.e. the raw ADC values).
     """
     return np.array(
-        (picoamperes * calibration.digitisation / calibration.rng) - calibration.offset,
+        (picoamperes * calibration.digitisation / calibration.range) - calibration.offset,
         dtype=np.int16,
     )
 
@@ -821,9 +848,8 @@ def compute_fractional_blockage(
     [NumpyArrayLike]
         Array of fractionalized nanopore current in the range [0, 1]
     """
-    pico = np.array(picoamperes, dtype=float)
-    pico /= open_channel
-    frac = np.clip(pico, a_max=1.0, a_min=0.0)
+    picoamperes /= open_channel
+    frac = np.clip(picoamperes, a_max=1.0, a_min=0.0)
     return frac
 
 

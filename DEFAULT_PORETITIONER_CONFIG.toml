@@ -1,6 +1,4 @@
 [general]
-# Segmenter version. Uses semantic versioning.
-#   Changes in minor/patch version are backwards compatible.
 version = "1.0"
 
 # Maximum number of parallel workers for the segmentation stage.
@@ -12,6 +10,7 @@ capture_directory = "./out/data"
 
 # Segmentation
 [segmentation]
+  bulkfast5="./d"
   n_captures_per_file = 10
   voltage_threshold = 0.1
   signal_threshold_frac = 0.700000

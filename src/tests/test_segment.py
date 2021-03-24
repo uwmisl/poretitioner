@@ -137,7 +137,9 @@ def old_config():
 
 
 def picoampere_signal_from_data_file(
-    filepath: str, channel_number=1, calibration: ChannelCalibration = ChannelCalibration(0, 1, 1)
+    filepath: str,
+    channel_number=1,
+    calibration: ChannelCalibration = ChannelCalibration(0, 1, 1),
 ) -> PicoampereSignal:
     """Helper method to extract a PicoampereSignal from a raw data file.
 
