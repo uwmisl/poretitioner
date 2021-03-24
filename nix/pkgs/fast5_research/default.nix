@@ -11,7 +11,7 @@ let
       owner = "nanoporetech";
       repo = name;
       rev = version;
-      sha256 = "15zw1xaa0dhh8b3qkmsr2kwcmagyd44ddq07j7mc9qwpdck6r2zr";
+      sha256 = "0rp3yrvlf9bgij4g967hh7lqx0kkil4n0l657v60d4k8kkdzxifg";
     };
 
     doCheck = false;

@@ -286,9 +286,9 @@ class ChannelCalibration(HDF5_GroupSerialableDataclass):
         This is the number of values that can even be produced the Analog-to-Digital. This exists because only a finite number of values can be represnted by a digitized signal.
     """
 
-    offset: int
+    offset: float
     range: float
-    digitisation: int
+    digitisation: float
 
 
 
