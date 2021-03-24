@@ -17,19 +17,87 @@
 #
 ###########################################################################################
 
-{ pkgs ? import <nixpkgs> { config = (import ./nix/config.nix); overlays = [ (import "./nix/overlays.nix") ]; }
+{ pkgs ? import <nixpkgs> { config = (import ./config.nix); overlays = [ (import ./overlays.nix) ]; }
 , python ? (pkgs.callPackage ./python.nix) { inherit pkgs; }
 , lib ? pkgs.lib
 , stdenv ? pkgs.stdenv
 , cudaSupport ? false
 }:
-with pkgs;
-with python.pkgs;
 let
-  debugpy = (callPackage ./pkgs/debugpy/debugpy.nix) { inherit python; };
-  pytorch = (callPackage ./pkgs/pytorch/pytorch.nix) { inherit python cudaSupport; };
+  # Takes in a python version, spits out run, build, test, and all packages for it.
+  getDependenciesForPython = pythonPackages:
+    with pythonPackages;
+    let
+      debugpy = pythonPackages.callPackage ./pkgs/debugpy/default.nix { };
+      pytorch = pythonPackages.callPackage ./pkgs/pytorch/default.nix { python = pythonPackages.python; inherit cudaSupport; };
+      fast5_research = pythonPackages.callPackage ./pkgs/fast5_research/default.nix { };
+    in
+    rec {
+      run = [
+        # Reading/writing TOML documents.
+        toml
+        # Numerical computation library
+        numpy
+        # Data manipulation and analysis
+        pandas
+        # Hierarchical Data Format utilities
+        h5py
+        # Parallel computing library
+        dask
+        # Charts and plotting library
+        matplotlib
+        # tkinter
+        # Data visualization
+        seaborn
+        # Interactive computing
+        notebook
+        # For interactive builds
+        jupyter
+        # For validating config and dict inputs
+        schema
+        # Neural networks
+        #torchvision
+        # Colorful logs!
+        colorlog
+
+        # Pytorch
+        pytorch
+      ]
+      # Oxford Nanopore Tools
+      ++ [ fast5_research ]
+      ;
+
+      build = [
+        # Import sorter
+        isort
+        # Highly opinionated code-formatter
+        black
+        # Style-guide enforcer
+        flake8
+        # Docstring static analyzer
+        pydocstyle
+      ];
+
+      test = [
+        # Testing suite
+        pytest
+        # Test runner
+        pytestrunner
+        # Test code coverage generator
+        pytestcov
+        # Debugpy (Used for debugging in VSCode: https://code.visualstudio.com/docs/python/debugging#_command-line-debugging)
+        debugpy
+      ];
+
+      all = run ++ build ++ test;
+    }
+  ;
+
+  pythonDeps = getDependenciesForPython python.pkgs;
 in
 rec {
+  getDependenciesForPython = getDependenciesForPython;
+  inherit pythonDeps;
 
   ###########################################################################################
   #
@@ -38,29 +106,9 @@ rec {
   #
   ###########################################################################################
 
-  run = [
-    # Reading/writing TOML documents.
-    toml
-    # Numerical computation library
-    numpy
-    # Data manipulation and analysis
-    pandas
-    # Hierarchical Data Format utilities
-    h5py
-    # Parallel computing library
-    dask
-    # Charts and plotting library
-    matplotlib
-    tkinter
-    # Data visualization
-    seaborn
-    # Interactive computing
-    notebook
-    # For interactive builds
-    jupyter
-    # Neural networks
-    #torchvision
-  ] ++ [ pytorch ];
+  run = [ ]
+    ++ pythonDeps.run
+  ;
 
   ###########################################################################################
   #
@@ -72,18 +120,12 @@ rec {
 
   build = [
     # Git hooks
-    pre-commit
-    # Import sorter
-    isort
-    # Highly opinionated code-formatter
-    black
-    # Style-guide enforcer
-    flake8
-    # Docstring static analyzer
-    pydocstyle
+    pkgs.pre-commit
     # Nix file style enforcer
     pkgs.nixpkgs-fmt
-  ];
+  ]
+  ++ pythonDeps.build
+  ;
 
   ###########################################################################################
   #
@@ -93,15 +135,10 @@ rec {
   ###########################################################################################
 
   test = [
-    # Testing suite
-    pytest
-    # Test runner
-    pytestrunner
-    # Test code coverage generator
-    pytestcov
-    # Debugpy (Used for debugging in VSCode: https://code.visualstudio.com/docs/python/debugging#_command-line-debugging)
-    debugpy
-  ];
+    pkgs.less
+  ]
+  ++ pythonDeps.test
+  ;
 
   ###########################################################################################
   #

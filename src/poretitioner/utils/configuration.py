@@ -26,6 +26,7 @@ import toml
 from ..getargs import ARG
 from ..logger import Logger, getLogger
 from .core import PathLikeOrString, stripped_by_keys
+from .filtering import FilterConfig, FilterConfigs, Filters, FilterSet, get_filters
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,7 @@ class CONFIG:
     GENERAL = "general"
     SEGMENTATION = "segmentation"
     FILTER = "filters"
+    CLASSIFICATION = "classification"
 
 
 def get_absolute_path(path: PathLikeOrString) -> Path:
@@ -130,7 +132,10 @@ class BaseConfiguration(metaclass=ABCMeta):
         return names
 
     def initialize_fields(
-        self, command_line_args: Dict = None, config: Dict = None, log: Logger = None
+        self,
+        command_line_args: Dict = None,
+        config: Dict = None,
+        log: Optional[Logger] = None,
     ):
         """[summary]
         #TODO
@@ -172,6 +177,7 @@ class BaseConfiguration(metaclass=ABCMeta):
         raise ValueError("Configuration was invalid.")
 
 
+<<<<<<< HEAD
 class FilterJSONEncoder(JSONEncoder):
     def default(self, obj):
         try:
@@ -234,6 +240,11 @@ class FilterConfiguration:
             for filter_config in json_dict["filters"]
         }
         return cls.__new__(filters)
+=======
+PoretitionerConfig = NewType(
+    "PoretitionerConfig", Dict[str, Union[BaseConfiguration, FilterSet]]
+)
+>>>>>>> jdunstan/beta-dataclasses
 
     def __setitem__(self, name, my_filter):
         self.filters[name] = my_filter
@@ -244,16 +255,20 @@ class FilterConfiguration:
 
 @dataclass(frozen=True)
 class GeneralConfiguration(BaseConfiguration):
+    version: str
     n_workers: int
     capture_directory: str
 
     def validate(self):
         # assert self.n_workers > 0
         # assert self.captures_per_f5 > 0
-        pass
+        return True
 
     def __init__(
-        self, command_line_args: Dict = None, config: Dict = None, log: Logger = getLogger()
+        self,
+        command_line_args: Dict = None,
+        config: Dict = None,
+        log: Logger = getLogger(),
     ) -> None:
         """[summary]
 
@@ -264,6 +279,9 @@ class GeneralConfiguration(BaseConfiguration):
         config : Dict, optional
             [description], by default None
         """
+        command_line_args = stripped_by_keys(
+            command_line_args, self.valid_field_names
+        )  # Only keep filter-related command line args
         self.initialize_fields(command_line_args=command_line_args, config=config)
 
     def validate(self):
@@ -279,15 +297,18 @@ class SegmentConfiguration(BaseConfiguration):
     translocation_delay: float
     terminal_capture_only: bool
     end_tolerance: float
-    good_channels: List[int]
     open_channel_prior_mean: int
     open_channel_prior_stdv: int
     terminal_capture_only: bool
+    capture_criteria: FilterSet
 
     def __init__(
-        self, command_line_args: Dict = None, config: Dict = None, log: Logger = getLogger()
+        self,
+        command_line_args: Dict = None,
+        config: Dict = None,
+        log: Logger = getLogger(),
     ) -> None:
-        """[summary]
+        """A set of configurations for the segmenter.
 
         Parameters
         ----------
@@ -300,7 +321,28 @@ class SegmentConfiguration(BaseConfiguration):
         command_line_args = stripped_by_keys(
             command_line_args, self.valid_field_names
         )  # Only keep filter-related command line args
-        self.initialize_fields(command_line_args=command_line_args, config=config)
+        self.initialize_fields(
+            command_line_args=command_line_args, config=config, log=log
+        )
+
+    def initialize_fields(
+        self, command_line_args: Dict, config: Dict, log: Optional[Logger] = None
+    ):
+        super().initialize_fields(
+            command_line_args=command_line_args, config=config, log=log
+        )
+
+        # Overwrite with actual capture criteria
+
+        filter_configs: FilterConfigs = {
+            name: attributes
+            for name, attributes in config.get("capture_criteria", {}).items()
+        }
+
+        capture_criteria = FilterSet.from_filter_configs("capture_criteria", filter_configs)
+
+        #capture_criteria = get_filters(capture_criteria_filter_configs)
+        object.__setattr__(self, "capture_criteria", capture_criteria)
 
     def validate(self):
         # TODO: Validation
@@ -325,7 +367,49 @@ class ClassifierConfiguration(BaseConfiguration):
         raise NotImplementedError("Not implemented configuration")
 
 
-def readconfig(path, command_line_args=None, log: Logger = getLogger()):
+def get_filter_set(
+    filter_command_line_args: Optional[Dict[str, Any]] = None,
+    filter_config_from_file: Optional[Dict[str, Any]] = None,
+    log: Logger = None,
+) -> FilterSet:
+
+    filter_config_from_file = (
+        filter_config_from_file if filter_config_from_file is not None else {}
+    )
+    filter_command_line_args = (
+        filter_command_line_args if filter_command_line_args is not None else {}
+    )
+    filter_command_line_args = stripped_by_keys(
+        filter_command_line_args, ARG.FILTER.ALL
+    )  # Only keep filter-related command line args
+    # Command line args take precidence over configuration files in the event of a conflict.
+    combined = {**filter_config_from_file, **filter_command_line_args}
+    log.debug(f"\nFilters: {combined!s}")
+
+    try:
+        # Get the filter set name, then remove it from the dictionary so we know everything else in `combined `refers to actual filters.
+        filter_set_name = combined.pop(ARG.FILTER.FILTER_SET_NAME)
+    except KeyError as e:
+        error_msg = f"Uh oh, we couldn't find the argument {ARG.FILTER.FILTER_SET_NAME} in either the config file or the command line. Please be sure to specify it in the config file, or on the command line."
+        log.error(error_msg)
+        raise e
+
+    my_filter_configs: FilterConfig = {
+        filter_name: filter_attributes
+        for filter_name, filter_attributes in combined.items()
+    }
+
+    log.debug(f"\n{my_filter_configs!s}")
+
+    filter_set = FilterSet.from_filter_configs(filter_set_name, my_filter_configs)
+    return filter_set
+
+
+def readconfig(
+    path: PathLikeOrString,
+    command_line_args: Optional[Dict[str, Any]] = None,
+    log: Logger = getLogger(),
+) -> PoretitionerConfig:
     """Read configuration from the path.
 
     Exceptions
@@ -336,7 +420,9 @@ def readconfig(path, command_line_args=None, log: Logger = getLogger()):
     path : Pathlike
         Path to the Poretitioner configuration file.
     """
-    config_path = str(get_absolute_path(path)).strip()  # Strip any trailing/leading whitespace.
+    config_path = str(
+        get_absolute_path(path)
+    ).strip()  # Strip any trailing/leading whitespace.
 
     read_config = toml.load(config_path)
     # config = ConfigParser()
@@ -347,14 +433,15 @@ def readconfig(path, command_line_args=None, log: Logger = getLogger()):
 
     # config.read(config_path)
     # config = config
-    log.debug(f"\n\ngen_config: {gen_config!s}\n\n")
-    log.debug(f"\n\nseg_config: {seg_config!s}\n\n")
-    log.debug(f"\n\ncommand_line_args: {command_line_args!s}\n\n")
-    log.debug(f"\n\nfilter_config: {filter_config!s}\n\n")
+    log.debug(f"gen_config: {gen_config!s}")
+    log.debug(f"seg_config: {seg_config!s}")
+    log.debug(f"command_line_args: {command_line_args!s}")
+    log.debug(f"filter_config: {filter_config!s}")
 
-    filter_commandline_args = {}
-    filter_configuration = FilterConfiguration(
-        filter_config=filter_config, command_line_args=command_line_args, log=log
+    filter_set = get_filter_set(
+        filter_command_line_args=command_line_args,
+        filter_config_from_file=filter_config,
+        log=log,
     )
 
     segmentation_configuration = SegmentConfiguration(
@@ -364,10 +451,11 @@ def readconfig(path, command_line_args=None, log: Logger = getLogger()):
         config=gen_config, command_line_args=command_line_args, log=log
     )
 
-    configs = {
+    configs: PoretitionerConfig = {
         CONFIG.GENERAL: general_configuration,
         CONFIG.SEGMENTATION: segmentation_configuration,
-        CONFIG.FILTER: filter_configuration,
+        CONFIG.FILTER: filter_set,
+        CONFIG.CLASSIFICATION: {},
     }
 
     return configs

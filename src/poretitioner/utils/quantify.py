@@ -21,7 +21,9 @@ from src.poretitioner.utils.core import PathLikeOrString, Window, WindowsByChann
 
 
 class QuantifyCaptureFile(ClassifierFile):
-    def __init__(self, capture_filepath: PathLikeOrString, logger: Logger = getLogger()):
+    def __init__(
+        self, capture_filepath: PathLikeOrString, logger: Logger = getLogger()
+    ):
         super().__init__(capture_filepath, logger=logger)
         # self.classifier_path = PurePosixPath(self.ROOT, "Classification", classifier_details.model)
 
@@ -174,7 +176,9 @@ def quantify_files(
                 blockage_array = capture_array
             else:
                 blockage_array = get_capture_details_in_f5(
-                    capture, read_path=read_path, classification_path=classification_path
+                    capture,
+                    read_path=read_path,
+                    classification_path=classification_path,
                 )
             if len(blockage_array) > 0:
                 blockage_arrays.append(blockage_array)
@@ -209,7 +213,10 @@ def quantify_files(
 
     elif quant_method == "capture_freq":
         capture_freqs = calc_capture_freq_intervals(
-            capture_windows, captures_by_channel, intervals=intervals, sampling_rate=sampling_rate
+            capture_windows,
+            captures_by_channel,
+            intervals=intervals,
+            sampling_rate=sampling_rate,
         )
         return capture_freqs
 
@@ -282,7 +289,9 @@ def sort_captures_by_channel(capture_array):
     return captures_by_channel
 
 
-def get_capture_details_in_f5(capture: CaptureFile, read_path=None, classification_path=None):
+def get_capture_details_in_f5(
+    capture: CaptureFile, read_path=None, classification_path=None
+):
     """Get capture times & channel info for all reads in the fast5 at read_path.
     If a classification_path is specified, get the label for each read too.
 
@@ -406,7 +415,10 @@ def calc_time_until_capture(
                 for blockage in blockages_in_window:
                     # Blockage must start after the last capture ended and
                     # finish before the next capture starts; otherwise skip
-                    if blockage.start >= last_capture_end and blockage.end < capture.start:
+                    if (
+                        blockage.start >= last_capture_end
+                        and blockage.end < capture.start
+                    ):
                         elapsed_time_until_capture -= blockage.duration
                         blockages.pop(0)
                 all_capture_times.append(elapsed_time_until_capture)

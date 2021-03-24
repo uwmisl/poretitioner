@@ -137,7 +137,9 @@ class TestRawSignal:
         signal = np.array([1, 2, 3])
         raw = RawSignal(signal, CHANNEL_NUMBER, CALIBRATION)
 
-        expected_signal_in_pA = PicoampereSignal(signal * 2, CHANNEL_NUMBER, CALIBRATION)
+        expected_signal_in_pA = PicoampereSignal(
+            signal * 2, CHANNEL_NUMBER, CALIBRATION
+        )
         resulting_signal_in_pA = raw.to_picoamperes()
         assert all(
             np.isclose(resulting_signal_in_pA, expected_signal_in_pA)
@@ -167,7 +169,9 @@ class TestRawSignal:
         frac = raw.to_fractionalized_from_guess(
             open_channel_guess=2, open_channel_bound=4, default=2
         )
-        assert all(np.isclose(frac, expected)), "Fractionalized current should match expected."
+        assert all(
+            np.isclose(frac, expected)
+        ), "Fractionalized current should match expected."
 
     def converting_signal_to_fractionalized_from_guess_creates_new_array_test(self):
         # It's important that we do not share memory between raw/pico/fractional signals, so modifying one doesn't change the others unexpectedly.
@@ -213,7 +217,9 @@ class TestPicoampereSignal:
         frac = pico.to_fractionalized_from_guess(
             open_channel_guess=OPEN_CHANNEL_GUESS, open_channel_bound=OPEN_CHANNEL_BOUND
         )
-        assert all(np.isclose(frac, expected)), "Fractionalized current should match expected."
+        assert all(
+            np.isclose(frac, expected)
+        ), "Fractionalized current should match expected."
 
 
 class PicoampereSignalTest:
@@ -227,7 +233,9 @@ class PicoampereSignalTest:
 
         expected = compute_fractional_blockage(pico, median)
         frac = pico.to_fractionalized_from_guess()
-        assert all(np.isclose(frac, expected)), "Fractionalized current should match expected."
+        assert all(
+            np.isclose(frac, expected)
+        ), "Fractionalized current should match expected."
 
     def picoampere_to_raw_test(self):
         picoamperes = [10, 20, 30]

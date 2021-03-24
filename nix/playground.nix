@@ -13,26 +13,24 @@
 #
 ###########################################################################################
 
-{ pkgs ? import <nixpkgs> { config = import ./config.nix; }
+{ pkgs ? import <nixpkgs> { config = (import ./config.nix); overlays = [ (import ./overlays.nix) ];
+  }
 , python ? pkgs.callPackage ./python.nix { inherit pkgs; }
 , cudaSupport ? false
 }:
-with pkgs;
-with python.pkgs;
 let
   # This file contains any python code you'd like
   # For convenience, we load some of the application's most important
   # classes and constants at the top, so you can jump right in and
   # use them in in bpython immediately.
-  playground_py = ''./nix/playground.py'';
-  dependencies = callPackage ./dependencies.nix { inherit python cudaSupport; };
+  playground_py = ./playground.py;
+  shell = pkgs.callPackage ./shell.nix {
+    inherit pkgs python cudaSupport;
+
+    postShellHook = ''
+      exec ${pkgs.zsh}/bin/zsh -c '${python.pkgs.bpython.pname} --interactive ${playground_py}'
+    '';
+  };
 in
-mkShell {
-  buildInputs = dependencies.all ++ [ bpython ];
-  shellHook = ''
-    ${bpython.pname} --interactive ${playground_py}
-  '';
-
-}
-
+shell
 #{ pkgs ? import <nixpkgs> { config = (import ./nix/config.nix); } , python ? (pkgs.callPackage ./nix/python.nix) { inherit pkgs; } }:
