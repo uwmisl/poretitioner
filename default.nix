@@ -50,7 +50,7 @@ let
   };
 
 
-  src = ./.;
+  poretitioner_src = builtins.path { path = ./.; inherit name; };
 
   # How to develop/release python packages with Nix:
   # https://github.com/NixOS/nixpkgs/blob/master/doc/languages-frameworks/python.section.md
@@ -62,7 +62,7 @@ let
       pname = name;
       version = version;
       format = "pyproject";
-      src = src;
+      src = poretitioner_src;
       checkInputs = test_pkgs;
       inherit doCheck;
       checkPhase = run_tests_and_coverage;

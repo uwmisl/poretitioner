@@ -15,11 +15,12 @@ import sys
 from pathlib import Path
 
 project_root_dir = Path(__file__).parent.parent.resolve()
-PROJECT_DIR_LOCATION = str(project_root_dir)
+PROJECT_DIR_LOCATION = "/Users/fourier/Developer/github/misl/poretitioner" #str("/Users/dna/Developer/poretitioner")
 
 
 def add_poretitioner_to_path():
     poretitioner_directory = str(Path(PROJECT_DIR_LOCATION, "src"))
+    print(f"\n{PROJECT_DIR_LOCATION}\n{poretitioner_directory}\n")
     sys.path.append(".")
     sys.path.append(poretitioner_directory)
     sys.path.append(PROJECT_DIR_LOCATION)
@@ -38,20 +39,21 @@ import toml
 
 import src.poretitioner.logger as logger
 from src import poretitioner
-from src.poretitioner import CONFIG, BulkFile
-from src.poretitioner.application_info import *
-from src.poretitioner.fast5s import *
-from src.poretitioner.getargs import *
+from src.poretitioner import CONFIG, BulkFile, CaptureFile, GeneralConfiguration, SegmentConfiguration, readconfig
+# from src.poretitioner.application_info import *
+# from src.poretitioner.getargs import *
 from src.poretitioner.logger import Logger as LoggerType
 from src.poretitioner.logger import getLogger
-from src.poretitioner.signals import *
-from src.poretitioner.utils import *
-from src.poretitioner.utils.classify import *
-from src.poretitioner.utils.configuration import (
-    GeneralConfiguration,
-    SegmentConfiguration,
-    readconfig,
-)
+from src.poretitioner.hdf5 import *
+
+# from src.poretitioner.signals import *
+# from src.poretitioner.utils import *
+# from src.poretitioner.utils.classify import *
+# from src.poretitioner.utils.configuration import (
+#     GeneralConfiguration,
+#     SegmentConfiguration,
+#     readconfig,
+# )
 
 LOG_VERBOSITY = 3
 # Temporarily changing the logger format for the intro messages.
@@ -90,9 +92,9 @@ def do_intro(log: LoggerType):
         f"\nJust remember, if you make any changes to Poretitioner code, be sure to call: "
     )
     log.debug(f"")
-    log.error(f"importlib.reload('poretitioner'")
+    log.error(f"importlib.reload('poretitioner')")
     log.debug(f"")
-    log.debug(f"So our runtime can pick up on your changes :)")
+    log.debug(f"So our runtime can pick up on your changes.")
     log.debug(f"")
 
 
@@ -157,7 +159,6 @@ report_bugs(log)
 # Quiet the logger while variables are being set up.
 logger.configure_root_logger(verbosity=1, debug=False)
 
-CALIBRATION = ChannelCalibration(0, 2, 1)
 CHANNEL_NUMBER = 1
 OPEN_CHANNEL_GUESS = 45
 OPEN_CHANNEL_BOUND = 10
@@ -179,10 +180,6 @@ CLASSIFIED_10_MINS_4_CHANNELS = (
 FILTER_FAST5_FILE = (
     f"{PROJECT_DIR_LOCATION}/src/tests/data/filter_and_store_result_test.fast5"
 )
-
-
-raw_signal = np.random.randn(10)
-raw = RawSignal(raw_signal, CHANNEL_NUMBER, CALIBRATION)
 
 bulky = BulkFile(BULK_FAST5_FILE, "r")
 

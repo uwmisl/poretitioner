@@ -4,7 +4,8 @@ let
   pname = repo_name;
   revision_tag = "v1.2.1";
   version = revision_tag;
-in buildPythonApplication rec {
+in
+buildPythonApplication rec {
 
   inherit pname version;
 

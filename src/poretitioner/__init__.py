@@ -2,13 +2,17 @@ import pathlib
 from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 
 from .fast5s import (
-    BulkFile,
-    CaptureFile,
+    BulkFile,    
     ContextTagsBase,
     ContextTagsBulk,
+)
+
+from .capture import (
+    CaptureFile,
     ContextTagsCapture,
     SubRun,
 )
+
 from .getargs import ARG, get_help
 from .logger import Logger, getLogger
 from .signals import (
@@ -30,8 +34,8 @@ from .utils.configuration import (
 )
 from .utils.exceptions import (
     CaptureSchemaVersionException,
-    HDF5GroupSerializationException,
-    HDF5SerializationException,
+    HDF5_GroupSerializationException,
+    HDF5_SerializationException,
     PluginNotFoundException,
 )
 

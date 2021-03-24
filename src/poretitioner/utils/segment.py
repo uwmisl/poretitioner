@@ -19,12 +19,15 @@ import numpy as np
 from dask.diagnostics import ProgressBar
 
 from .. import application_info, logger
-from ..fast5s import BulkFile, CaptureFile
+from ..fast5s import (
+    ChannelCalibration,
+    BulkFile
+)
+
 from ..signals import (
     Capture,
     CaptureMetadata,
     Channel,
-    ChannelCalibration,
     FractionalizedSignal,
     PicoampereSignal,
     RawSignal,
@@ -32,9 +35,16 @@ from ..signals import (
     digitize_current,
     find_open_channel_current,
 )
+
+from ..capture import CaptureFile
+
 from . import filtering
 from .configuration import GeneralConfiguration, SegmentConfiguration
-from .core import ReadId, Window, find_windows_below_threshold, hdf5_dtype
+from .core import ReadId, Window, find_windows_below_threshold
+
+from ..hdf5 import (
+    hdf5_dtype
+)
 
 ProgressBar().register()
 
@@ -65,7 +75,7 @@ def find_captures(
     signal_threshold_frac: float,
     open_channel_pA_calculated: float,
     terminal_capture_only: bool = False,
-    capture_criteria: Optional[filtering.Filters] = None,
+    capture_criteria: Optional[filtering.FilterSet] = None,
     delay=50,
     end_tol=0,
 ) -> List[Capture]:
@@ -89,8 +99,8 @@ def find_captures(
     terminal_capture_only : bool, optional
         Only return the final capture in the window, and only if it remains
         captured until the end of the window (to be ejected), by default False
-    capture_criteria : filtering.Filters, optional
-        List of filter plugins to apply during segmentation, default None
+    capture_criteria : filtering.FilterSet, optional
+        A named set of filter plugins to apply during segmentation, default None
     delay : int, optional
         Translocation delay. At high sampling rates, there may be some data
         points at the beginning of the capture that represent the initial
@@ -154,7 +164,7 @@ def find_captures(
         filtered_captures = [
             capture
             for capture in captures
-            if filtering.does_pass_filters(capture, capture_criteria)
+            if capture_criteria(capture)
         ]
     return filtered_captures
 
@@ -684,7 +694,7 @@ def parallel_find_captures(
                 n_in_file += 1
 
                 picoamperes: PicoampereSignal = cap.signal
-                raw_signal = picoamperes.to_raw()[start:end]
+                raw_signal = picoamperes.to_raw()
                 local_logger.debug(f"\tLength of raw signal : {len(raw_signal)}")
 
                 local_logger.debug(f"\tWriting to file: {capture_f5_filepath}...")

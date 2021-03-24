@@ -15,9 +15,9 @@
 #
 ###########################################################################################
 
-{ pkgs ? import <nixpkgs> { config = (import ../../config.nix); overlays = [ (import ../../overlays.nix) ];  }
+{ pkgs ? import <nixpkgs> { config = (import ../../config.nix); overlays = [ (import ../../overlays.nix) ]; }
 , lib ? pkgs.lib
-, python ?  pkgs.python39
+, python ? pkgs.python39
 , cudaSupport ? false
 }:
 with python.pkgs;

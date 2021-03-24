@@ -23,16 +23,16 @@
 , stdenv ? pkgs.stdenv
 , cudaSupport ? false
 }:
-with pkgs;
 let
   # Takes in a python version, spits out run, build, test, and all packages for it.
-  getDependenciesForPython = myPython:
-    with myPython.pkgs;
+  getDependenciesForPython = pythonPackages: 
+    with pythonPackages;
     let
-      debugpy = (callPackage ./pkgs/debugpy/debugpy.nix) { python=myPython; };
-      pytorch = (callPackage ./pkgs/pytorch/pytorch.nix) { python=myPython; inherit cudaSupport; };
-    in
-    rec {
+      debugpy = pythonPackages.callPackage ./pkgs/debugpy/default.nix { };
+      pytorch = pythonPackages.callPackage ./pkgs/pytorch/default.nix { python=pythonPackages.python; inherit cudaSupport; };
+      ont_fast5_api = pythonPackages.callPackage ./pkgs/ont_fast5_api/default.nix {  };
+      ont_fast5_validator = pythonPackages.callPackage ./pkgs/ont_h5_validator/default.nix {  };
+    in rec {
       run = [
         # Reading/writing TOML documents.
         toml
@@ -59,7 +59,14 @@ let
         #torchvision
         # Colorful logs!
         colorlog
-      ] ++ [ pytorch ];
+
+        # Pytorch
+        pytorch
+      ]
+      # Oxford Nanopore Tools
+      ++ [ ont_fast5_api ]
+      ++ ont_fast5_validator
+      ;
 
       build = [
         # Import sorter
@@ -84,13 +91,14 @@ let
       ];
 
       all = run ++ build ++ test;
-  };
+    }
+  ;
 
-  pythonDeps = (getDependenciesForPython python);
+  pythonDeps = getDependenciesForPython python.pkgs;
 in
 rec {
-
-  inherit getDependenciesForPython pythonDeps;
+  getDependenciesForPython = getDependenciesForPython;
+  inherit pythonDeps;
 
   ###########################################################################################
   #
@@ -99,10 +107,8 @@ rec {
   #
   ###########################################################################################
 
-
-
   run = [ ]
-        ++ pythonDeps.run
+    ++ pythonDeps.run
   ;
 
   ###########################################################################################
@@ -115,11 +121,11 @@ rec {
 
   build = [
     # Git hooks
-    pre-commit
+    pkgs.pre-commit
     # Nix file style enforcer
-    nixpkgs-fmt
+    pkgs.nixpkgs-fmt
   ]
-    ++ pythonDeps.build
+  ++ pythonDeps.build
   ;
 
   ###########################################################################################
@@ -132,7 +138,7 @@ rec {
   test = [
     pkgs.less
   ]
-    ++ pythonDeps.test
+  ++ pythonDeps.test
   ;
 
   ###########################################################################################

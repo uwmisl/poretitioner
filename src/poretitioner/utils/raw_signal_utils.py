@@ -70,9 +70,9 @@ def judge_channels(bulk_f5_fname, expected_open_channel=235):
         #     len_raw = len(raw)
         #     q_50 = int(len_raw / 2)
         #     q_75 = int(len_raw * 3 / 4)
-        #     median_outside_rng = np.abs(sorted_raw[q_50] - expected_open_channel) > 25
-        #     upper_outside_rng = np.abs(sorted_raw[q_75] - expected_open_channel) > 25
-        #     if median_outside_rng and upper_outside_rng:
+        #     median_outside_range = np.abs(sorted_raw[q_50] - expected_open_channel) > 25
+        #     upper_outside_range = np.abs(sorted_raw[q_75] - expected_open_channel) > 25
+        #     if median_outside_range and upper_outside_range:
         #         continue
 
         # Case 3: The channel is off

@@ -17,13 +17,18 @@ import h5py
 import numpy as np
 
 from . import logger
-from .utils.core import (
-    DataclassHDF5GroupSerialable,
+
+from .hdf5 import (
+    HDF5_GroupSerialableDataclass,
+    HDF5_DatasetSerialableDataclass,
     HDF5_Attributes,
     HDF5_Dataset,
     HDF5_Group,
     HDF5_Type,
-    HDF5GroupSerializable,
+    HDF5_GroupSerializable,
+)
+
+from .utils.core import (
     NumpyArrayLike,
     ReadId,
     Window,
@@ -46,48 +51,6 @@ __all__ = [
 
 DEFAULT_OPEN_CHANNEL_GUESS = 220  # In picoAmperes (pA).
 DEFAULT_OPEN_CHANNEL_BOUND = 15  # In picoAmperes (pA).
-
-
-@dataclass(frozen=True)
-class ChannelCalibration(DataclassHDF5GroupSerialable):
-    """
-    On the Oxford Nanopore devices, there's an analog to digital converter that converts the raw, unitless analog signal
-    transforms the raw current. To convert these raw signals to a measurement of current in picoAmperes,
-    we need to know certain values for the channel configuration.
-
-
-    ⎜   Physics    ⎜  Device  ⎜            Software          ⎜
-
-    ⎜‒‒‒‒‒‒‒‒‒‒‒‒‒⎜‒‒‒‒‒‒‒‒‒⎜‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒⎜
-
-    ⎜             ⎜         ⎜                            ⎜
-
-    ⎜   Current   ⟶  ADC    ⟶    Calibration ⟶  Signal     ⎜
-
-    ⎜  (Amperes)   ⎜ (Unitless) ⎜      (Unitless)    (PicoAmperes)⎜
-
-    ⎜             ⎜         ⎜                            ⎜
-
-    ⎜‒‒‒‒‒‒‒‒‒‒‒‒⎜‒‒‒‒‒‒‒‒‒⎜‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒⎜
-
-
-    Fields
-    ----------
-    offset : float
-        Adjustment to the ADC to each 0pA.
-        Essentially, this is the average value the device ADC gives when there's zero current.
-        We subtract this from the raw ADC value to account for this, like zero'ing out a scale before weighing.
-
-    rng: float
-        The range of digitized picoAmperes that can be produced after the analog-to-digital conversion. The ratio of rng:digitisation represents the change in picoamperes of current per ADC change of 1.
-
-    digitisation: float
-        This is the number of values that can even be produced the Analog-to-Digital. This exists because only a finite number of values can be represnted by a digitized signal.
-    """
-
-    offset: float
-    rng: float
-    digitisation: float
 
 
 class SignalMetadata(
@@ -543,20 +506,45 @@ class PicoampereSignal(CurrentSignal):
         )
         return fractionalized
 
-
-class HDFSSignal(BaseSignal, DataclassHDF5GroupSerialable):
+#@dataclass(frozen=True, init=False)
+@dataclass(init=False)
+class HDF5_Signal(HDF5_DatasetSerialableDataclass):
     start_time_bulk: int
     start_time_local: int
     duration: int
     voltage: float
-    open_channel_pA: int
-    read_id: str
+    open_channel_pA: float
+    read_id: ReadId
     ejected: bool
     channel_number: int
 
+    def __new__(cls, data: Union[np.ndarray, NumpyArrayLike], start_time_bulk: int, start_time_local: int, duration: int, voltage: float, open_channel_pA: float, read_id: ReadId, ejected: bool, channel_number: int):
+        self = super().__new__(cls, data)
+        self.start_time_bulk = start_time_bulk
+        self.start_time_local = start_time_local
+        self.duration = duration
+        self.voltage = voltage
+        self.open_channel_pA = open_channel_pA
+        self.read_id = read_id
+        self.ejected = ejected
+        self.channel_number = channel_number
+        return self
+
+    def __init__(self, data: Union[np.ndarray, NumpyArrayLike], start_time_bulk: int, start_time_local: int, duration: int, voltage: float, open_channel_pA: float, read_id: ReadId, ejected: bool, channel_number: int):
+        super().__init__(data)
+        self.start_time_bulk = start_time_bulk
+        self.start_time_local = start_time_local
+        self.duration = duration
+        self.voltage = voltage
+        self.open_channel_pA = open_channel_pA
+        self.read_id = read_id
+        self.ejected = ejected
+        self.channel_number = channel_number
+    
+
 
 @dataclass(frozen=True)
-class Channel(DataclassHDF5GroupSerialable):
+class Channel(HDF5_GroupSerialableDataclass):
     """A nanopore channel. Contains an id (channel_number), info on how it was calibrated, and its median current when the pore is open.
 
     Fields
@@ -674,10 +662,10 @@ class Channel(DataclassHDF5GroupSerialable):
         return self
 
     @classmethod
-    def from_group(cls, group: h5py.Group) -> HDF5GroupSerializable:
+    def from_group(cls, group: h5py.Group) -> HDF5_GroupSerializable:
         """Serializes this object FROM an HDF5 Group.
 
-        class Baz(HDF5GroupSerializable):
+        class Baz(HDF5_GroupSerializable):
             # ...Implementation
 
         my_hdf5_file = h5py.File("/path/to/file")
@@ -729,11 +717,6 @@ class CaptureMetadata:
     channel_number: int
     calibration: ChannelCalibration
     sampling_rate: float
-
-
-@dataclass(frozen=True)
-class ChannelInfo(HDF5GroupSerializable):
-    pass
 
 
 @dataclass(frozen=True)
@@ -807,7 +790,7 @@ def calculate_raw_in_picoamperes(
     [NumpyArrayLike]
         Raw current scaled to pA.
     """
-    return (raw + calibration.offset) * (calibration.rng / calibration.digitisation)
+    return (raw + calibration.offset) * (calibration.range / calibration.digitisation)
 
 
 def digitize_current(
@@ -828,7 +811,7 @@ def digitize_current(
         Picoampere current digitized (i.e. the raw ADC values).
     """
     return np.array(
-        (picoamperes * calibration.digitisation / calibration.rng) - calibration.offset,
+        (picoamperes * calibration.digitisation / calibration.range) - calibration.offset,
         dtype=np.int16,
     )
 

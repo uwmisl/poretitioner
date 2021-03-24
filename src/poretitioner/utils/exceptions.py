@@ -1,26 +1,8 @@
 from typing import *
 
-import h5py
-
 from .plugin import Plugin
 
-
-class HDF5SerializationException(AttributeError):
-    """We couldn't serialize a data class from a HDF5 file."""
-
-    def __init__(self, msg: str, *args: object) -> None:
-        super().__init__(*args)
-        self.msg = msg
-
-
-class HDF5GroupSerializationException(HDF5SerializationException):
-    """We couldn't serialize a data class from a HDF5 file."""
-
-    def __init__(
-        self, msg: str, *args: object, group: Optional[h5py.Group] = None
-    ) -> None:
-        super().__init__(msg, *args)
-        self.group = group
+from ..hdf5.exceptions import HDF5_SerializationException, HDF5_GroupSerializationException, HDF5_DatasetSerializationException
 
 
 class PluginNotFoundException(AttributeError):
@@ -29,7 +11,7 @@ class PluginNotFoundException(AttributeError):
         self.plugin = plugin
 
 
-class CaptureSchemaVersionException(HDF5SerializationException):
+class CaptureSchemaVersionException(HDF5_SerializationException):
     """We couldn't serialize this object because it was store with an incompatible schema version."""
 
     def __init__(self, msg: str, *args: object) -> None:

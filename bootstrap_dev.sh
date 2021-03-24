@@ -129,10 +129,6 @@ shell () {
 isDarwin () {
     [ $(uname -s ) = "Darwin" ]
 }
-yellow "This is because Nix will need to create/delete a directory at the file system root (i.e. /nix/), "
-    yellow "as well as append data to your /etc/bashrc and /etc/zshrc to make itself available to all users. "
-    yellow "Some extra install/uninstall steps will be necessary if we find out it's not writeable."
-
 
 ask_sudo () {
     # $1 Reason
@@ -309,10 +305,10 @@ install_cachix () {
     then
         yellow "Cachix not installed, installing Cachix..."
 
-        install_cachix="sudo nix-env -iA cachix -f https://cachix.org/api/v1/instal"
-        ask_sudo "Install Cachix as a trusted user so that all users can use the trusted caches" "$install_cachix"
+        install_cachix="sudo nix-env -iA cachix -f https://cachix.org/api/v1/install"
+        ask_sudo "Cachix is a remote binary cache that lets us store and share packages we've already built. This can save us a lot of build time. I'd like to install Cachix as a trusted user so that all users can use these trusted caches" "$install_cachix"
 
-        . $install_cachix
+        sudo nix-env -iA cachix -f https://cachix.org/api/v1/install
         # Cachix is already installed.
         green "Cachix installed!"
     else
@@ -345,24 +341,6 @@ install_misl_env () {
     nix-env -i "pre-commit" -f "<nixpkgs>"
 
     green "MISL env installed."
-}
-
-
-
-add_nix_to_user_profiles () {
-    PROFILES=( "$HOME/.bashrc" "$HOME/.zshrc" )
-
-    ADD_NIX="
-# Nix
-if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
-  . '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
-fi
-# End Nix
-"
-
-    for profile in ${PROFILES[@]}; do
-        grep -qxF "${ADD_NIX}" foo.bar || echo "${ADD_NIX}" >> $profile
-    done
 }
 
 ##############################################

@@ -228,7 +228,7 @@ class SegmentConfiguration(BaseConfiguration):
     open_channel_prior_mean: int
     open_channel_prior_stdv: int
     terminal_capture_only: bool
-    capture_criteria: Filters
+    capture_criteria: FilterSet
 
     def __init__(
         self,
@@ -236,7 +236,7 @@ class SegmentConfiguration(BaseConfiguration):
         config: Dict = None,
         log: Logger = getLogger(),
     ) -> None:
-        """[summary]
+        """A set of configurations for the segmenter.
 
         Parameters
         ----------
@@ -261,12 +261,15 @@ class SegmentConfiguration(BaseConfiguration):
         )
 
         # Overwrite with actual capture criteria
-        capture_criteria_filter_configs: FilterConfigs = {
-            name: FilterConfig(name, attributes)
-            for name, attributes in config["capture_criteria"].items()
+        
+        filter_configs: FilterConfigs = {
+            name: attributes
+            for name, attributes in config.get("capture_criteria", {}).items()
         }
 
-        capture_criteria = get_filters(capture_criteria_filter_configs)
+        capture_criteria = FilterSet.from_filter_configs("capture_criteria", filter_configs)
+
+        #capture_criteria = get_filters(capture_criteria_filter_configs)
         object.__setattr__(self, "capture_criteria", capture_criteria)
 
     def validate(self):
@@ -319,8 +322,8 @@ def get_filter_set(
         log.error(error_msg)
         raise e
 
-    my_filter_configs = {
-        filter_name: FilterConfig(filter_name, filter_attributes)
+    my_filter_configs: FilterConfig = {
+        filter_name: filter_attributes
         for filter_name, filter_attributes in combined.items()
     }
 

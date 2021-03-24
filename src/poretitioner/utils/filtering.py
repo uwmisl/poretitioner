@@ -7,12 +7,16 @@ This module provides more granular filtering for captures.
 You can customize your own filters too.
 
 """
+from __future__ import annotations
+
+from h5py import File as Fast5File
+
 import re
 from abc import ABC, ABCMeta, abstractmethod
 from dataclasses import dataclass
 from json import JSONEncoder
 from pathlib import PosixPath
-from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
+from typing import Any, Dict, Iterable, Mapping, NewType, Optional, Protocol, Type, TypedDict, Union
 
 import h5py
 import numpy as np
@@ -20,18 +24,20 @@ import numpy as np
 from ..logger import Logger, getLogger
 from ..signals import Capture
 from .core import (
-    DataclassHDF5GroupSerialable,
-    Fast5File,
-    HasFast5,
-    HDF5_Group,
-    HDF5GroupSerializable,
-    HDF5GroupSerializing,
-    IsAttr,
     NumpyArrayLike,
     PathLikeOrString,
     ReadId,
     stripped_by_keys,
 )
+
+from ..hdf5 import (
+    HDF5_GroupSerialableDataclass,
+    HasFast5,
+    HDF5_Group,
+    HDF5_GroupSerializable,
+    HDF5_GroupSerializing,
+)
+
 from .plugin import Plugin
 
 CaptureOrTimeSeries = Union[Capture, NumpyArrayLike]
@@ -52,7 +58,8 @@ __all__ = [
     "FilterConfig",
     "Filter",
     "Filters",
-    "DEFAULT_FILTER_PLUGINS" "FilterSet",
+    "DEFAULT_FILTER_PLUGINS",
+    "FilterSet",
     "FilterConfigs",
     "FilterPlugin",
     "PATH",
@@ -83,9 +90,10 @@ class FILTER_PATH:
         return pass_path
 
 
-@dataclass(frozen=True)
-class FilterConfig:
+class FilterConfig(TypedDict):
     """A blueprint for how to construct a FilterPlugin.
+
+    Contains a name, and any number of other attributes
 
     Note on terminology:
 
@@ -96,9 +104,6 @@ class FilterConfig:
 
     For custom plugins, make sure "filepath" is an attribute that points to the file to laod
     """
-
-    name: str
-    attributes: Dict[str, Any]
 
 
 # Mapping of a FilterName to filter configurations.
@@ -190,9 +195,10 @@ class FilterPlugin(Plugin):
         return result
 
 
+RANGE_FILTER_DEFAULT_MINIMUM: float = -np.inf
+RANGE_FILTER_DEFAULT_MAXIMUM: float = np.inf
+
 class RangeFilter(FilterPlugin):
-    DEFAULT_MINIMUM: float = -np.inf
-    DEFAULT_MAXIMUM: float = np.inf
 
     def __init__(
         self, minimum: Optional[float] = None, maximum: Optional[float] = None
@@ -206,8 +212,8 @@ class RangeFilter(FilterPlugin):
         maximum : float, optional
             The largest value this signal should be allowed to take (inclusive), by default RangeFilter.DEFAULT_MAXIMUM
         """
-        self.minimum = minimum if minimum is not None else RangeFilter.DEFAULT_MINIMUM
-        self.maximum = maximum if maximum is not None else RangeFilter.DEFAULT_MAXIMUM
+        self.minimum = minimum if minimum is not None else RANGE_FILTER_DEFAULT_MINIMUM
+        self.maximum = maximum if maximum is not None else RANGE_FILTER_DEFAULT_MAXIMUM
 
     def extract(self, capture: CaptureOrTimeSeries) -> NumpyArrayLike:
         """Extracts a summary statistic from the capture (e.g. mean, length, standard deviation).
@@ -558,7 +564,7 @@ class Filter(Filtering):
 
     @property
     def name(self) -> FilterName:
-        return FilterName(self.plugin.name())
+        return FilterName(self.plugin.__class__.name())
 
     def as_attr(self) -> Dict[str, Any]:
         name = self.name
@@ -568,26 +574,27 @@ class Filter(Filtering):
     def from_attr(self, attr) -> IsAttr:
         ...
 
+import json
 
 @dataclass
-class HDF5FilterSerialable(Filter, DataclassHDF5GroupSerialable):
+class HDF5_FilterSerialable(Filter, HDF5_GroupSerialableDataclass):
     def as_group(
         self, parent_group: HDF5_Group, log: Optional[Logger] = None
     ) -> HDF5_Group:
         log = log if log is not None else getLogger()
         # Note: This line simply registers a group with the name 'name' in the parent group.
         this_group = HDF5_Group(parent_group.require_group(self.name))
-
-        all_attrs = {**vars(self.config), **vars(self.plugin)}
+        
+        all_attrs = {**self.config, **vars(self.plugin)}
         this_group.create_attrs(all_attrs)
 
         # Implementers must now write their serialized instance to this group.
-        return HDF5_Group(new_group)
+        return this_group
 
     @classmethod
     def from_group(
         cls, group: HDF5_Group, log: Optional[Logger] = None
-    ) -> DataclassHDF5GroupSerialable:
+    ) -> HDF5_GroupSerialableDataclass:
         # You see, the trouble is, in the above 'as_group' call, we lumped together
         # all the attributes of the FilterConfig and the FilterPlugin, not knowing
         # which attributes belonged to which class.
@@ -606,8 +613,9 @@ class HDF5FilterSerialable(Filter, DataclassHDF5GroupSerialable):
         return super().from_group(group, log)
 
 
-# class Filters(DataclassHDF5GroupSerialable):
+# class Filters(HDF5_GroupSerialableDataclass):
 #     filters:
+
 
 Filters = Dict[FilterName, Filter]
 
@@ -627,14 +635,14 @@ def get_filters(filter_configs: Optional[FilterConfigs] = None) -> Filters:
     """
     filter_configs = filter_configs if filter_configs is not None else FilterConfigs({})
     my_filters = {
-        name: filter_from_config(filter_config)
+        name: filter_from_config(name, filter_config)
         for name, filter_config in filter_configs.items()
     }
 
     return my_filters
 
 
-def does_pass_filters(capture: CaptureOrTimeSeries, filters: Filters) -> bool:
+def does_pass_filters(capture: CaptureOrTimeSeries, filters: Iterable[Filter]) -> bool:
     """
     Check whether an array of values (e.g. a single nanopore capture)
     passes a set of filters. Filters can be based on summary statistics
@@ -644,7 +652,7 @@ def does_pass_filters(capture: CaptureOrTimeSeries, filters: Filters) -> bool:
     ----------
     capture : CaptureOrTimeSeries | NumpyArrayLike
         Capture containing time series of nanopore current values for a single capture, or the signal itself.
-    filters : Filters
+    filters : Iterable[Filter]
         The set of filters to apply. Write your own filter by subclassing FilterPlugin.
 
     Returns
@@ -652,104 +660,102 @@ def does_pass_filters(capture: CaptureOrTimeSeries, filters: Filters) -> bool:
     boolean
         True if capture passes all filters; False otherwise.
     """
-    # TODO: Parallelize? https://github.com/uwmisl/poretitioner/issues/67
-    all_passed = True
-    for filter_out in filters.values():
-        if not filter_out(capture):
+    all_passed = True 
+    for some_filter in filters:
+        if not some_filter(capture):
             return False
-    return True
+    return all_passed
 
+@dataclass(frozen=True)
+class FilterSetProtocol(Filtering, Protocol):
+    filter_set_id: FilterSetId
+    filters: Filters
 
-class FilterSet(Filtering):
+    @classmethod
+    def from_filter_configs(
+        cls, name: FilterSetId, filter_configs: FilterConfigs = None):
+        ...
+
+@dataclass(frozen=True, init=False)
+class FilterSet(FilterSetProtocol):
     """
     A collection of filters with a name for easy
-    identification.
-    Mapping of filter_set_name to its filters.
-
-    Q: Why inherit from FilterPlugin?
-    A: So we can treat an amalgam of filters (i.e. a FilterSet)
-       just like a singular filter.
-       This is known as the Composite Pattern [1]
-
-    [1] - https://en.wikipedia.org/wiki/Composite_pattern
+    identification. Essentially a mapping of filter names to their implementations.
     """
-
-    name: FilterSetId
-    filters: Filters
 
     def validate(self):
         raise NotImplementedError("Implement validation for filters!")
 
-    def json_encoder(self) -> JSONEncoder:
-        encoder = FilterJSONEncoder()
-        return encoder
+    def __init__(self, filter_set_id: FilterSetId, filters: Filters) -> None:
+        filterset = super().__init__(self)
+        object.__setattr__(self, "filter_set_id", filter_set_id)
+        object.__setattr__(self, "filters", filters)
+        # self.name = name
+        # self.filters = filters
 
-    @classmethod
-    def from_json(
-        cls, json_dict: Dict, filter_set_name: FilterSetId, filters_dict: Dict
-    ):
-        filter_configs: FilterConfigs = FilterConfigs(
-            {
-                FilterName(filter_config.get("name")): FilterConfig(**filter_config)
-                for filter_config in json_dict["filters"]
-            }
-        )
-        filters = get_filters(filter_configs)
-        filter_set = cls.__new__(cls)
-        filter_set = filter_set.__init__(filter_set_name, filters)
-
+    ############################
+    #
+    #   FilterSetProtocol
+    #
+    ############################
     @classmethod
     def from_filter_configs(
         cls, name: FilterSetId, filter_configs: FilterConfigs = None
     ):
         filters: Filters = get_filters(filter_configs)
-        filter_set = cls.__new__(cls)
+        filter_set = cls.__new__(cls, name, filters)
         filter_set.__init__(name, filters)
         return filter_set
 
     def apply(self, capture: CaptureOrTimeSeries) -> bool:
-        return does_pass_filters(capture, self.filters)
+        return does_pass_filters(capture, self.filters.values())
 
     def __call__(self, capture: CaptureOrTimeSeries) -> bool:
         return self.apply(capture)
 
 
-class HDF5FilterSet(FilterSet, HDF5GroupSerializable):
-    def __init__(self, group: HDF5_Group) -> None:
-        super().__init__(group)
+
+class HDF5_FilterSet(FilterSet, HDF5_GroupSerialableDataclass):
+    
+    def __init__(self, filter_set: FilterSet) -> None:
+        self._filterset = filter_set
+
+    ############################
+    #
+    #   HDF5_GroupSerializable
+    #
+    ############################
 
     def name(self):
-        return self.name
+        return self._filterset.filter_set_id
 
     def as_group(
         self, parent_group: HDF5_Group, log: Optional[Logger] = None
     ) -> HDF5_Group:
-        new_group = super(HDF5GroupSerializable).as_group(parent_group, log=log)
-        for name, filter_t in self.filters.items():
-            filter_group = HDF5_Group(new_group.require_group(name))
-            hdf5_filter = HDF5FilterSerialable(filter_t.config, filter_t.plugin)
-            hdf5_filter.as_group(filter_group)
+        filter_set_group = parent_group.require_group(self.name())
+        for name, filter_t in self._filterset.filters.items():
+            hdf5_filter = HDF5_FilterSerialable(filter_t.config, filter_t.plugin)
+            hdf5_filter.as_group(filter_set_group)
 
-        # Note: This does nothing but register a group with the name 'name' in the parent group.
-        #       Implementers must now write their serialized instance to this group.
-        return HDF5_Group(new_group)
+        return HDF5_Group(filter_set_group)
 
-    @classmethod
-    @abstractmethod
-    def from_group(
-        cls, group: HDF5_Group, log: Optional[Logger] = None
-    ) -> HDF5GroupSerializable:
-        raise NotImplementedError(
-            f"from_group not implemented for {cls.__name__}. Make sure you write a method that returns a serialzied version of this object."
-        )
+    # @classmethod
+    # def from_group(
+    #     cls, group: HDF5_Group, log: Optional[Logger] = None
+    # ) -> HDF5_GroupSerializable:
+    #     raise NotImplementedError(
+    #         f"from_group not implemented for {cls.__name__}. Make sure you write a method that returns a serialzied version of this object."
+    #     )
 
 
-def filter_from_config(config: FilterConfig, log: Logger = getLogger()) -> Filter:
+def filter_from_config(name: str, config: FilterConfig, log: Logger = getLogger()) -> Filter:
     """Creates a Filter from a config spefication. If no "filename" is present in the FilterConfig, it's
     assumed to be one of the default filtesr
 
     Parameters
     ----------
+    name : str
+        The unique name of a filter.
     config : FilterConfig
         Filter configuration to build the plugin.
     log : Logger, optional
@@ -767,10 +773,7 @@ def filter_from_config(config: FilterConfig, log: Logger = getLogger()) -> Filte
         1) A plugin class with the name in the configuration is defined at the filepath described in the configuration
         2) The plugin class inherits from the `FilterPlugin` abstract base class.
     """
-    name = config.name
-
-    attributes: Dict[str, Any] = config.attributes
-    filepath = attributes.get("filepath", None)
+    filepath = config.get("filepath", None)
 
     # TODO: For non-default FilterPlugins, load/unpickle the class from the filepath. https://github.com/uwmisl/poretitioner/issues/91
     plugin = None
@@ -785,7 +788,7 @@ def filter_from_config(config: FilterConfig, log: Logger = getLogger()) -> Filte
     # Make sure any plugin attributes defined in the config are moved over to the plugin instance.
     try:
         # Here, we take care of setting whatever attributes the plugin config defines on the new plugin instance.
-        for key, value in attributes.items():
+        for key, value in config.items():
             object.__setattr__(plugin, key, value)
     except AttributeError as e:
         log.warning(
