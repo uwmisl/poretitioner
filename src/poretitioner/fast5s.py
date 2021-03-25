@@ -19,7 +19,6 @@ from typing import *  # I know people don't like import *, but I think it has be
 import h5py
 
 from .application_info import get_application_info
-from .fast5s import FilterSet
 from .hdf5.hdf5 import (
     Fast5File,
     HasFast5,
@@ -35,6 +34,7 @@ from .signals import CaptureMetadata, FractionalizedSignal, RawSignal, VoltageSi
 from .utils.classify import CLASSIFICATION_PATH
 from .utils.configuration import SegmentConfiguration
 from .utils.core import NumpyArrayLike, PathLikeOrString, ReadId, dataclass_fieldnames
+from .utils.filtering import FilterSet
 
 __all__ = [
     "BulkFile",
@@ -58,15 +58,7 @@ class ContextTagsBase(HDF5_GroupSerialableDataclass):
     vary slightly.
     """
 
-    # Katie Q: Can't find this in the Bulk :O
-    # experiment_duration_set: str
     experiment_type: str
-    # Katie Q: Can't find this in the Bulk :O
-    # flowcell_product_code: str
-    # Katie Q: Can't find this in the Bulk :O
-    # package: str
-    # Katie Q: Can't find this in the Bulk :O
-    # package_version: str
     sample_frequency: str
 
     department: str
@@ -221,13 +213,13 @@ def add_signal_to_path(base: PathLikeOrString) -> PathLike:
         A HDF5-friendly path that contains the signal group.
     """
     # We're using PurePosixPath, instead of Path, to guarantee that the path separator will be '/' (i.e. FAST5_ROOT) (instead of using the operating system default)
-    path_with_signal = PurePosixPath(base, KEY.SIGNAL)
+    path_with_signal = str(PurePosixPath(base, KEY.SIGNAL))
     return path_with_signal
 
 
 def add_channel_id_to_path(base: PathLikeOrString) -> PathLike:
     # We're using PurePosixPath, instead of Path, to guarantee that the path separator will be '/' (i.e. FAST5_ROOT) (instead of using the operating system default)
-    path_with_channel_id = PurePosixPath(base, KEY.CHANNEL_ID)
+    path_with_channel_id = str(PurePosixPath(base, KEY.CHANNEL_ID))
     return path_with_channel_id
 
 
@@ -388,10 +380,7 @@ class BaseFile(HasFast5):
 
 class BulkFile(BaseFile):
     def __init__(
-        self,
-        bulk_filepath: PathLikeOrString,
-        mode: str = "r",
-        logger: Logger = getLogger(),
+        self, bulk_filepath: PathLikeOrString, mode: str = "r", logger: Logger = getLogger()
     ):
         # TODO: Black doesn't like the formatting here, can't figure out why.
         # fmt: off
@@ -552,10 +541,7 @@ class BulkFile(BaseFile):
         return calibration
 
     def get_raw_signal(
-        self,
-        channel_number: int,
-        start: Optional[int] = None,
-        end: Optional[int] = None,
+        self, channel_number: int, start: Optional[int] = None, end: Optional[int] = None
     ) -> RawSignal:
         """Retrieve raw signal from open fast5 file.
 

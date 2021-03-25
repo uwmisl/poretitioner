@@ -89,11 +89,14 @@ class ContextTagsCapture(ContextTagsBase):
     """
 
     bulk_filename: str
+    filename: str
 
     @classmethod
-    def from_context_tags_bulk_group(cls, bulk_tags_group: HDF5_Group) -> ContextTagsCapture:
+    def from_context_tags_bulk_group(
+        cls, capture_filename: str, bulk_tags_group: HDF5_Group
+    ) -> ContextTagsCapture:
         capture_fields = dataclass_fieldnames(cls)
-        context_tags = {}
+        context_tags = {"filename": capture_filename}
         for key, value in bulk_tags_group.objects_from_attrs().items():
             if key == "filename":
                 # "Filename" in Bulk is named "bulk_filename" in Capture.
@@ -119,11 +122,11 @@ class Channel(HDF5_GroupSerialableDataclass):
         channel_id = f"channel_id"
         return channel_id
 
-    def as_group(self, parent_group: HDF5_Group, log: Optional[Logger] = None) -> HDF5_Group:
+    def add_to_group(self, parent_group: HDF5_Group, log: Optional[Logger] = None) -> HDF5_Group:
         log = log if log is not None else getLogger()
 
         """Returns this object as an HDF5 Group."""
-        my_group: HDF5_Group = super().as_group(parent_group)
+        my_group: HDF5_Group = super().add_to_group(parent_group)
 
         for field_name, field_value in vars(self).items():
             if isinstance(field_value, HDF5_GroupSerializable):
@@ -131,7 +134,7 @@ class Channel(HDF5_GroupSerialableDataclass):
                 # So we create a new group rooted at our dataclass's group
                 # And assign it the value of whatever the group of the value is.
                 my_group.require_group(field_name)
-                field_group = field_value.as_group(my_group, log=log)
+                field_group = field_value.add_to_group(my_group, log=log)
             elif isinstance(field_value, ChannelCalibration):
                 for calibration_key, value in vars(field_value).items():
                     my_group.create_attr(calibration_key, value)
@@ -227,9 +230,13 @@ class Read(HDF5_GroupSerialableDataclass):
     channel_id: Channel
     Signal: HDF5_Signal  # This is the raw signal, fresh from the Fast5.
 
-    def __init__(self, read_id: ReadId, channel_id: Channel, signal: Signal):
+    def __init__(
+        self, parent_group: HDF5_Group, read_id: ReadId, channel_id: Channel, signal: Signal
+    ):
         self.read_id = read_id
         self.channel_id = channel_id
+
+        self.add_to_group(parent_group)
 
         self.signal = signal.as_dataset(self)
 
@@ -251,10 +258,7 @@ class SegmentationMeta(HDF5_GroupSerialableDataclass):
 
 class CaptureFile(BaseFile):
     def __init__(
-        self,
-        capture_filepath: PathLikeOrString,
-        mode: str = "r",
-        logger: Logger = getLogger(),
+        self, capture_filepath: PathLikeOrString, mode: str = "r", logger: Logger = getLogger()
     ):
         # TODO: Black doesn't like the formatting here, can't figure out why.
         # fmt: off
@@ -339,7 +343,7 @@ class CaptureFile(BaseFile):
         capture_context_tags_group = self.f5.require_group(CAPTURE_PATH.CONTEXT_TAGS)
         bulk_context_tags = bulk_f5.context_tags_group
         context_tags_capture = ContextTagsCapture.from_context_tags_bulk_group(bulk_context_tags)
-        capture_context_tags_group = context_tags_capture.as_group(
+        capture_context_tags_group = context_tags_capture.add_to_group(
             capture_context_tags_group.parent, log=log
         )
 
@@ -362,7 +366,7 @@ class CaptureFile(BaseFile):
         # /
         if sub_run is not None:
             subrun_group = HDF5_Group(self.f5.require_group(CAPTURE_PATH.SUB_RUN))
-            sub_run.as_group(subrun_group.parent, log=log)
+            sub_run.add_to_group(subrun_group.parent, log=log)
             # id = sub_run.sub_run_id
             # offset = sub_run.sub_run_offset
             # duration = sub_run.sub_run_duration
@@ -396,7 +400,7 @@ class CaptureFile(BaseFile):
             capture_windows_group,
         )
 
-        SEGMENT_METADATA.as_group(capture_segmentation_group, log=log)
+        SEGMENT_METADATA.add_to_group(capture_segmentation_group, log=log)
         # print(__name__)
 
         # capture_segmentation_group.attrs.create(
@@ -656,7 +660,7 @@ class CaptureFile(BaseFile):
             metadata.channel_number,
         )
         read = Read(read_id, channel_id, signal)
-        read.as_group(f5, log=log)
+        read.add_to_group(f5, log=log)
 
         # signal_path = str(signal_path_for_read_id(read_id))
         # f5[signal_path] = raw_signal
