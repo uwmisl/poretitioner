@@ -7,7 +7,7 @@ After these steps, you'll be ready to use poretitioner as a library, as an execu
 0. (Windows only) There’s some extra setup required if you’re on Windows, but it’s nothing insurmountable thanks to the Windows Subsystem for Linux (WSL)! Follow the install [Windows Subsystem for Linux instructions here](https://docs.microsoft.com/en-us/windows/wsl/install-win10). Once you’re done, you’ll be on a real live Linux kernel, you can follow along with the rest of the Linux Ubuntu instructions.
 
 
-1. Sign up for [Github](github), if we haven’t already!
+1. Sign up for [Github](https://www.github.com), if we haven’t already!
 
 2. Download `git`
     - MacOS: Nothing to do, proceed to the next step (git is already installed at `/usr/bin/git`).
@@ -16,13 +16,13 @@ After these steps, you'll be ready to use poretitioner as a library, as an execu
     - Linux/RHL
         - `sudo yum install git`
     - Window:
-        - [Installation instructions here](git_windows)
+        - [Installation instructions here](https://git-scm.com/download/win)
         - I highly recommend installing Windows Subsystem for Linux before proceeding with this guide.
 
 3. Download the repository
     - Navigate to the directory where you'd like to put Poretitioner (e.g. `pushd $HOME`).
         - Aside
-            - Did you know about [pushd](pushd_tips)? It changes your directory like `cd`, but also keeps track of which directory you're leaving!
+            - Did you know about [pushd](https://en.wikipedia.org/wiki/Pushd_and_popd)? It changes your directory like `cd`, but also keeps track of which directory you're leaving!
             - Really handy when you need to change directories somewhere quickly or temporarilty, and want to come back to the the directory you left.
 ```
 # Say I'm in $HOME.
@@ -70,7 +70,7 @@ nix-shell -p nix-info --run "nix-info -m"
 
 ### Poretitioner
 
-Perfect, now you have Nix, our package manager, installed. Now let's boogie :)
+Perfect, you have Nix, our package manager, installed. Now let's boogie :)
 
 
 #### Poretitioner Playgronud
@@ -81,7 +81,7 @@ Navigate to the directory where you cloned poretitioner (e.g. $HOME/poretitioner
 nix-shell --pure ./nix/playground.nix
 ```
 
-This little command does 3 things, let's break them down. This command...
+This little command does 3 things, let's break it down:
 
 
 `nix-shell`
@@ -96,26 +96,15 @@ This little command does 3 things, let's break them down. This command...
 `./nix/playground.nix`
 
 - And has all the packages we need...
-    - Our desired packages were defined in nix/playgrond.nix).
+    - Our desired packages were defined in nix/playground.nix).
         - Python3.8, Zshell, bpython, jupyter, pytest -- lots of goodies~!
 
 - Then runs a Python script that...
     - Knows about all the packages we declared and where to find them.
-    - Opens a Python [Read-Evaluate-Print-Loop (REPL)](repl_explainer) environment.
+    - Opens a Python [Read-Evaluate-Print-Loop (REPL)](https://en.wikipedia.org/wiki/Read%E2%80%93eval%E2%80%93print_loop) environment.
 
 
 
 ## Troubleshooting
 
-You're in _trouble_? _Shoot_ me a Slack message or [email](jdunstan_email) :)!
-
-### Nix
-
--
-
-
-[github](https://www.github.com)
-[gitwindows](https://git-scm.com/download/win)
-[pushd_tips](https://en.wikipedia.org/wiki/Pushd_and_popd)
-[repl_explainer](https://en.wikipedia.org/wiki/Read%E2%80%93eval%E2%80%93print_loop)
-[jdunstan_email](mailto:jdunstan@cs.washington.edu)
+You're in _trouble_? _Shoot_ me a Slack message or [email](mailto:jdunstan@cs.washington.edu) :)!
