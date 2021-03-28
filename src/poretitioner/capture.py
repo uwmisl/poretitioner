@@ -236,9 +236,10 @@ class Read(HDF5_GroupSerialableDataclass):
         self.read_id = read_id
         self.channel_id = channel_id
 
-        self.add_to_group(parent_group)
+        self_group = self.add_to_group(parent_group)
 
-        self.signal = signal.as_dataset(self)
+        self.channel_id = channel_id.add_to_group(self_group)
+        self.signal = signal.add_to_group(self_group)
 
     def name(self) -> str:
         return self.read_id

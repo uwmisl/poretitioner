@@ -177,74 +177,9 @@ class BaseConfiguration(metaclass=ABCMeta):
         raise ValueError("Configuration was invalid.")
 
 
-<<<<<<< HEAD
-class FilterJSONEncoder(JSONEncoder):
-    def default(self, obj):
-        try:
-            return vars(obj)
-        except TypeError:
-            pass
-        # Best practice to let base class default raise the type error:
-        # https://docs.python.org/3/library/json.html#json.JSONEncoder.default
-        return super().default(obj)
-
-
-@dataclass(frozen=True)
-class FilterConfig:
-    name: str
-    attributes: Dict[str, Any]
-    filepath: Optional[str] = None
-
-
-@dataclass(frozen=True)
-class FilterConfiguration:
-    """
-    Mapping of name to filter configuration.
-    """
-
-    filters: Dict[str, FilterConfig]
-
-    def __init__(
-        self, command_line_args: Dict = None, filter_config: Dict = None, log: Logger = getLogger()
-    ) -> None:
-        # Rule of 3, this needs to be a helper of some kind
-        filter_command_line_args = stripped_by_keys(
-            command_line_args, ARG.FILTER.ALL
-        )  # Only keep filter-related command line args
-
-        filter_config = filter_config if filter_config is not None else {}
-
-        object.__setattr__(self, "filters", {})
-        # Command line args take precidence over configuration files in the event of a conflict.
-        combined = {**filter_config, **filter_command_line_args}
-        log.debug(f"\nFilters: {combined!s}")
-
-        for filter_name, filter_attributes in combined.items():
-            # TODO: Filter Plugin should allow filepaths. https://github.com/uwmisl/poretitioner/issues/91
-            filepath = None
-            filter_config = FilterConfig(filter_name, filter_attributes, filepath)
-            log.debug(f"\nFilters[{filter_name}] = {filter_config!r}")
-            self.filters[filter_name] = filter_config
-
-    def validate(self):
-        raise NotImplementedError("Implement validation for filters!")
-
-    def json_encoder(self) -> JSONEncoder:
-        encoder = FilterJSONEncoder()
-        return encoder
-
-    @classmethod
-    def from_json(cls, json_dict: Dict):
-        filters = {
-            filter_config.get("name"): FilterConfig(**filter_config)
-            for filter_config in json_dict["filters"]
-        }
-        return cls.__new__(filters)
-=======
 PoretitionerConfig = NewType(
     "PoretitionerConfig", Dict[str, Union[BaseConfiguration, FilterSet]]
 )
->>>>>>> jdunstan/beta-dataclasses
 
     def __setitem__(self, name, my_filter):
         self.filters[name] = my_filter
