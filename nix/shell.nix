@@ -21,9 +21,9 @@ with pkgs;
 let
   dependencies = callPackage ./dependencies.nix { inherit python cudaSupport; };
 
-  poretitionerPath = ../src/poretitioner;
+  #poretitionerPath = ../src/poretitioner;
 
-  myPython = python.withPackages (_: dependencies.pythonDeps.all ++ [ poretitionerPath ]);
+  #myPython = python.withPackages (_: dependencies.pythonDeps.all ++ [ poretitionerPath ]);
 
 in
 mkShell {
@@ -46,10 +46,9 @@ mkShell {
     pkgs.xtermcontrol
     pkgs.xterm
     pkgs.zsh
-    myPython
-    myPython.pkgs.bpython
+    python
   ]
   ++ dependencies.all;
 
-  propagatedBuildInputs = dependencies.all ++ [ myPython ];
+  propagatedBuildInputs = dependencies.all ++ [ python ];
 }

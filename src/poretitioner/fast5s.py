@@ -235,7 +235,8 @@ def add_channel_id_to_path(base: PathLikeOrString) -> PathLike:
 class ChannelCalibration(HDF5_GroupSerialableDataclass):
     """
     On the Oxford Nanopore devices, there's an analog to digital converter that converts the raw, unitless analog signal
-    transforms the raw current. To convert these raw signals to a measurement of current in picoAmperes,
+    transforms the raw current. 
+    To convert these raw signals to a measurement of current in picoAmperes,
     we need to know certain values for the channel configuration.
 
 
