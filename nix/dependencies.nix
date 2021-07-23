@@ -61,10 +61,10 @@ let
         colorlog
 
         # Pytorch
-        pytorch
+        #pytorch
       ]
       # Oxford Nanopore Tools
-      ++ [ fast5_research ]
+      #++ [ fast5_research ]
       ;
 
       build = [

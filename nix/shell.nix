@@ -13,7 +13,7 @@
 ###########################################################################################
 
 { pkgs ? import <nixpkgs> { config = (import ./config.nix); overlays = [ (import ./overlays.nix) ]; }
-, python ? pkgs.callPackage ./python.nix { inherit pkgs; }
+, python
 , cudaSupport ? false
 , postShellHook ? ""
 }:
@@ -21,7 +21,7 @@ with pkgs;
 let
   dependencies = callPackage ./dependencies.nix { inherit python cudaSupport; };
 
-  #poretitionerPath = ../src/poretitioner;
+  poretitionerPath = ../src/poretitioner;
 
   #myPython = python.withPackages (_: dependencies.pythonDeps.all ++ [ poretitionerPath ]);
 
@@ -32,7 +32,7 @@ mkShell {
     # Patch `packages.json` so that nix's *python* is used as default value for `python.pythonPath`.
     if [ -e "../.vscode/settings.json" ]; then
       substituteInPlace ../.vscode/settings.json \
-        --replace \"python\"  \"${myPython}/bin/python\"
+        --replace \"python\"  \"${python}/bin/python\"
     fi
   ''
   # --replace "\"python.pythonPath\": .*" "\"python.pythonPath\": \"${myPython}/bin/python\""
