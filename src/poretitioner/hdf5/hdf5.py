@@ -380,6 +380,16 @@ class HDF5_ParentHaving:
 
 
 class HDF5_Dataset(h5py.Dataset, NumpyArrayLike, HDF5_AttributeHaving, HDF5_ParentHaving):
+
+    def __new__(cls, dataset: NumpyArrayLike) -> HDF5_Dataset:
+        if isinstance(dataset, HDF5_Dataset):
+            return dataset
+        self.dataset = dataset
+        self.size = dataset.size
+        
+
+        
+
     def __init__(self, dataset: h5py.Dataset):
         self._dataset = dataset
 

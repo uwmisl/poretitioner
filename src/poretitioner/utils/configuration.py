@@ -177,7 +177,6 @@ class BaseConfiguration(metaclass=ABCMeta):
         raise ValueError("Configuration was invalid.")
 
 
-<<<<<<< HEAD
 class FilterJSONEncoder(JSONEncoder):
     def default(self, obj):
         try:
@@ -240,11 +239,7 @@ class FilterConfiguration:
             for filter_config in json_dict["filters"]
         }
         return cls.__new__(filters)
-=======
-PoretitionerConfig = NewType(
-    "PoretitionerConfig", Dict[str, Union[BaseConfiguration, FilterSet]]
-)
->>>>>>> jdunstan/beta-dataclasses
+
 
     def __setitem__(self, name, my_filter):
         self.filters[name] = my_filter
@@ -252,6 +247,10 @@ PoretitionerConfig = NewType(
     def __getitem__(self, name):
         return self.filters[name]
 
+from typing import NewType
+PoretitionerConfig = NewType(
+    "PoretitionerConfig", Dict[str, Union[BaseConfiguration, FilterSet]]
+)
 
 @dataclass(frozen=True)
 class GeneralConfiguration(BaseConfiguration):

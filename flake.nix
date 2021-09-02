@@ -51,6 +51,15 @@
           ++ pkgs.lib.optional (buildOptions.isRelease) [ "bpython" ];
         };
 
+        pythonShell = mach-nix-utils.mkPythonShell {
+          python = "python38";
+          requirements = builtins.readFile ./requirements.txt;
+          packagesExtra = [
+          ]
+          
+          ++ pkgs.lib.optional (buildOptions.isRelease) [ "bpython" ];
+        };
+
         customOverrides = self: super: {
           # Overrides go here
         };
@@ -71,6 +80,9 @@
 
           defaultPackage = self.packages.${system}.${packageName};
 
-          devShell = import ./nix/shell.nix { inherit pkgs python; };
+          devShell = pythonShell;
+
+
+          # devShell = import ./nix/shell.nix { inherit pkgs python; };
       });
 }

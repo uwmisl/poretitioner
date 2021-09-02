@@ -38,7 +38,7 @@ from .hdf5 import (
     get_class_for_name,
     hdf5_dtype,
 )
-from .signals import HDF5_Signal
+from .signals import Signal, HDF5_Signal
 from .utils.classify import CLASSIFICATION_PATH
 from .utils.configuration import SegmentConfiguration
 from .utils.core import PathLikeOrString, ReadId, Window, WindowsByChannel, dataclass_fieldnames
@@ -223,19 +223,31 @@ class CaptureWindows(WindowsByChannel):
 
 
 @dataclass(init=False)
-class Read(HDF5_GroupSerialableDataclass):
+class Read:
+    read_id: str
     channel_id: Channel
-    Signal: HDF5_Signal  # This is the raw signal, fresh from the Fast5.
+    Signal: Signal  # This is the raw signal, fresh from the Fast5.
 
     def __init__(self, read_id: ReadId, channel_id: Channel, signal: Signal):
         self.read_id = read_id
         self.channel_id = channel_id
+        self.signal = signal#.as_dataset(self.as_group("/"))
 
-        self.signal = signal.as_dataset(self)
+    
+
+@dataclass(init=False)
+class HDF5_Read(Read, HDF5_GroupSerialableDataclass):
+
+    def __init__(self, read_id: ReadId, channel_id: Channel, signal: Signal, parent_group: HDF5_Group):
+        super().__init__(read_id, channel_id, signal)
+        read_group = parent_group.require_group(self.name())
+
+        HDF5_Signal(signal, read_group)
+        
+        #signaldataset = read_group.require_dataset("signal", shape=self.read.signal.shape, dtype=self.dtype)
 
     def name(self) -> str:
         return self.read_id
-
 
 @dataclass
 class SegmentationMeta(HDF5_GroupSerialableDataclass):
@@ -642,9 +654,17 @@ class CaptureFile(BaseFile):
             metadata.calibration,
             metadata.open_channel_pA,
             metadata.sampling_rate,
-        )
+        ) 
+        self.start_time_bulk = metadata.start_time_bulk
+        self.start_time_local = metadata.start_time_local
+        self.duration = metadata.duration
+        self.voltage = metadata.voltage_threshold
+        self.open_channel_pA = metadata.open_channel_pA
+        self.read_id = read_id
+        self.ejected = metadata.ejected
+      
         # signal = HDF5_Signal.__new__(HDF5_Signal, raw_signal)
-        signal = HDF5_Signal(
+        signal = Signal(
             raw_signal,
             metadata.start_time_bulk,
             metadata.start_time_local,
@@ -655,7 +675,11 @@ class CaptureFile(BaseFile):
             metadata.ejected,
             metadata.channel_number,
         )
+
+        root = HDF5_Group(f5.require_group(read_id))
         read = Read(read_id, channel_id, signal)
+        HDF5_Read(read_id, channel_id, signal, root)
+
         read.as_group(f5, log=log)
 
         # signal_path = str(signal_path_for_read_id(read_id))

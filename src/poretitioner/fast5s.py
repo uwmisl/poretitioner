@@ -19,7 +19,6 @@ from typing import *  # I know people don't like import *, but I think it has be
 import h5py
 
 from .application_info import get_application_info
-from .fast5s import FilterSet
 from .hdf5.hdf5 import (
     Fast5File,
     HasFast5,

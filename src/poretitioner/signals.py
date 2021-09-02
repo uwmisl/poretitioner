@@ -495,10 +495,9 @@ class PicoampereSignal(CurrentSignal):
         )
         return fractionalized
 
-
 # @dataclass(frozen=True, init=False)
 @dataclass(init=False)
-class HDF5_Signal(HDF5_DatasetSerialableDataclass):
+class Signal(NumpyArrayLike):
     start_time_bulk: int
     start_time_local: int
     duration: int
@@ -531,28 +530,38 @@ class HDF5_Signal(HDF5_DatasetSerialableDataclass):
         self.channel_number = channel_number
         return self
 
-    def __init__(
-        self,
-        data: Union[np.ndarray, NumpyArrayLike],
-        start_time_bulk: int,
-        start_time_local: int,
-        duration: int,
-        voltage: float,
-        open_channel_pA: float,
-        read_id: ReadId,
-        ejected: bool,
-        channel_number: int,
-    ):
-        super().__init__(data)
-        self.start_time_bulk = start_time_bulk
-        self.start_time_local = start_time_local
-        self.duration = duration
-        self.voltage = voltage
-        self.open_channel_pA = open_channel_pA
-        self.read_id = read_id
-        self.ejected = ejected
-        self.channel_number = channel_number
+    # def __init__(
+    #     self,
+    #     data: Union[np.ndarray, NumpyArrayLike],
+    #     start_time_bulk: int,
+    #     start_time_local: int,
+    #     duration: int,
+    #     voltage: float,
+    #     open_channel_pA: float,
+    #     read_id: ReadId,
+    #     ejected: bool,
+    #     channel_number: int,
+    # ):
+    #     super().__init__(data)
+    #     self.start_time_bulk = start_time_bulk
+    #     self.start_time_local = start_time_local
+    #     self.duration = duration
+    #     self.voltage = voltage
+    #     self.open_channel_pA = open_channel_pA
+    #     self.read_id = read_id
+    #     self.ejected = ejected
+    #     self.channel_number = channel_number
 
+
+
+@dataclass(init=False)
+class HDF5_Signal(HDF5_DatasetSerialableDataclass):
+    signal: Signal
+
+    def __init__(self, signal: Signal, parent_group: HDF5_Group):
+        self.signal = signal
+        signal_dataset = self.as_dataset(parent_group)
+        print(f"{signal_dataset}!r")
 
 @dataclass(frozen=True)
 class Channel(HDF5_GroupSerialableDataclass):
@@ -661,8 +670,21 @@ class Channel(HDF5_GroupSerialableDataclass):
         """
 
         open_channel_pA = picoamperes.find_open_channel_current(
-            open_channel_guess, open_channel_bound, default=open_channel_default
+            open_channel_guess=open_channel_guess, open_channel_bound=open_channel_bound, default=open_channel_default)
+        object.__setattr__(self, "channel_number", channel_number)
+        object.__setattr__(self, "calibration", calibration)
+        object.__setattr__(self, "sampling_rate", sampling_rate)
+        return self
+
+    @classmethod
+    def from_group(cls, group: h5py.Group) -> HDF5_GroupSerializable:
+        """Serializes this object FROM an HDF5 Group.
+
+        class Baz(HDF5_GroupSerializable):
+            # ...Implementation
+nel_bound, default=open_channel_default
         )
+        """
         self = cls.__new__(cls)
         # We're using this esoteric __setattr__ method so we can keep the dataclass frozen while setting its initial attributes
         # https://docs.python.org/3/library/dataclasses.html#frozen-instances
