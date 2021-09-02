@@ -7,7 +7,7 @@ h5py==3.1.0
 dask[complete]==2021.03.0
 matplotlib==3.3.4
 seaborn==0.11.1
-notebook==6.2.0
+notebook==6.4.1
 
 #dask-ml[complete]
 colorlog
