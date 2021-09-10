@@ -31,9 +31,9 @@ n_workers = 5
   [filters.mean]
     # Whether to filter based on the signal mean.
     # Minimum signal mean to pass. Defaults to -∞ if no value is provided.
-    # minimum = 0
+    minimum = 0
     # Maximum signal mean to pass. Defaults to +∞ if no value is provided.
-    # maximum = 100
+    maximum = 100
   [filters.min]
     # minimum = 0
     # maximum = 100

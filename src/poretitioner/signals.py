@@ -520,6 +520,7 @@ class Signal(NumpyArrayLike):
         channel_number: int,
     ):
         self = super().__new__(cls, data)
+        self._data = data
         self.start_time_bulk = start_time_bulk
         self.start_time_local = start_time_local
         self.duration = duration

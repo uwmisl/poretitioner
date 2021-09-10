@@ -110,6 +110,10 @@ class NumpyArrayLike(np.ndarray):
 ####################################
 
 
+# NOTE: Sadly, many of these can't be used until "RuntimeError: Unable to create attribute (object header message is too large)" https://github.com/h5py/h5py/issues/1855
+# The goal is to provide high-level data-class representations of HDF5 objects, so users can just describe their structures as python dataclasses instead of finagling with h5py. 
+# Unfortunately, there's currently a bug "RuntimeError: Unable to create attribute (object header message is too large)" that can only be fixed by delving into the low-level API ()
+
 def hdf5_dtype(object: Any) -> Optional[np.dtype]:
     """Returns the proper h5py dtype for an object, if one is necessary.
     Otherwise returns None.
@@ -384,10 +388,8 @@ class HDF5_Dataset(h5py.Dataset, NumpyArrayLike, HDF5_AttributeHaving, HDF5_Pare
     def __new__(cls, dataset: NumpyArrayLike) -> HDF5_Dataset:
         if isinstance(dataset, HDF5_Dataset):
             return dataset
-        self.dataset = dataset
-        self.size = dataset.size
         
-
+        self = dataset
         
 
     def __init__(self, dataset: h5py.Dataset):
@@ -416,10 +418,10 @@ class HDF5_Group(h5py.Group, HDF5_AttributeHaving, HDF5_ParentHaving):
         return HDF5_Group(self._group.parent)
 
     def require_group(self, name: str):
-        return HDF5_Group(super().require_group(name))
+        return HDF5_Group(self._group.require_group(name))
 
-    def require_dataset(self, name, shape, dtype, exact, **kwds):
-        return HDF5_Dataset(super().require_dataset(name, shape, dtype, exact=exact, **kwds))
+    def require_dataset(self, name, data, dtype, shape, **kwds):
+        return HDF5_Dataset(self._group.require_dataset(name, shape, data=data, dtype=dtype,**kwds))
 
     def __getattr__(self, attrib: str):
         return getattr(self._group, attrib)

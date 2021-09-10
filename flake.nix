@@ -67,6 +67,9 @@
         app = mach-nix-utils.buildPythonApplication {
           inherit pname version;
 
+          python = "python38";
+          requirements = builtins.readFile ./requirements.txt;
+
           # add missing dependencies whenever necessary.
           packagesExtra = [
             python
@@ -80,7 +83,29 @@
 
           defaultPackage = self.packages.${system}.${packageName};
 
-          devShell = pythonShell;
+          devShell = pkgs.mkShell {
+            shellHook = ''
+                # Patch Visual Studio Code's workspace `settings.json` so that nix's python is used as default value for `python.pythonPath`.
+                # That way, the debugger will know where all your dependencies are, etc.
+                #
+                if [ -e "./.vscode/settings.json" ]; then
+                  echo "Setting VSCode Workspace's Python path for Nix:"
+                  cat .vscode/settings.json  | jq '. + {"python.defaultInterpreterPath": "${python}/bin/python"}' | tee .vscode/settings.json | grep "python.pythonPath"
+                fi
+              '';
+
+              buildInputs = [
+                pkgs.bash
+                pkgs.bashInteractive
+                pkgs.locale
+                pkgs.xtermcontrol
+                pkgs.xterm
+                pkgs.zsh
+                pkgs.jq
+
+                python
+              ];
+          };
 
 
           # devShell = import ./nix/shell.nix { inherit pkgs python; };

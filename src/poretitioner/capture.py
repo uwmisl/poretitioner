@@ -19,6 +19,10 @@ from .fast5s import (
     ContextTagsBulk,
     RawSignal,
     TrackingId,
+
+    channel_path_for_read_id,
+    signal_path_for_read_id,
+
 )
 from .hdf5 import (
     HasAttrs,
@@ -242,9 +246,14 @@ class HDF5_Read(Read, HDF5_GroupSerialableDataclass):
         super().__init__(read_id, channel_id, signal)
         read_group = parent_group.require_group(self.name())
 
-        HDF5_Signal(signal, read_group)
+        #HDF5_Signal(signal, read_group)
+
+        channel_id.as_group(read_group)
         
-        #signaldataset = read_group.require_dataset("signal", shape=self.read.signal.shape, dtype=self.dtype)
+        signaldataset = read_group.require_dataset("signal", data=signal, dtype=signal.dtype, shape=signal.shape)
+        print(f"{signaldataset!r}")
+
+
 
     def name(self) -> str:
         return self.read_id
@@ -676,30 +685,30 @@ class CaptureFile(BaseFile):
             metadata.channel_number,
         )
 
-        root = HDF5_Group(f5.require_group(read_id))
-        read = Read(read_id, channel_id, signal)
-        HDF5_Read(read_id, channel_id, signal, root)
+        # root = HDF5_Group(f5.require_group(read_id))
+        # read = Read(read_id, channel_id, signal)
+        # my_read = HDF5_Read(read_id, channel_id, signal, root)
 
-        read.as_group(f5, log=log)
+        # my_read.as_group(f5, log=log)
 
-        # signal_path = str(signal_path_for_read_id(read_id))
-        # f5[signal_path] = raw_signal
-        # f5[signal_path].attrs["read_id"] = read_id
-        # f5[signal_path].attrs["start_time_bulk"] = metadata.start_time_bulk
-        # f5[signal_path].attrs["start_time_local"] = metadata.start_time_local
-        # f5[signal_path].attrs["duration"] = metadata.duration
-        # f5[signal_path].attrs["ejected"] = metadata.ejected
-        # f5[signal_path].attrs["voltage"] = metadata.voltage_threshold
-        # f5[signal_path].attrs[KEY.OPEN_CHANNEL_PA] = metadata.open_channel_pA
+        signal_path = str(signal_path_for_read_id(read_id))
+        f5[signal_path] = raw_signal
+        f5[signal_path].attrs["read_id"] = read_id
+        f5[signal_path].attrs["start_time_bulk"] = metadata.start_time_bulk
+        f5[signal_path].attrs["start_time_local"] = metadata.start_time_local
+        f5[signal_path].attrs["duration"] = metadata.duration
+        f5[signal_path].attrs["ejected"] = metadata.ejected
+        f5[signal_path].attrs["voltage"] = metadata.voltage_threshold
+        f5[signal_path].attrs[KEY.OPEN_CHANNEL_PA] = metadata.open_channel_pA
 
-        # channel_path = str(channel_path_for_read_id(read_id))
-        # f5.require_group(channel_path)
-        # f5[channel_path].attrs["channel_number"] = metadata.channel_number
-        # f5[channel_path].attrs["digitisation"] = metadata.calibration.digitisation
-        # f5[channel_path].attrs["range"] = metadata.calibration.range
-        # f5[channel_path].attrs["offset"] = metadata.calibration.offset
-        # f5[channel_path].attrs["sampling_rate"] = metadata.sampling_rate
-        # f5[channel_path].attrs[KEY.OPEN_CHANNEL_PA] = metadata.open_channel_pA
+        channel_path = str(channel_path_for_read_id(read_id))
+        f5.require_group(channel_path)
+        f5[channel_path].attrs["channel_number"] = metadata.channel_number
+        f5[channel_path].attrs["digitisation"] = metadata.calibration.digitisation
+        f5[channel_path].attrs["range"] = metadata.calibration.range
+        f5[channel_path].attrs["offset"] = metadata.calibration.offset
+        f5[channel_path].attrs["sampling_rate"] = metadata.sampling_rate
+        f5[channel_path].attrs[KEY.OPEN_CHANNEL_PA] = metadata.open_channel_pA
 
     def write_capture_windows(self, capture_windows: WindowsByChannel):
         pass
