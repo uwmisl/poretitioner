@@ -1,5 +1,6 @@
 # from .fast5s import BulkFile, CaptureFile
 import pprint
+import sys
 from pathlib import Path
 from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 
@@ -8,7 +9,7 @@ import numpy as np
 
 from .getargs import ARG, COMMAND, get_args
 from .utils import segment
-from .utils.configuration import CONFIG, GeneralConfiguration, SegmentConfiguration, readconfig
+from .utils.configuration import CONFIG, GeneralConfiguration, SegmentConfiguration, read_config
 from .utils.filtering import FilterConfig, FilterConfigs, Filters, FilterSet, get_filters
 
 
@@ -21,25 +22,27 @@ def run(args):
 
     # Get the command line args as a dictionary.
     command_line_args = vars(args)
+
+
+    # Capture directory
     if "capture_directory" not in command_line_args and getattr(
         args, ARG.GENERAL.CAPTURE_DIRECTORY, False
     ):
-        command_line_args["capture_directory"] = command_line_args[ARG.GENERAL.CAPTURE_DIRECTORY]
+        command_line_args["capture_directory"] = command_line_args.get(ARG.GENERAL.CAPTURE_DIRECTORY)
 
     # Read configuration file, if it exists.
-    try:
-        configuration_path = Path(command_line_args[ARG.GENERAL.CONFIG]).resolve()
-    except KeyError as e:
-        log.info(f"No config file found from arg: {ARG.GENERAL.CONFIG}.")
-        raise e
-    configuration = readconfig(configuration_path, command_line_args=command_line_args, log=log)
-    bulk_f5_filepath = Path(command_line_args[ARG.GENERAL.BULK_FAST5]).resolve()
-
+    configuration_path = command_line_args[ARG.GENERAL.CONFIG]
+    if configuration_path is not None and Path.is_file(Path(configuration_path)):
+        configuration_path = str(Path(configuration_path).resolve())
+    log.debug(f"\t Reading configuration file: {configuration_path!s}")
+    configuration = read_config(config=configuration_path, with_command_line_args=command_line_args)
+    bulk_f5_filepath = Path(command_line_args.get(ARG.GENERAL.BULK_FAST5, "")).resolve()
     seg_config = configuration[CONFIG.SEGMENTATION]
     filter_set: FilterSet = configuration[CONFIG.FILTER]
     config = configuration[CONFIG.GENERAL]
 
-    save_location = Path(getattr(args, ARG.GENERAL.CAPTURE_DIRECTORY)).resolve()
+    DEFAULT_SAVE_LOCATION = Path.cwd() # Save to the current working directory if no save directory is specified.
+    save_location = Path(getattr(args, ARG.GENERAL.CAPTURE_DIRECTORY, DEFAULT_SAVE_LOCATION)).resolve()
 
     log.info(f"bulk_f5_filepath: {bulk_f5_filepath}")
     log.info(f"Save location: {save_location}")
@@ -47,7 +50,6 @@ def run(args):
     if args.command == COMMAND.SEGMENT:
         segmentation_config_str = pprint.pformat(seg_config.__dict__)
         general_config_str = pprint.pformat(config.__dict__)
-
         capture_metadata = segment.segment(
             bulk_f5_filepath,
             config,
@@ -78,7 +80,7 @@ def main():
     # To test the application with pre-configured command line arguments,
     # set `use_fake_command_line` to True and/or modify the `command_line` list
     # with whatever arguments you'd like:
-    use_fake_command_line = True
+    use_fake_command_line = False
     if use_fake_command_line:
         command_line = [
             "segment",
@@ -87,7 +89,7 @@ def main():
             "--capture-directory",
             "./out/data/",
             "--config",
-            "./poretitioner_config.toml" " ",
+            "./poretitioner_config.toml" ,
             "-vvvvv",
         ]
         args = get_args(command_line)
@@ -95,3 +97,4 @@ def main():
         args = get_args()
     # test_fast5()
     run(args)
+    sys.exit(0)

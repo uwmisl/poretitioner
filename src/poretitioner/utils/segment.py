@@ -8,13 +8,16 @@ bulk fast5s.
 
 """
 import os
+import sys
 import re
 import uuid
 from dataclasses import dataclass
 from logging import Logger
 from pathlib import Path
 from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
+from dask.distributed import Client
 
+import dask.multiprocessing as dask_mp
 import dask.bag as db
 import numpy as np
 from dask.diagnostics import ProgressBar
@@ -41,9 +44,6 @@ from .core import ReadId, Window, find_windows_below_threshold
 ProgressBar().register()
 
 app_info = application_info.get_application_info()
-
-__version__ = app_info.version
-__name__ = app_info.name
 
 __all__ = ["segment"]
 
@@ -206,6 +206,7 @@ def find_captures_dask_wrapper(
     List[Capture]
         List of captures in the given window of signal.
     """
+
     return find_captures(
         unsegmented_signal.signal,  # TODO this is not yet a capture at this point! It's just a region in the time series where there *could* be captures.
         unsegmented_signal.signal.channel_number,
@@ -464,6 +465,7 @@ def parallel_find_captures(
         If the desired output location does not exist (i.e., save_location) in
         the config, raise IOError.
     """
+    
     bulk_f5_fname = segment_config.bulkfast5
     local_logger = logger.getLogger()
     n_workers = config.n_workers
@@ -507,7 +509,13 @@ def parallel_find_captures(
         end_tol=end_tol,
     )
     local_logger.info("Beginning segmentation.")
-    captures = capture_map.compute(num_workers=n_workers)
+
+    try:
+        captures = capture_map.compute(scheduler="threads", num_workers=n_workers)
+    except RuntimeError as e:
+        local_logger.fatal(f"Runtime error while executing segmenter computation: step: {e!s}", e)
+        sys.exit(-3)
+
     local_logger.debug(f"Captures (1st 10): {captures[:10]}")
 
     context = prepped_captures.metadata

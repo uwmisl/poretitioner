@@ -31,7 +31,6 @@
             isRelease = false;
         };
 
-
         pname = "poretitioner";
         version = "0.5";
         pkgs = nixpkgs.legacyPackages.${system};
@@ -72,42 +71,87 @@
 
           # add missing dependencies whenever necessary.
           packagesExtra = [
+            
             python
           ];
           src = ./.;
+
+          # Add in freeze_support() for Dask, allowing us to use process-based clusters [1] (note: this is not always optimal over thread-based approaches, depending on the data and computation. For a discussion, please see [2]).
+          # This must be done in the __name__ == '__main__' block, which is created by the Nix python wrapper.
+          #
+          # [1] - https://github.com/dask/distributed/issues/2422
+          # [2] - https://iotespresso.com/numpy-releases-gil-what-does-that-mean/
+          #
+          postFixup = ''
+            sed -i "s/if __name__ == '__main__':/if __name__ == '__main__':\n    import dask.multiprocessing as dask_mp\n    dask_mp.multiprocessing.freeze_support()\n    from dask.distributed import Client, LocalCluster\n    cluster = LocalCluster()\n    client = Client(cluster)/g" $out/bin/.${pname}-wrapped;
+          '';
         };
 
         packageName = "poretitioner";
+
+
+        # Create docker package 
+        #buildDocker = { app }: 
       in {
-          packages.${packageName} = app;
+          #packages.${packageName} = app;
 
-          defaultPackage = self.packages.${system}.${packageName};
+          packages = flake-utils.lib.flattenTree {
+            inherit app;
 
-          devShell = pkgs.mkShell {
-            shellHook = ''
-                # Patch Visual Studio Code's workspace `settings.json` so that nix's python is used as default value for `python.pythonPath`.
-                # That way, the debugger will know where all your dependencies are, etc.
-                #
+            defaultPackage = app;
+            
+            docker = pkgs.dockerTools.buildImage {
+              name = "${app.pname}";
+              tag = "latest";
+
+              # Setting 'created' to 'now' will correctly set the file's creation date
+              # (instead of setting it to Unix epoch + 1). This is impure, but fine for our purposes.
+              created = "now";
+              config = {
+                Cmd = [ ];
+                # Runs 'poretitioner' by default.
+                Entrypoint = [ "${app.outPath}/bin/${app.pname}" ];
+              };
+            };
+            #gitAndTools = pkgs.gitAndTools;
+          };
+
+          defaultPackage = app;
+
+          #packages.${system}.docker =
+
+          devShell =
+          let
+          # Adds a function so that vsdebugpy runs debugpy on localhost port 5678.
+          # In VSCode, you can connect to the Python Remote Debugger on port 5678
+          debugpyHook = ''vsdebugpy() { python -m debugpy --wait-for-client --listen localhost:5678 "$0"; }'';
+
+          # Patch Visual Studio Code's workspace `settings.json` so that nix's python is used as default value for `python.pythonPath`.
+          # That way, the debugger will know where all your dependencies are, etc.
+          #
+          vscodePythonHook = ''
                 if [ -e "./.vscode/settings.json" ]; then
                   echo "Setting VSCode Workspace's Python path for Nix:"
                   cat .vscode/settings.json  | jq '. + {"python.defaultInterpreterPath": "${python}/bin/python"}' | tee .vscode/settings.json | grep "python.pythonPath"
                 fi
               '';
 
-              buildInputs = [
-                pkgs.bash
-                pkgs.bashInteractive
-                pkgs.locale
-                pkgs.xtermcontrol
-                pkgs.xterm
-                pkgs.zsh
-                pkgs.jq
+          allHooks = [ vscodePythonHook debugpyHook ];
+          in
+          pkgs.mkShell {
+            shellHook = pkgs.lib.concatStringsSep "\n" allHooks;
 
-                python
-              ];
+            buildInputs = [
+              pkgs.bash
+              pkgs.bashInteractive
+              pkgs.locale
+              pkgs.xtermcontrol
+              pkgs.xterm
+              pkgs.zsh
+              pkgs.jq
+
+              python
+            ];
           };
-
-
-          # devShell = import ./nix/shell.nix { inherit pkgs python; };
       });
 }

@@ -6,10 +6,13 @@ getargs.py
 This module is responsible for parsing the application's commandline arguments.
 
 """
+
+import os
 from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass
 from typing import *  # I know people don't like import *, but I think it has benefits for types (doesn't impede people from being generous with typing)
 
+import importlib.resources as resources
 
 def as_cli_arg(property: str) -> str:
     """We'd like to match command line arguments to their
@@ -199,10 +202,11 @@ def get_parser(commandline_args: List = None) -> ArgumentParser:
         parser : ArgumentParser
             Parser to give an output file option
         """
+        default_config = resources.Path("DEFAULT_PORETITIONER_CONFIG.toml").absolute().resolve()
         parser.add_argument(
             f"--{ARG.GENERAL.CONFIG}",
             action="store",
-            default=".",
+            default=default_config,
             help="Configuration file to configure Poretitioner.",
         )
 
@@ -243,6 +247,7 @@ def add_capture_directory_option_to_parser(parser: ArgumentParser):
     parser.add_argument(
         f"--{arg}",
         action="store",
+        default=os.environ.get("PWD"),
         help="Which directory to store the segmented capture fast5 files.",
     )
 

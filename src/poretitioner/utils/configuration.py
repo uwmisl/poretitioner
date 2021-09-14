@@ -23,6 +23,9 @@ from typing import Any, Dict, List, Optional, Union
 import numpy as np
 import toml
 
+from importlib.metadata import distribution
+import importlib.resources as resources
+
 from ..getargs import ARG
 from ..logger import Logger, getLogger
 from .core import PathLikeOrString, stripped_by_keys
@@ -423,7 +426,12 @@ def readconfig(
         get_absolute_path(path)
     ).strip()  # Strip any trailing/leading whitespace.
 
-    read_config = toml.load(config_path)
+    read_config = {}
+    try:
+        read_config = toml.load(config_path)
+    except FileNotFoundError:
+        # config_path wasn't passed as a path, but a literal TOML string.
+        read_config = toml.loads(config_path)
     # config = ConfigParser()
 
     gen_config = read_config[CONFIG.GENERAL]
@@ -460,6 +468,15 @@ def readconfig(
     return configs
 
     # TODO: Return configuration https://github.com/uwmisl/poretitioner/issues/73
+
+def read_config(
+    config: str = None, with_command_line_args: Optional[Dict[str, str]] = None
+) -> PoretitionerConfig:
+    fallback_config_path = str(
+        resources.Path("DEFAULT_PORETITIONER_CONFIG.toml").absolute().resolve()
+    )
+    path_to_default_config = config if config is not None else fallback_config_path
+    return readconfig(path_to_default_config, command_line_args=with_command_line_args)
 
 
 def read_segmentation(config, command_line_args=None):
