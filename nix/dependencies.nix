@@ -56,12 +56,12 @@ let
         # For validating config and dict inputs
         schema
         # Neural networks
-        #torchvision
+        torchvision
         # Colorful logs!
         colorlog
 
         # Pytorch
-        #pytorch
+        pytorch
       ]
       # Oxford Nanopore Tools
       #++ [ fast5_research ]

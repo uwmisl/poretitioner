@@ -155,8 +155,8 @@ class NTER_2018_CNN(PytorchClassifierPlugin):
             label = label.cpu().numpy()[0][0]
         else:
             label = label.numpy()[0][0]
-        if class_labels is not None:
-            label = class_labels[label]
+        if self.class_label_for_result is not None:
+            label = self.class_label_for_result[label]
         probability = prob[0][0].data
 
         ClassificationResult(label, probability)

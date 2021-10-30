@@ -20,7 +20,7 @@ import torch.nn as nn
 from ..logger import Logger, getLogger
 from ..signals import Capture, FractionalizedSignal, RawSignal
 # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
-# from .models import NTERs_trained_cnn_05152019 as pretrained_model
+from .models import NTERs_trained_cnn_05152019 as pretrained_model
 from . import filtering
 from .configuration import ClassifierConfiguration
 from .core import NumpyArrayLike, PathLikeOrString, ReadId
@@ -287,7 +287,7 @@ def classify_fast5_file(
 
     with ClassifierFile(capture_filepath, "r+") as classifier_f5:
 
-        details = ClassifierDetails(
+        details = Classifie rDetails(
             classifier_name,
             classifier_version,
             classifier_location,
@@ -498,6 +498,7 @@ class PytorchClassifierPlugin(ClassifierPlugin):
         module: nn.Module,
         name: str,
         version: str,
+        #class_labels
         state_dict_filepath: PathLikeOrString,
         use_cuda: bool = False,
     ):
@@ -531,6 +532,7 @@ class PytorchClassifierPlugin(ClassifierPlugin):
         self.name = name
         self.version = version
 
+        #self.class_labels = class_labels
         self.state_dict_filepath = state_dict_filepath
         self.use_cuda = use_cuda
 
