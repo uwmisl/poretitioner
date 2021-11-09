@@ -21,6 +21,7 @@ from ..logger import Logger, getLogger
 from ..signals import Capture, FractionalizedSignal, RawSignal
 # TODO: Pipe through filtering https://github.com/uwmisl/poretitioner/issues/43 https://github.com/uwmisl/poretitioner/issues/68
 from .models import NTERs_trained_cnn_05152019 as pretrained_model
+from .models.NTERs_trained_cnn_05152019 import NTER_2018_CNN
 from . import filtering
 from .configuration import ClassifierConfiguration
 from .core import NumpyArrayLike, PathLikeOrString, ReadId
@@ -237,13 +238,41 @@ def filter_and_classify(
     classify_fast5_file(f5, clf_config, classifier, classifier_name, read_path)
 
 
+
+def classify_fast5_file1(
+    capture_filepath: PathLikeOrString,
+    clf_config,
+    classifier: ClassifierPlugin,
+    classifier_run_name,
+    read_path,
+    class_labels=None,
+):
+    local_logger = logger.getLogger()
+    local_logger.debug(f"Beginning classification for file {capture_filepath}.")
+    classify_start = clf_config["start_obs"]  # 100 in NTER paper
+    classify_end = clf_config["end_obs"]  # 21000 in NTER paper
+    classifier_confidence_threshold = clf_config["min_confidence"]
+
+    assert classify_start >= 0 and classify_end >= 0
+    assert classifier_confidence_threshold is None or (0 <= classifier_confidence_threshold <= 1)
+
+    local_logger.debug(
+        f"Classification parameters: name: {classifier.model_name}, "
+        f"range of data points: ({classify_start}, {classify_end})"
+        f"confidence required to pass: {classifier_confidence_threshold}"
+    )
+
+    results_path = f"/Classification/{classifier_run_name}"
+    write_classifier_details(f5, clf_config, results_path)
+
+
+
 # def classify_file(
 #     capturef5: ClassifierFile, configuration: ClassifierConfiguration, classifier: Classifier, classifier_run_name, read_path, class_labels=None):
 #     for read in capturef5.reads:
 #         pass
 
 # TODO: Implement Classification with the new data model: https://github.com/uwmisl/poretitioner/issues/92
-
 
 def classify_fast5_file(
     capture_filepath: PathLikeOrString,
@@ -287,7 +316,7 @@ def classify_fast5_file(
 
     with ClassifierFile(capture_filepath, "r+") as classifier_f5:
 
-        details = Classifie rDetails(
+        details = ClassifierDetails(
             classifier_name,
             classifier_version,
             classifier_location,
@@ -324,6 +353,11 @@ def classify_fast5_file(
     #         passed_classification = None
     #     write_classifier_result(f5, results_path, read_id, y, p, passed_classification)
 
+
+def init_classifier1(classifier_name, classification_path, clf_config, class_labels=None):
+    classifier = NTER_2018_CNN(pretrained_model.load_cnn(classification_path), classifier_name,
+    clf_config["version"], classification_path, LabelForResult)
+    return classifier
 
 # TODO: Implement Classification with the new data model: https://github.com/uwmisl/poretitioner/issues/92
 # TODO: This classifier initialization should be a special case of a Plugin: https://github.com/uwmisl/poretitioner/issues/91
@@ -368,6 +402,11 @@ def init_classifier(classifier_name, classification_path):
         pass
     else:
         raise ValueError(f"Invalid classifier name: {classifier_name}")
+
+
+def predict_class1(classifier:ClassifierPlugin, raw) -> ClassificationResult:
+    return classifier.evaluate(raw)
+
 
 
 # TODO: Implement Classification with the new data model: https://github.com/uwmisl/poretitioner/issues/92
@@ -498,7 +537,6 @@ class PytorchClassifierPlugin(ClassifierPlugin):
         module: nn.Module,
         name: str,
         version: str,
-        #class_labels
         state_dict_filepath: PathLikeOrString,
         use_cuda: bool = False,
     ):
@@ -532,11 +570,10 @@ class PytorchClassifierPlugin(ClassifierPlugin):
         self.name = name
         self.version = version
 
-        #self.class_labels = class_labels
         self.state_dict_filepath = state_dict_filepath
         self.use_cuda = use_cuda
 
-    def load(self, use_cuda: bool = False):
+    def load(self, use_cuda: bool = False, state_dict_filepath: str = None):
         """Loads the PyTorch module. This means instantiating it,
         setting its state dict [1], and setting it to evaluation mode (so we perform an inference)[2].
 
