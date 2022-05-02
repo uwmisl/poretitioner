@@ -313,7 +313,7 @@ class CaptureFile(BaseFile):
         self,
         bulk_f5: BulkFile,
         segment_config: SegmentConfiguration,
-        capture_criteria: Optional[Filters] = None,
+        capture_criteria: Optional[FilterSet] = None,
         sub_run: Optional[SubRun] = None,
         log: Logger = None,
     ):
@@ -343,14 +343,15 @@ class CaptureFile(BaseFile):
         # /Meta/context_tags
         capture_context_tags_group = self.f5.require_group(CAPTURE_PATH.CONTEXT_TAGS)
         bulk_context_tags = bulk_f5.context_tags_group
-        context_tags_capture = ContextTagsCapture.from_context_tags_bulk_group(bulk_context_tags)
+        bulk_f5_fname = bulk_f5.filename
+        context_tags_capture = ContextTagsCapture.from_context_tags_bulk_group(bulk_f5_fname, bulk_context_tags)
         capture_context_tags_group = context_tags_capture.add_to_group(
             capture_context_tags_group.parent, log=log
         )
 
         # capture_context_tags_group.attrs.create(key, value, dtype=hdf5_dtype(value))
 
-        # bulk_f5_fname = bulk_f5.filename
+        bulk_f5_fname = bulk_f5.filename
 
         # capture_context_tags_group.attrs.create(
         #     "bulk_filename", bulk_f5_fname, dtype=hdf5_dtype(bulk_f5_fname)
@@ -388,7 +389,7 @@ class CaptureFile(BaseFile):
         segmenter_name = get_application_info().name
         version = get_application_info().data_schema_version
         good_channels = [1]  # TODO: Pass in good channels
-        filters = HDF5_FilterSet(segment_config.capture_criteria)
+        filters = HDF5_FilterSet(capture_criteria)
 
         SEGMENT_METADATA = SegmentationMeta(
             segmenter_name,
@@ -418,27 +419,27 @@ class CaptureFile(BaseFile):
         if segment_config is None:
             raise ValueError("No segment configuration provided.")
         else:
-            # self.log.info(f"Saving Segment config: {segment_config!s}")
-            # for key, value in vars(segment_config).items():
-            #     try:
-            #         save_value = json.dumps(value)
-            #     except TypeError:
-            #         # In case the object isn't easily serializable
-            #         save_value = json.dumps({k: v.__dict__ for k, v in value.items()})
-            #     context_id_group.create_dataset(key, data=save_value)
+            self.log.info(f"Saving Segment config: {segment_config!s}")
+            for key, value in vars(segment_config).items():
+                try:
+                    save_value = json.dumps(value)
+                except TypeError:
+                    # In case the object isn't easily serializable
+                    save_value = json.dumps({k: v.__dict__ for k, v in value.items()})
+                context_id_group.create_dataset(key, data=save_value)
 
-            # for name, my_filter in capture_criteria.items():
-            #     filter_plugin = my_filter.plugin
-            #     # `isinstance` is an anti-pattern, pls don't use in production.
-            #     if isinstance(filter_plugin, RangeFilter):
-            #         maximum = filter_plugin.maximum
-            #         minimum = filter_plugin.minimum
+            for name, my_filter in capture_criteria.items():
+                filter_plugin = my_filter.plugin
+                # `isinstance` is an anti-pattern, pls don't use in production.
+                if isinstance(filter_plugin, RangeFilter):
+                    maximum = filter_plugin.maximum
+                    minimum = filter_plugin.minimum
 
-            #         self.log.debug(
-            #             f"Setting capture criteria for {name}: ({minimum}, {maximum})"
-            #         )
+                    self.log.debug(
+                        f"Setting capture criteria for {name}: ({minimum}, {maximum})"
+                    )
 
-            #         filter_group.create_dataset(name, data=(minimum, maximum))
+                    filter_group.create_dataset(name, data=(minimum, maximum))
             pass
             # Based on the example code, it doesn't seem like we write anything for ejected filter?
 

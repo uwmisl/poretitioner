@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from json import JSONEncoder
 from os import PathLike
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, NewType, Union
 
 import numpy as np
 import toml
@@ -35,7 +35,6 @@ class CONFIG:
     SEGMENTATION = "segmentation"
     FILTER = "filters"
     CLASSIFICATION = "classification"
-
 
 def get_absolute_path(path: PathLikeOrString) -> Path:
     """Gets the absolute path for a file path.
@@ -177,16 +176,17 @@ class BaseConfiguration(metaclass=ABCMeta):
         raise ValueError("Configuration was invalid.")
 
 
-PoretitionerConfig = NewType(
-    "PoretitionerConfig", Dict[str, Union[BaseConfiguration, FilterSet]]
-)
-
     def __setitem__(self, name, my_filter):
         self.filters[name] = my_filter
 
     def __getitem__(self, name):
         return self.filters[name]
 
+
+
+PoretitionerConfig = NewType(
+    "PoretitionerConfig", Dict[str, Union[BaseConfiguration, FilterSet]]
+)
 
 @dataclass(frozen=True)
 class GeneralConfiguration(BaseConfiguration):

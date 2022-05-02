@@ -391,7 +391,7 @@ class HDF5_Group(h5py.Group, HDF5_AttributeHaving, HDF5_ParentHaving):
     def __new__(cls, group: Optional[h5py.Group]) -> HDF5_Group:
         if isinstance(group, HDF5_Group):
             return group
-        hdf5_group = super().__new__(cls, group)
+        hdf5_group = super().__new__(cls)
         hdf5_group._group = group
         return hdf5_group
 
