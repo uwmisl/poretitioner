@@ -547,7 +547,7 @@ import json
 
 @dataclass
 class HDF5_FilterSerialable(Filter, HDF5_GroupSerialableDataclass):
-    def as_group(self, parent_group: HDF5_Group, log: Optional[Logger] = None) -> HDF5_Group:
+    def add_to_group(self, parent_group: HDF5_Group, log: Optional[Logger] = None) -> HDF5_Group:
         log = log if log is not None else getLogger()
         # Note: This line simply registers a group with the name 'name' in the parent group.
         this_group = HDF5_Group(parent_group.require_group(self.name))
@@ -562,7 +562,7 @@ class HDF5_FilterSerialable(Filter, HDF5_GroupSerialableDataclass):
     def from_group(
         cls, group: HDF5_Group, log: Optional[Logger] = None
     ) -> HDF5_GroupSerialableDataclass:
-        # You see, the trouble is, in the above 'as_group' call, we lumped together
+        # You see, the trouble is, in the above 'add_to_group' call, we lumped together
         # all the attributes of the FilterConfig and the FilterPlugin, not knowing
         # which attributes belonged to which class.
         #
@@ -691,11 +691,11 @@ class HDF5_FilterSet(FilterSet, HDF5_GroupSerialableDataclass):
     def name(self):
         return self._filterset.filter_set_id
 
-    def as_group(self, parent_group: HDF5_Group, log: Optional[Logger] = None) -> HDF5_Group:
+    def add_to_group(self, parent_group: HDF5_Group, log: Optional[Logger] = None) -> HDF5_Group:
         filter_set_group = parent_group.require_group(self.name())
         for name, filter_t in self._filterset.filters.items():
             hdf5_filter = HDF5_FilterSerialable(filter_t.config, filter_t.plugin)
-            hdf5_filter.as_group(filter_set_group)
+            hdf5_filter.add_to_group(filter_set_group)
 
         return HDF5_Group(filter_set_group)
 

@@ -403,7 +403,7 @@ class HDF5_Group(h5py.Group, HDF5_AttributeHaving, HDF5_ParentHaving):
     def __new__(cls, group: Optional[h5py.Group]) -> HDF5_Group:
         if isinstance(group, HDF5_Group):
             return group
-        hdf5_group = super().__new__(cls, group)
+        hdf5_group = super().__new__(cls)
         hdf5_group._group = group
         return hdf5_group
 
@@ -446,7 +446,7 @@ class HDF5_Serializing(ABC):
 
     @classmethod
     @abstractmethod
-    def from_a(cls, a: HDF5_Type, log: Optional[Logger] = None) -> HDF5_Serializing:
+    def add_to_group(cls, a: HDF5_Type, log: Optional[Logger] = None) -> HDF5_Serializing:
         """Creates an instance of this class (from) (a) HDF5_Type.
 
         Parameters
@@ -468,7 +468,7 @@ class HDF5_Serializing(ABC):
             This method wasn't implemented, but needs to be.
         """
         raise NotImplementedError(
-            f"{cls!s} is missing an implementation for {HDF5_Serializing.from_a.__name__}"
+            f"{cls!s} is missing an implementation for {HDF5_Serializing.add_to_group.__name__}"
         )
 
     @abstractmethod
@@ -539,7 +539,7 @@ class HDF5_GroupSerializing(HDF5_Serializing, HDF5_AttributeHaving):
         """Group name that this object will be stored under.
         i.e. If this method returns "patrice_lmb", then a subsequent call to
 
-        `self.as_group(Group("/Foo/bar/"))`
+        `self.add_to_group(Group("/Foo/bar/"))`
 
         Will return a group at /Foo/bar/patrice_lmb
 
@@ -552,7 +552,7 @@ class HDF5_GroupSerializing(HDF5_Serializing, HDF5_AttributeHaving):
         """
         return self.__class__.__name__
 
-    def as_group(self, parent_group: HDF5_Group, log: Optional[Logger] = None) -> HDF5_Group:
+    def add_to_group(self, parent_group: HDF5_Group, log: Optional[Logger] = None) -> HDF5_Group:
         """Stores and Returns this object as an HDF5 Group, rooted at the group passed in.
         This should be used to directly set the contents of an Hdf5 group.
         This method should also create the group named 'name' in the parent_group, if it doesn't already exist.
@@ -567,7 +567,7 @@ class HDF5_GroupSerializing(HDF5_Serializing, HDF5_AttributeHaving):
 
         my_serial = Baz()
         baz_group = foo_group.require_group(my_serial.name()) # Make space in the file for Baz at f'/foo/{my_serial.name()}'
-        my_serialized_group = my_serial.as_group(foo_group) # Sets "/foo/boop" group to the serialized group
+        my_serialized_group = my_serial.add_to_group(foo_group) # Sets "/foo/boop" group to the serialized group
 
         my_serialized_group # /boop group, rooted at /foo/
 
@@ -613,16 +613,16 @@ class HDF5_GroupSerializable(HDF5_GroupSerializing):
     read directly from hd5 Groups.
 
     Not meant to be instantiated directly. Instead, subclass and make sure your
-    `as_group` implementation uses the group created by `super().as_group(...)`.
+    `add_to_group` implementation uses the group created by `super().add_to_group(...)`.
 
-    NOTE: Make sure to call super().as_group(...)
+    NOTE: Make sure to call super().add_to_group(...)
     """
 
     def name(self) -> str:
         """Group name that this object will be stored under.
         i.e. If this method returns "patrice_lmb", then a subsequent call to
 
-        `self.as_group(Group("/Foo/bar/"))`
+        `self.add_to_group(Group("/Foo/bar/"))`
 
         Will return a group at /Foo/bar/patrice_lmb
 
@@ -635,12 +635,12 @@ class HDF5_GroupSerializable(HDF5_GroupSerializing):
         """
         return self.__class__.__name__
 
-    def as_group(self, parent_group: HDF5_Group, log: Optional[Logger] = None) -> HDF5_Group:
+    def add_to_group(self, parent_group: HDF5_Group, log: Optional[Logger] = None) -> HDF5_Group:
         new_group = parent_group.require_group(self.name())
         parent_group[self.name()] = self
         # Note: This does nothing but register a group with the name 'name' in the parent group.
         #       Implementers must now write their serialized instance to this group.
-        return self
+        return new_group
 
     @classmethod
     @abstractmethod
@@ -649,25 +649,25 @@ class HDF5_GroupSerializable(HDF5_GroupSerializing):
             f"from_group not implemented for {cls.__name__}. Make sure you write a method that returns a serialzied version of this object."
         )
 
-    def require_group_from_group(
-        self, parent_group: HDF5_Group, log: Optional[Logger] = None
-    ) -> HDF5_GroupSerializable:
-        # child_group = parent_group.require_group(self.name())
-        child_group = self.as_group(parent_group, log=log)
+    # def require_group_from_group(
+    #     self, parent_group: HDF5_Group, log: Optional[Logger] = None
+    # ) -> HDF5_GroupSerializable:
+    #     # child_group = parent_group.require_group(self.name())
+    #     child_group = self.add_to_group(parent_group, log=log)
 
     @classmethod
-    def from_a(cls, a: HDF5_Group, log: Logger) -> HDF5_Serializing:
+    def add_to_group(cls, a: HDF5_Group, log: Logger) -> HDF5_Serializing:
         return cls.from_group(parent_group=a, log=log)
 
     def as_a(self, a: HDF5_Type, log: Logger) -> HDF5_Type:
-        return self.as_group(parent_group=a, log=log)
+        return self.add_to_group(parent_group=a, log=log)
 
     def update(self, log: Optional[Logger] = None):
         self.as_a(self._group.parent, log=log)
 
 
 class HDF5_GroupSerialiableDict(Dict[T, S], HDF5_GroupSerializable):
-    def as_group(self, parent_group: HDF5_Group, log: Optional[Logger] = None) -> HDF5_Group:
+    def add_to_group(self, parent_group: HDF5_Group, log: Optional[Logger] = None) -> HDF5_Group:
         log = log if log is not None else getLogger()
 
         my_group = parent_group.require_group(self.name())
@@ -744,7 +744,7 @@ class HDF5_GroupSerialiableDict(Dict[T, S], HDF5_GroupSerializable):
 
 
 class HDF5_GroupSerialableDataclass(HDF5_GroupSerializable):
-    def as_group(self, parent_group: HDF5_Group, log: Optional[Logger] = None) -> HDF5_Group:
+    def add_to_group(self, parent_group: HDF5_Group, log: Optional[Logger] = None) -> HDF5_Group:
         log = log if log is not None else getLogger()
 
         """Returns this object as an HDF5 Group."""
@@ -756,7 +756,7 @@ class HDF5_GroupSerialableDataclass(HDF5_GroupSerializable):
                 # So we create a new group rooted at our dataclass's group
                 # And assign it the value of whatever the group of the value is.
                 # new_group = my_group.require_group(field_name)
-                field_value.as_group(my_group)
+                field_value.add_to_group(my_group)
             elif isinstance(field_value, HDF5_DatasetSerializable):
                 field_value.as_a(my_group, log)
             else:
@@ -835,7 +835,7 @@ class HDF5_DatasetSerializing(HDF5_Dataset, HDF5_Serializing):
         """Group name that this object will be stored under.
         i.e. If this method returns "patrice_lmb", then a subsequent call to
 
-        `self.as_group(Group("/Foo/bar/"))`
+        `self.add_to_group(Group("/Foo/bar/"))`
 
         Will return a group at /Foo/bar/patrice_lmb
 
@@ -851,7 +851,7 @@ class HDF5_DatasetSerializing(HDF5_Dataset, HDF5_Serializing):
 
 class HDF5_DatasetSerializable(HDF5_DatasetSerializing):
     @classmethod
-    def from_a(
+    def add_to_group(
         cls, a: Union[HDF5_Dataset, HDF5_Group], log: Optional[Logger] = None
     ) -> HDF5_DatasetSerializable:
         # Assume A is the parent group

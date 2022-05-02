@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from json import JSONEncoder
 from os import PathLike
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, NewType, Union
 
 import numpy as np
 import toml
@@ -38,7 +38,6 @@ class CONFIG:
     SEGMENTATION = "segmentation"
     FILTER = "filters"
     CLASSIFICATION = "classification"
-
 
 def get_absolute_path(path: PathLikeOrString) -> Path:
     """Gets the absolute path for a file path.
@@ -221,36 +220,14 @@ class FilterConfiguration:
         combined = {**filter_config, **filter_command_line_args}
         log.debug(f"\nFilters: {combined!s}")
 
-        for filter_name, filter_attributes in combined.items():
-            # TODO: Filter Plugin should allow filepaths. https://github.com/uwmisl/poretitioner/issues/91
-            filepath = None
-            filter_config = FilterConfig(filter_name, filter_attributes, filepath)
-            log.debug(f"\nFilters[{filter_name}] = {filter_config!r}")
-            self.filters[filter_name] = filter_config
-
-    def validate(self):
-        raise NotImplementedError("Implement validation for filters!")
-
-    def json_encoder(self) -> JSONEncoder:
-        encoder = FilterJSONEncoder()
-        return encoder
-
-    @classmethod
-    def from_json(cls, json_dict: Dict):
-        filters = {
-            filter_config.get("name"): FilterConfig(**filter_config)
-            for filter_config in json_dict["filters"]
-        }
-        return cls.__new__(filters)
-
-
     def __setitem__(self, name, my_filter):
         self.filters[name] = my_filter
 
     def __getitem__(self, name):
         return self.filters[name]
 
-from typing import NewType
+
+
 PoretitionerConfig = NewType(
     "PoretitionerConfig", Dict[str, Union[BaseConfiguration, FilterSet]]
 )
@@ -336,7 +313,7 @@ class SegmentConfiguration(BaseConfiguration):
 
         # Overwrite with actual capture criteria
 
-        filter_configs: FilterConfigs = {
+        filter_configs = {
             name: attributes
             for name, attributes in config.get("capture_criteria", {}).items()
         }

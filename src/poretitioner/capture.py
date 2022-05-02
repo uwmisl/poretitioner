@@ -93,11 +93,14 @@ class ContextTagsCapture(ContextTagsBase):
     """
 
     bulk_filename: str
+    filename: str
 
     @classmethod
-    def from_context_tags_bulk_group(cls, bulk_tags_group: HDF5_Group) -> ContextTagsCapture:
+    def from_context_tags_bulk_group(
+        cls, capture_filename: str, bulk_tags_group: HDF5_Group
+    ) -> ContextTagsCapture:
         capture_fields = dataclass_fieldnames(cls)
-        context_tags = {}
+        context_tags = {"filename": capture_filename}
         for key, value in bulk_tags_group.objects_from_attrs().items():
             if key == "filename":
                 # "Filename" in Bulk is named "bulk_filename" in Capture.
@@ -123,11 +126,11 @@ class Channel(HDF5_GroupSerialableDataclass):
         channel_id = f"channel_id"
         return channel_id
 
-    def as_group(self, parent_group: HDF5_Group, log: Optional[Logger] = None) -> HDF5_Group:
+    def add_to_group(self, parent_group: HDF5_Group, log: Optional[Logger] = None) -> HDF5_Group:
         log = log if log is not None else getLogger()
 
         """Returns this object as an HDF5 Group."""
-        my_group: HDF5_Group = super().as_group(parent_group)
+        my_group: HDF5_Group = super().add_to_group(parent_group)
 
         for field_name, field_value in vars(self).items():
             if isinstance(field_value, HDF5_GroupSerializable):
@@ -135,7 +138,7 @@ class Channel(HDF5_GroupSerialableDataclass):
                 # So we create a new group rooted at our dataclass's group
                 # And assign it the value of whatever the group of the value is.
                 my_group.require_group(field_name)
-                field_group = field_value.as_group(my_group, log=log)
+                field_group = field_value.add_to_group(my_group, log=log)
             elif isinstance(field_value, ChannelCalibration):
                 for calibration_key, value in vars(field_value).items():
                     my_group.create_attr(calibration_key, value)
@@ -232,7 +235,9 @@ class Read:
     channel_id: Channel
     Signal: Signal  # This is the raw signal, fresh from the Fast5.
 
-    def __init__(self, read_id: ReadId, channel_id: Channel, signal: Signal):
+    def __init__(
+        self, parent_group: HDF5_Group, read_id: ReadId, channel_id: Channel, signal: Signal
+    ):
         self.read_id = read_id
         self.channel_id = channel_id
         self.signal = signal#.as_dataset(self.as_group("/"))
@@ -254,6 +259,13 @@ class HDF5_Read(Read, HDF5_GroupSerialableDataclass):
         print(f"{signaldataset!r}")
 
 
+<<<<<<< HEAD
+=======
+        self_group = self.add_to_group(parent_group)
+
+        self.channel_id = channel_id.add_to_group(self_group)
+        self.signal = signal.add_to_group(self_group)
+>>>>>>> jdunstan/hdf5
 
     def name(self) -> str:
         return self.read_id
@@ -272,10 +284,7 @@ class SegmentationMeta(HDF5_GroupSerialableDataclass):
 
 class CaptureFile(BaseFile):
     def __init__(
-        self,
-        capture_filepath: PathLikeOrString,
-        mode: str = "r",
-        logger: Logger = getLogger(),
+        self, capture_filepath: PathLikeOrString, mode: str = "r", logger: Logger = getLogger()
     ):
         # TODO: Black doesn't like the formatting here, can't figure out why.
         # fmt: off
@@ -329,7 +338,7 @@ class CaptureFile(BaseFile):
         self,
         bulk_f5: BulkFile,
         segment_config: SegmentConfiguration,
-        capture_criteria: Optional[Filters] = None,
+        capture_criteria: Optional[FilterSet] = None,
         sub_run: Optional[SubRun] = None,
         log: Logger = None,
     ):
@@ -359,14 +368,15 @@ class CaptureFile(BaseFile):
         # /Meta/context_tags
         capture_context_tags_group = self.f5.require_group(CAPTURE_PATH.CONTEXT_TAGS)
         bulk_context_tags = bulk_f5.context_tags_group
-        context_tags_capture = ContextTagsCapture.from_context_tags_bulk_group(bulk_context_tags)
-        capture_context_tags_group = context_tags_capture.as_group(
+        bulk_f5_fname = bulk_f5.filename
+        context_tags_capture = ContextTagsCapture.from_context_tags_bulk_group(bulk_f5_fname, bulk_context_tags)
+        capture_context_tags_group = context_tags_capture.add_to_group(
             capture_context_tags_group.parent, log=log
         )
 
         # capture_context_tags_group.attrs.create(key, value, dtype=hdf5_dtype(value))
 
-        # bulk_f5_fname = bulk_f5.filename
+        bulk_f5_fname = bulk_f5.filename
 
         # capture_context_tags_group.attrs.create(
         #     "bulk_filename", bulk_f5_fname, dtype=hdf5_dtype(bulk_f5_fname)
@@ -383,7 +393,7 @@ class CaptureFile(BaseFile):
         # /
         if sub_run is not None:
             subrun_group = HDF5_Group(self.f5.require_group(CAPTURE_PATH.SUB_RUN))
-            sub_run.as_group(subrun_group.parent, log=log)
+            sub_run.add_to_group(subrun_group.parent, log=log)
             # id = sub_run.sub_run_id
             # offset = sub_run.sub_run_offset
             # duration = sub_run.sub_run_duration
@@ -404,7 +414,7 @@ class CaptureFile(BaseFile):
         segmenter_name = get_application_info().name
         version = get_application_info().data_schema_version
         good_channels = [1]  # TODO: Pass in good channels
-        filters = HDF5_FilterSet(segment_config.capture_criteria)
+        filters = HDF5_FilterSet(capture_criteria)
 
         SEGMENT_METADATA = SegmentationMeta(
             segmenter_name,
@@ -417,7 +427,7 @@ class CaptureFile(BaseFile):
             capture_windows_group,
         )
 
-        SEGMENT_METADATA.as_group(capture_segmentation_group, log=log)
+        SEGMENT_METADATA.add_to_group(capture_segmentation_group, log=log)
         # print(__name__)
 
         # capture_segmentation_group.attrs.create(
@@ -434,27 +444,27 @@ class CaptureFile(BaseFile):
         if segment_config is None:
             raise ValueError("No segment configuration provided.")
         else:
-            # self.log.info(f"Saving Segment config: {segment_config!s}")
-            # for key, value in vars(segment_config).items():
-            #     try:
-            #         save_value = json.dumps(value)
-            #     except TypeError:
-            #         # In case the object isn't easily serializable
-            #         save_value = json.dumps({k: v.__dict__ for k, v in value.items()})
-            #     context_id_group.create_dataset(key, data=save_value)
+            self.log.info(f"Saving Segment config: {segment_config!s}")
+            for key, value in vars(segment_config).items():
+                try:
+                    save_value = json.dumps(value)
+                except TypeError:
+                    # In case the object isn't easily serializable
+                    save_value = json.dumps({k: v.__dict__ for k, v in value.items()})
+                context_id_group.create_dataset(key, data=save_value)
 
-            # for name, my_filter in capture_criteria.items():
-            #     filter_plugin = my_filter.plugin
-            #     # `isinstance` is an anti-pattern, pls don't use in production.
-            #     if isinstance(filter_plugin, RangeFilter):
-            #         maximum = filter_plugin.maximum
-            #         minimum = filter_plugin.minimum
+            for name, my_filter in capture_criteria.items():
+                filter_plugin = my_filter.plugin
+                # `isinstance` is an anti-pattern, pls don't use in production.
+                if isinstance(filter_plugin, RangeFilter):
+                    maximum = filter_plugin.maximum
+                    minimum = filter_plugin.minimum
 
-            #         self.log.debug(
-            #             f"Setting capture criteria for {name}: ({minimum}, {maximum})"
-            #         )
+                    self.log.debug(
+                        f"Setting capture criteria for {name}: ({minimum}, {maximum})"
+                    )
 
-            #         filter_group.create_dataset(name, data=(minimum, maximum))
+                    filter_group.create_dataset(name, data=(minimum, maximum))
             pass
             # Based on the example code, it doesn't seem like we write anything for ejected filter?
 
@@ -684,6 +694,7 @@ class CaptureFile(BaseFile):
             metadata.ejected,
             metadata.channel_number,
         )
+<<<<<<< HEAD
 
         # root = HDF5_Group(f5.require_group(read_id))
         # read = Read(read_id, channel_id, signal)
@@ -709,6 +720,29 @@ class CaptureFile(BaseFile):
         f5[channel_path].attrs["offset"] = metadata.calibration.offset
         f5[channel_path].attrs["sampling_rate"] = metadata.sampling_rate
         f5[channel_path].attrs[KEY.OPEN_CHANNEL_PA] = metadata.open_channel_pA
+=======
+        read = Read(read_id, channel_id, signal)
+        read.add_to_group(f5, log=log)
+
+        # signal_path = str(signal_path_for_read_id(read_id))
+        # f5[signal_path] = raw_signal
+        # f5[signal_path].attrs["read_id"] = read_id
+        # f5[signal_path].attrs["start_time_bulk"] = metadata.start_time_bulk
+        # f5[signal_path].attrs["start_time_local"] = metadata.start_time_local
+        # f5[signal_path].attrs["duration"] = metadata.duration
+        # f5[signal_path].attrs["ejected"] = metadata.ejected
+        # f5[signal_path].attrs["voltage"] = metadata.voltage_threshold
+        # f5[signal_path].attrs[KEY.OPEN_CHANNEL_PA] = metadata.open_channel_pA
+
+        # channel_path = str(channel_path_for_read_id(read_id))
+        # f5.require_group(channel_path)
+        # f5[channel_path].attrs["channel_number"] = metadata.channel_number
+        # f5[channel_path].attrs["digitisation"] = metadata.calibration.digitisation
+        # f5[channel_path].attrs["range"] = metadata.calibration.range
+        # f5[channel_path].attrs["offset"] = metadata.calibration.offset
+        # f5[channel_path].attrs["sampling_rate"] = metadata.sampling_rate
+        # f5[channel_path].attrs[KEY.OPEN_CHANNEL_PA] = metadata.open_channel_pA
+>>>>>>> jdunstan/hdf5
 
     def write_capture_windows(self, capture_windows: WindowsByChannel):
         pass

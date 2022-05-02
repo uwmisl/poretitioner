@@ -398,9 +398,7 @@ def segment(
     )
 
     good_channels = judge_channels(
-        bulk_f5_filepath,
-        #segment_config.open_channel_prior_mean,
-        #segment_config.open_channel_prior_stdv,
+        bulk_f5_filepath
     )
 
     # TODO #102 Save good channels to fast5 in segment.py
@@ -465,7 +463,7 @@ def parallel_find_captures(
         If the desired output location does not exist (i.e., save_location) in
         the config, raise IOError.
     """
-    
+
     bulk_f5_fname = segment_config.bulkfast5
     local_logger = logger.getLogger()
     n_workers = config.n_workers
@@ -598,7 +596,7 @@ def parallel_find_captures(
         capture_f5_filepath = Path(save_location, f"{run_id}_{file_no}.fast5")
         local_logger.info(f"capture_fname:{capture_f5_filepath} n_in_file:{n_in_file}")
         capture_file = CaptureFile(capture_f5_filepath, mode="w")
-        capture_file.initialize_from_bulk(bulk, segment_config, sub_run=None)
+        capture_file.initialize_from_bulk(bulk, segment_config, filters, sub_run=None)
 
         for captures, signal_metadata in zip(captures, context):
             for cap in captures:
@@ -629,7 +627,7 @@ def parallel_find_captures(
                     local_logger.info(f"capture_fname:{capture_f5_filepath} n_in_file:{n_in_file}")
                     mode = "w"
                     capture_file = CaptureFile(capture_f5_filepath, mode=mode)
-                    capture_file.initialize_from_bulk(bulk, segment_config, sub_run=None)
+                    capture_file.initialize_from_bulk(bulk, segment_config, filters, sub_run=None)
 
                 n_in_file += 1
 

@@ -3,7 +3,7 @@
 
   inputs = {
     nixpkgs = {
-      url = "github:NixOS/nixpkgs";
+      url = "github:NixOS/nixpkgs/22.05-pre";
     };
 
     flake-utils = {
@@ -16,7 +16,7 @@
     };
 
     mach-nix = {
-      url = github:DavHau/mach-nix;
+      url = github:DavHau/mach-nix/3.4.0;
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.flake-utils.follows = "flake-utils";
       inputs.pypi-deps-db.follows = "pypi-deps-db";
@@ -42,11 +42,10 @@
         };
 
         python = mach-nix-utils.mkPython {
-          python = "python38";
           requirements = builtins.readFile ./requirements.txt;
           packagesExtra = [
           ]
-          
+
           ++ pkgs.lib.optional (buildOptions.isRelease) [ "bpython" ];
         };
 
@@ -55,7 +54,7 @@
           requirements = builtins.readFile ./requirements.txt;
           packagesExtra = [
           ]
-          
+
           ++ pkgs.lib.optional (buildOptions.isRelease) [ "bpython" ];
         };
 
@@ -71,7 +70,7 @@
 
           # add missing dependencies whenever necessary.
           packagesExtra = [
-            
+
             python
           ];
           src = ./.;
@@ -90,8 +89,8 @@
         packageName = "poretitioner";
 
 
-        # Create docker package 
-        #buildDocker = { app }: 
+        # Create docker package
+        #buildDocker = { app }:
       in {
           #packages.${packageName} = app;
 
@@ -99,7 +98,7 @@
             inherit app;
 
             defaultPackage = app;
-            
+
             docker = pkgs.dockerTools.buildImage {
               name = "${app.pname}";
               tag = "latest";
